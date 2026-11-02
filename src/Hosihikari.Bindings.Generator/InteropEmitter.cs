@@ -1079,6 +1079,17 @@ internal static class InteropEmitter
         var declarations = ParameterDeclarations(create);
         var stringIndices = FindStringParameters(create.Parameters);
         var arguments = string.Join(", ", BuildCallArgumentList(create.Parameters));
+        // A constructor parameter may itself be called "handle" (ServerSoundInstance does);
+        // the result local must not shadow it.
+        var local = "handle";
+        for (var index = 0; index < create.Parameters.Count; index++)
+        {
+            if (CSharpParameterName(create.Parameters, index) == local)
+            {
+                local = "__hs_handle";
+                break;
+            }
+        }
         lines.Add($"    public static {className} {name}({declarations})");
         lines.Add("    {");
         EmitPinnedBody(
@@ -1089,16 +1100,16 @@ internal static class InteropEmitter
             "        ",
             bodyIndent =>
             {
-                lines.Add(bodyIndent + $"var handle = NativeMethods.{TableFieldAccess(create)}({arguments});");
-                EmitHandleCheck(lines, bodyIndent);
-                lines.Add(bodyIndent + $"return new {className}((nint)handle);");
+                lines.Add(bodyIndent + $"var {local} = NativeMethods.{TableFieldAccess(create)}({arguments});");
+                EmitHandleCheck(lines, bodyIndent, local);
+                lines.Add(bodyIndent + $"return new {className}((nint){local});");
             });
         lines.Add("    }");
     }
 
-    private static void EmitHandleCheck(List<string> lines, string indent = "        ")
+    private static void EmitHandleCheck(List<string> lines, string indent = "        ", string local = "handle")
     {
-        lines.Add(indent + "if (handle == null)");
+        lines.Add(indent + $"if ({local} == null)");
         lines.Add(indent + "{");
         lines.Add(indent + "    throw new global::System.InvalidOperationException(NativeMethods.GetLastError() ?? \"BindingShim create call failed.\");");
         lines.Add(indent + "}");
