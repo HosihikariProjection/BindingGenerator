@@ -282,6 +282,12 @@ internal sealed class AbiFunction
     /// <summary>True when the return is `std::optional` over a trivially copyable record.</summary>
     public bool ReturnOptionalRecord { get; init; }
 
+    /// <summary>
+    /// True when the optional payload is not trivially copyable; the shim copies it out with
+    /// its copy constructor and destroys the in-place original with its destructor.
+    /// </summary>
+    public bool ReturnOptionalRecordNeedsCopy { get; init; }
+
     /// <summary>Absolute bit offset for symbol-dispatched field accessors.</summary>
     public long? FieldBitOffset { get; init; }
 
@@ -3061,6 +3067,7 @@ internal sealed class AbiPlan
         var returnRequiresCopy = false;
         var returnTriviallyCopyable = false;
         var returnOptionalRecord = false;
+        var returnOptionalRecordNeedsCopy = false;
 
         var byValueReturnName = IsPointerOrReferenceType(nativeReturnType)
             ? nativeReturnType
@@ -3097,6 +3104,28 @@ internal sealed class AbiPlan
             returnOptionalRecord = true;
             returnWrapperType = optionalReturnWrapper;
             nativeReturnType = optionalReturnInner;
+        }
+        else if (symbolDispatch
+            && TryParseOptional(nativeReturnType, out var optionalCopyInner)
+            && TryResolveSymbolOptionalCopyRecord(
+                optionalCopyInner,
+                symbolByValueReturns,
+                declarationNames,
+                out var optionalCopyRecord,
+                out var optionalCopyWrapper))
+        {
+            // A non-trivially copyable payload is copied out with its copy constructor and
+            // the in-place original is destroyed with its destructor.
+            byValueReturn = optionalCopyRecord;
+            returnKind = AbiKind.Opaque;
+            returnOwned = true;
+            returnOptional = true;
+            returnNullable = true;
+            returnTriviallyCopyable = false;
+            returnOptionalRecord = true;
+            returnOptionalRecordNeedsCopy = true;
+            returnWrapperType = optionalCopyWrapper;
+            nativeReturnType = optionalCopyInner;
         }
         else if (!TryMapReturnType(
                 declaration.Surface,
@@ -3244,6 +3273,7 @@ internal sealed class AbiPlan
             ReturnRequiresCopy = returnRequiresCopy,
             ReturnTriviallyCopyable = returnTriviallyCopyable,
             ReturnOptionalRecord = returnOptionalRecord,
+            ReturnOptionalRecordNeedsCopy = returnOptionalRecordNeedsCopy,
             ReturnExpected = returnExpected,
             ExpectedErrorType = expectedErrorType,
             MutableStringOut = mutableStringOut,
@@ -7009,6 +7039,36 @@ internal sealed class AbiPlan
         wrapperType = "";
         var name = CompactTemplateName(StripTopLevelQualifiers(inner));
         if (!symbolOptionalRecords.TryGetValue(name, out var found))
+        {
+            return false;
+        }
+
+        if (!declarationNames.TryGetValue(found.Id, out var declarationName))
+        {
+            return false;
+        }
+
+        record = found;
+        wrapperType = "global::" + declarationName.NamespaceName + "." + declarationName.ClassName;
+        return true;
+    }
+
+    /// <summary>
+    /// Resolves an optional payload that is not trivially copyable. Only records already
+    /// eligible for a by-value return (layout, destructor symbol) qualify; the shim copies
+    /// the payload with its copy constructor and destroys the original.
+    /// </summary>
+    private static bool TryResolveSymbolOptionalCopyRecord(
+        string inner,
+        IReadOnlyDictionary<string, DeclarationRecord> symbolByValueReturns,
+        IReadOnlyDictionary<string, DeclarationName> declarationNames,
+        out DeclarationRecord record,
+        out string wrapperType)
+    {
+        record = null!;
+        wrapperType = "";
+        var name = CompactTemplateName(StripTopLevelQualifiers(inner));
+        if (!symbolByValueReturns.TryGetValue(name, out var found) || found.TriviallyCopyable)
         {
             return false;
         }

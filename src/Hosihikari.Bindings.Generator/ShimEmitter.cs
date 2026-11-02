@@ -3628,13 +3628,62 @@ internal static class ShimEmitter
                     }
 
                     yield return $"    auto* const hs_record = static_cast<void*>(hs_allocate(static_cast<std::size_t>({size}), {align}));";
-                    yield return $"    std::memcpy(hs_record, hs_result->data, static_cast<std::size_t>({size}));";
-                    if (manualOptionalSret)
+                    if (function.ReturnOptionalRecordNeedsCopy)
                     {
-                        yield return "    hs_result.~HsTypedResult();";
-                    }
+                        MemberRecord? optionalCopyConstructor = null;
+                        MemberRecord? optionalDestructor = null;
+                        foreach (var member in members.Values.Where(member =>
+                                     string.Equals(member.DeclarationId, function.ReturnDeclarationId, StringComparison.Ordinal)))
+                        {
+                            if (member.Kind == "destructor" && member.Access == "public" && HasDispatchSymbol(member))
+                            {
+                                optionalDestructor = member;
+                            }
+                            else if (member.Kind == "constructor"
+                                && member.Access == "public"
+                                && IsCopyConstructorRecord(member, function.NativeReturnType)
+                                && HasDispatchSymbol(member))
+                            {
+                                optionalCopyConstructor = member;
+                            }
+                        }
 
-                    yield return "    return hs_record;";
+                        if (optionalCopyConstructor is null || optionalDestructor is null)
+                        {
+                            yield return "    setLastError(\"the optional payload copy or destructor symbol is unavailable\");";
+                        }
+                        else
+                        {
+                            var (copyOffset, copySymbol) = SymbolFacts(optionalCopyConstructor, configuration.Os);
+                            var (dtorOffset, dtorSymbol) = SymbolFacts(optionalDestructor, configuration.Os);
+                            yield return $"    static auto const hs_optionalCopy = hs_resolve({copyOffset}, {CppLiteral(copySymbol)});";
+                            yield return $"    static auto const hs_optionalDtor = hs_resolve({dtorOffset}, {CppLiteral(dtorSymbol)});";
+                            yield return "    if (hs_optionalCopy == nullptr || hs_optionalDtor == nullptr)";
+                            yield return "    {";
+                            yield return "        setLastError(\"the optional payload copy or destructor symbol was not resolved\");";
+                            yield return "        return nullptr;";
+                            yield return "    }";
+                            yield return "    reinterpret_cast<void (*)(void*, void const*)>(const_cast<void*>(hs_optionalCopy))(hs_record, hs_result->data);";
+                            yield return "    reinterpret_cast<void (*)(void*)>(const_cast<void*>(hs_optionalDtor))(hs_result->data);";
+                        }
+
+                        if (manualOptionalSret)
+                        {
+                            yield return "    hs_result.~HsTypedResult();";
+                        }
+
+                        yield return "    return hs_record;";
+                    }
+                    else
+                    {
+                        yield return $"    std::memcpy(hs_record, hs_result->data, static_cast<std::size_t>({size}));";
+                        if (manualOptionalSret)
+                        {
+                            yield return "    hs_result.~HsTypedResult();";
+                        }
+
+                        yield return "    return hs_record;";
+                    }
                 }
                 else if (function.ReturnKind == AbiKind.StringView)
                 {
