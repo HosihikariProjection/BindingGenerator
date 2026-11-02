@@ -3924,21 +3924,65 @@ internal sealed class AbiPlan
 
         if (symbolDispatch && TryParseSpan(nativeType, out var spanElement))
         {
-            if (!IsPointerType(spanElement))
+            var spanElementText = spanElement.Trim();
+            if (spanElementText.StartsWith("gsl::not_null<", StringComparison.Ordinal)
+                && spanElementText.EndsWith(">", StringComparison.Ordinal))
             {
-                reason = $"span element type '{spanElement}' is not supported";
+                var inner = spanElementText["gsl::not_null<".Length..^1].Trim();
+                if (IsPointerType(inner))
+                {
+                    spanElementText = inner;
+                }
+            }
+
+            arrayElementOwnership = ArrayElementOwnership.None;
+            if (IsPointerType(spanElementText))
+            {
+                // Pointer elements surface as nint[] without ownership.
+                arrayElementKind = AbiKind.Opaque;
+                arrayElementNativeType = spanElementText;
+            }
+            else if (TryMapEnumUnderlying(spanElementText, enumUnderlyingByName, out var spanScalar)
+                || TryMapFundamental(spanElementText, out spanScalar))
+            {
+                // Scalars are copied into a managed array right after the call.
+                arrayElementKind = spanScalar;
+                arrayElementNativeType = spanElementText;
+            }
+            else if ((TryResolveRecordWrapper(
+                        spanElementText,
+                        declarationsByQualifiedName,
+                        declarationNames,
+                        destroyableDeclarationIds,
+                        false,
+                        out var resolvedSpanWrapper)
+                    ? resolvedSpanWrapper
+                    : symbolVectorElements is not null
+                        && symbolVectorElements.TryGetValue(StripTopLevelQualifiers(spanElementText), out var spanElementRecord)
+                        && declarationNames.TryGetValue(spanElementRecord.Id, out var spanElementName)
+                            ? "global::" + spanElementName.NamespaceName + "." + spanElementName.ClassName
+                            : null) is { } spanRecordWrapper)
+            {
+                // A borrowed span of records is copied element by element so each wrapper
+                // owns its storage.
+                arrayElementKind = AbiKind.Opaque;
+                arrayElementType = StripTopLevelQualifiers(spanElementText);
+                arrayElementOwnership = ArrayElementOwnership.RecordCopy;
+                arrayElementWrapperType = spanRecordWrapper;
+                arrayElementNativeType = StripTopLevelQualifiers(spanElementText);
+            }
+            else
+            {
+                reason = $"span element type '{spanElementText}' is not supported";
                 return false;
             }
 
-            // gsl::span<T> is a 16-byte {pointer, size} view. The shim returns it as a borrowed
-            // array view; pointer elements surface as nint[] without ownership.
+            // gsl::span<T> is a 16-byte {size, pointer} view. The shim converts it to the
+            // pointer-first C ABI view.
             kind = AbiKind.ArrayView;
             nativeType = canonical.Trim();
             array = true;
             returnSpan = true;
-            arrayElementKind = AbiKind.Opaque;
-            arrayElementOwnership = ArrayElementOwnership.None;
-            arrayElementNativeType = spanElement;
             return true;
         }
 

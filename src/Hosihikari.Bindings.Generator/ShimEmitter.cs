@@ -3611,8 +3611,31 @@ internal static class ShimEmitter
             }
             else if (spanReturn)
             {
+                // gsl::span stores its size before the pointer; the C ABI view stores the
+                // pointer first.
                 yield return $"    {call};";
-                yield return "    return *reinterpret_cast<HosihikariArrayView*>(hs_spanStorage);";
+                yield return "    auto const& hs_span = *reinterpret_cast<HosihikariSpanView const*>(hs_spanStorage);";
+                if (function.ArrayElementOwnership == ArrayElementOwnership.RecordCopy)
+                {
+                    var size = vectorElementLayout!.Size.ToString(CultureInfo.InvariantCulture);
+                    var align = (vectorElementLayout.Align > 0 ? vectorElementLayout.Align : 8)
+                        .ToString(CultureInfo.InvariantCulture);
+                    yield return "    thread_local std::vector<void*> hs_spanItems;";
+                    yield return "    hs_spanItems.clear();";
+                    yield return "    hs_spanItems.reserve(hs_span.size);";
+                    yield return "    auto const* hs_spanBytes = static_cast<unsigned char const*>(hs_span.data);";
+                    yield return "    for (std::size_t hs_i = 0; hs_i < hs_span.size; ++hs_i)";
+                    yield return "    {";
+                    yield return $"        auto* const hs_copy = static_cast<void*>(hs_allocate(static_cast<std::size_t>({size}), {align}));";
+                    yield return $"        std::memcpy(hs_copy, hs_spanBytes + hs_i * {size}, static_cast<std::size_t>({size}));";
+                    yield return "        hs_spanItems.push_back(hs_copy);";
+                    yield return "    }";
+                    yield return "    return HosihikariArrayView{hs_spanItems.data(), hs_spanItems.size()};";
+                }
+                else
+                {
+                    yield return "    return HosihikariArrayView{hs_span.data, hs_span.size};";
+                }
             }
             else if (arrayReturn)
             {
