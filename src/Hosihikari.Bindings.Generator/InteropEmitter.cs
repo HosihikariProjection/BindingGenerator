@@ -795,6 +795,11 @@ internal static class InteropEmitter
             types.Add("bool*");
         }
 
+        if (function.MutableStringOutRef)
+        {
+            types.Add("global::Hosihikari.Bindings.Abi.StringView*");
+        }
+
         types.Add(AbiPlan.CSharpTableType(function.ReturnKind));
         return "delegate* unmanaged[Cdecl]<" + string.Join(", ", types) + ">";
     }
@@ -1071,7 +1076,7 @@ internal static class InteropEmitter
 
     private static void EmitCreate(List<string> lines, string className, string name, AbiFunction create)
     {
-        var declarations = ParameterDeclarations(create.Parameters);
+        var declarations = ParameterDeclarations(create);
         var stringIndices = FindStringParameters(create.Parameters);
         var arguments = string.Join(", ", BuildCallArgumentList(create.Parameters));
         lines.Add($"    public static {className} {name}({declarations})");
@@ -1103,7 +1108,7 @@ internal static class InteropEmitter
     private static void EmitMethod(List<string> lines, string name, AbiFunction method)
     {
         var modifier = method.Static ? "static " : "";
-        var declarations = ParameterDeclarations(method.Parameters);
+        var declarations = ParameterDeclarations(method);
         var stringIndices = FindStringParameters(method.Parameters);
         var callArguments = new List<string>();
         if (!method.Static)
@@ -1115,6 +1120,11 @@ internal static class InteropEmitter
         if (method.NeedsPresenceFlag)
         {
             callArguments.Add("&__hs_hasValue");
+        }
+
+        if (method.MutableStringOutRef)
+        {
+            callArguments.Add("&__hs_strOut0");
         }
 
         var call = $"NativeMethods.{TableFieldAccess(method)}({string.Join(", ", callArguments)})";
@@ -1145,13 +1155,42 @@ internal static class InteropEmitter
             lines.Add("        var __hs_hasValue = false;");
         }
 
+        var mutableStringIndex = method.MutableStringOutRef
+            ? method.Parameters.FindIndex(parameter => parameter.IsMutableString)
+            : -1;
+        var mutableStringName = mutableStringIndex >= 0
+            ? CSharpParameterName(method.Parameters, mutableStringIndex)
+            : null;
+        if (method.MutableStringOutRef)
+        {
+            lines.Add("        var __hs_strOut0 = default(global::Hosihikari.Bindings.Abi.StringView);");
+        }
+
         EmitPinnedBody(
             lines,
             method.Parameters,
             stringIndices,
             FindVectorParameters(method.Parameters),
             "        ",
-            bodyIndent => EmitMethodBody(lines, method, call, bodyIndent));
+            bodyIndent =>
+            {
+                if (!method.MutableStringOutRef)
+                {
+                    EmitMethodBody(lines, method, call, bodyIndent);
+                    return;
+                }
+
+                lines.Add(bodyIndent + "try");
+                lines.Add(bodyIndent + "{");
+                EmitMethodBody(lines, method, call, bodyIndent + "    ");
+                lines.Add(bodyIndent + "}");
+                lines.Add(bodyIndent + "finally");
+                lines.Add(bodyIndent + "{");
+                lines.Add(
+                    bodyIndent
+                    + $"    {mutableStringName} = __hs_strOut0.Data == null ? \"\" : global::System.Text.Encoding.UTF8.GetString(__hs_strOut0.Data, checked((int)__hs_strOut0.Size));");
+                lines.Add(bodyIndent + "}");
+            });
         lines.Add("    }");
     }
 
@@ -1345,8 +1384,9 @@ internal static class InteropEmitter
         lines.Add($"        throw new global::System.NotSupportedException({CSharpLiteral(stubMessage)});");
     }
 
-    private static string ParameterDeclarations(IReadOnlyList<AbiParameter> parameters)
+    private static string ParameterDeclarations(AbiFunction function)
     {
+        var parameters = function.Parameters;
         var declarations = new List<string>();
         for (var index = 0; index < parameters.Count; index++)
         {
@@ -1361,6 +1401,11 @@ internal static class InteropEmitter
             }
 
             var type = CSharpDeclarationType(parameter);
+            if (function.MutableStringOutRef && parameter.IsMutableString)
+            {
+                type = "ref " + type;
+            }
+
             declarations.Add($"{type} {CSharpParameterName(parameters, index)}");
         }
 

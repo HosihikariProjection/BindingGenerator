@@ -754,6 +754,11 @@ internal static class ShimEmitter
             parameters.Add("bool*");
         }
 
+        if (function.MutableStringOutRef)
+        {
+            parameters.Add("HosihikariStringView*");
+        }
+
         var parameterList = parameters.Count == 0 ? "void" : string.Join(", ", parameters);
         return $"{returnType} (*{function.TableField})({parameterList})";
     }
@@ -2187,6 +2192,24 @@ internal static class ShimEmitter
             "",
             "using hosihikari::abi::setLastError;",
             "thread_local std::string g_stringResult;",
+            "thread_local std::string g_stringOutResult;",
+            "",
+            "// Reports a rewritten string argument through the caller's view when the native",
+            "// return keeps its own result slot. A separate buffer keeps it from clobbering a",
+            "// string return. The destructor runs on every return path.",
+            "struct hs_string_out_guard",
+            "{",
+            "    std::string& value;",
+            "    HosihikariStringView* out;",
+            "    ~hs_string_out_guard()",
+            "    {",
+            "        if (out != nullptr)",
+            "        {",
+            "            g_stringOutResult.assign(value);",
+            "            *out = HosihikariStringView{g_stringOutResult.data(), g_stringOutResult.size()};",
+            "        }",
+            "    }",
+            "};",
             "",
         };
 
@@ -2673,6 +2696,11 @@ internal static class ShimEmitter
             parameters.Add("bool* hs_hasValue");
         }
 
+        if (function.MutableStringOutRef)
+        {
+            parameters.Add("HosihikariStringView* hs_strOut");
+        }
+
         yield return $"static {returnType} {function.CppName}({string.Join(", ", parameters)}) try";
         yield return "{";
 
@@ -2689,6 +2717,12 @@ internal static class ShimEmitter
                 ? "std::basic_string_view<char>"
                 : "std::basic_string<char>";
             yield return $"    {stringType} hs_str{index}({name}_data, {name}_size);";
+        }
+
+        if (function.MutableStringOutRef)
+        {
+            var mutableIndex = function.Parameters.FindIndex(parameter => parameter.IsMutableString);
+            yield return $"    hs_string_out_guard hs_strOutGuard(hs_str{mutableIndex}, hs_strOut);";
         }
 
         for (var index = 0; index < function.Parameters.Count; index++)

@@ -306,7 +306,13 @@ internal sealed class AbiFunction
     /// True when the native call returns void but rewrites a std::string argument in place;
     /// the shim reports that text as the call result instead.
     /// </summary>
-    public bool MutableStringOut => Parameters.Any(parameter => parameter.IsMutableString);
+    public bool MutableStringOut { get; init; }
+
+    /// <summary>
+    /// True when the native return keeps its own value, so the rewritten string argument
+    /// travels through an extra trailing <c>HosihikariStringView*</c> out parameter.
+    /// </summary>
+    public bool MutableStringOutRef { get; init; }
     public bool Static { get; init; }
 
     /// <summary>
@@ -3161,9 +3167,11 @@ internal sealed class AbiPlan
             parameters.Add(abiParameter);
         }
 
-        // A mutable std::string argument is rewritten by the callee. The shim owns the
-        // string and can report the rewritten text, but only one value fits the result
-        // channel; the native return must be void so nothing else needs it.
+        // A mutable std::string argument is rewritten by the callee. A void method can
+        // return the text in place of its result; any other return keeps its own value,
+        // so the text travels through a trailing out view instead.
+        var mutableStringOut = false;
+        var mutableStringOutRef = false;
         var mutableStrings = parameters.Where(parameter => parameter.IsMutableString).ToList();
         if (mutableStrings.Count > 0)
         {
@@ -3179,14 +3187,16 @@ internal sealed class AbiPlan
                 return false;
             }
 
-            if (returnKind != AbiKind.Void)
+            if (returnKind == AbiKind.Void)
             {
-                reason = "a mutable string reference requires a void return";
-                return false;
+                returnKind = AbiKind.StringView;
+                nativeReturnType = "std::basic_string<char>";
+                mutableStringOut = true;
             }
-
-            returnKind = AbiKind.StringView;
-            nativeReturnType = "std::basic_string<char>";
+            else
+            {
+                mutableStringOutRef = true;
+            }
         }
 
         function = new AbiFunction
@@ -3232,6 +3242,8 @@ internal sealed class AbiPlan
             ReturnOptionalRecord = returnOptionalRecord,
             ReturnExpected = returnExpected,
             ExpectedErrorType = expectedErrorType,
+            MutableStringOut = mutableStringOut,
+            MutableStringOutRef = mutableStringOutRef,
             VariantInfo = returnVariant,
             CallableInfo = returnCallable,
             Parameters = parameters,
