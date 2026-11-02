@@ -234,7 +234,7 @@ internal sealed class AbiFunction
     /// positional, but adding a function no longer renames every call site.
     /// </summary>
     public string TableField => CppName;
-    public string CppName { get; init; } = "";
+    public string CppName { get; set; } = "";
     public AbiFunctionKind Kind { get; init; }
     public AbiCastKind CastKind { get; init; }
     public string? TargetCppName { get; init; }
@@ -284,6 +284,9 @@ internal sealed class AbiFunction
 
     /// <summary>Absolute bit offset for symbol-dispatched field accessors.</summary>
     public long? FieldBitOffset { get; init; }
+
+    /// <summary>Set for a bitfield; the accessor reads or writes this many bits.</summary>
+    public int? FieldBitWidth { get; init; }
 
     /// <summary>True when a field getter returns the address of the field storage.</summary>
     public bool FieldAddress { get; init; }
@@ -1989,6 +1992,29 @@ internal sealed class AbiPlan
         foreach (var callable in usedCallables)
         {
             functions.AddRange(BuildCallableFunctions(callable));
+        }
+
+        // Table field names use the first 32 bits of a SHA-256; with tens of thousands of
+        // functions a collision is possible and would define one C symbol twice. Extend
+        // the colliding name deterministically so both sides keep the same spelling.
+        var usedFunctionNames = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var function in functions)
+        {
+            if (usedFunctionNames.Add(function.CppName))
+            {
+                continue;
+            }
+
+            var suffix = 1;
+            string uniqueName;
+            do
+            {
+                uniqueName = function.CppName + "_" + suffix.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                suffix++;
+            }
+            while (!usedFunctionNames.Add(uniqueName));
+
+            function.CppName = uniqueName;
         }
 
         var ordered = functions
@@ -6523,11 +6549,7 @@ internal sealed class AbiPlan
             return false;
         }
 
-        if (field.BitWidth is > 0)
-        {
-            reason = "bitfields are not supported by symbol dispatch";
-            return false;
-        }
+        var bitfield = field.BitWidth > 0;
 
         if (field.Static)
         {
@@ -6595,7 +6617,7 @@ internal sealed class AbiPlan
             return true;
         }
 
-        if (bitOffset < 0 || bitOffset % 8 != 0)
+        if (bitOffset < 0 || (!bitfield && bitOffset % 8 != 0))
         {
             reason = "the field has no byte-aligned offset";
             return false;
@@ -6637,6 +6659,13 @@ internal sealed class AbiPlan
             fallback = true;
         }
 
+        // A bitfield is only readable as the scalar its bits encode.
+        if (bitfield && fallback)
+        {
+            reason = "the bitfield type is not supported by symbol dispatch";
+            return false;
+        }
+
         var className = declarationNames[declaration.Id];
         getter = new AbiFunction
         {
@@ -6652,6 +6681,7 @@ internal sealed class AbiPlan
             ReturnKind = kind,
             NativeReturnType = canonical,
             FieldBitOffset = bitOffset,
+            FieldBitWidth = bitfield ? (int)field.BitWidth!.Value : null,
             FieldAddress = fallback,
             IsBitset = bitsetBits > 0,
             BitsetBits = bitsetBits,
@@ -6672,6 +6702,7 @@ internal sealed class AbiPlan
                 ReturnKind = AbiKind.Void,
                 NativeReturnType = "void",
                 FieldBitOffset = bitOffset,
+                FieldBitWidth = bitfield ? (int)field.BitWidth!.Value : null,
                 Parameters =
                 [
                     new AbiParameter

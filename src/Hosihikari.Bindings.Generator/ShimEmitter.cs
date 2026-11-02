@@ -2880,6 +2880,55 @@ internal static class ShimEmitter
             yield return $"    reinterpret_cast<void (*)(void*, void const*)>(const_cast<void*>(hs_arg{index}Copy))(hs_arg{index}Storage, {name});";
         }
 
+        if (function.FieldBitOffset is { } bitfieldOffset
+            && function.Kind is AbiFunctionKind.Get or AbiFunctionKind.Set
+            && function.FieldBitWidth is { } bitfieldWidth)
+        {
+            // A bitfield never crosses its declared storage unit; copy the bytes that hold
+            // the field into a zeroed word, shift past the leading bits and mask the width.
+            // Reading through memcpy keeps unaligned fields from touching neighbouring
+            // storage.
+            var bitShift = (int)(bitfieldOffset % 8);
+            var fieldByteOffset = bitfieldOffset / 8;
+            var fieldByteCount = (bitShift + bitfieldWidth + 7) / 8;
+            var fieldMask = bitfieldWidth >= 64
+                ? "~std::uint64_t{0}"
+                : $"((std::uint64_t{{1}} << {bitfieldWidth}) - 1)";
+            if (function.Kind == AbiFunctionKind.Get)
+            {
+                yield return "    std::uint64_t hs_bits = 0;";
+                yield return $"    std::memcpy(&hs_bits, static_cast<unsigned char const*>(hs_self) + {fieldByteOffset}, {fieldByteCount});";
+                yield return $"    hs_bits = (hs_bits >> {bitShift}) & {fieldMask};";
+                if (function.ReturnKind == AbiKind.Bool)
+                {
+                    yield return "    return hs_bits != 0;";
+                }
+                else if (function.ReturnKind is AbiKind.I8 or AbiKind.I16 or AbiKind.I32 or AbiKind.I64)
+                {
+                    yield return $"    return static_cast<{AbiPlan.CppType(function.ReturnKind)}>(static_cast<std::int64_t>(hs_bits << (64 - {bitfieldWidth})) >> (64 - {bitfieldWidth}));";
+                }
+                else
+                {
+                    yield return $"    return static_cast<{AbiPlan.CppType(function.ReturnKind)}>(hs_bits);";
+                }
+            }
+            else
+            {
+                var value = CppParameterName(function.Parameters[0], 0);
+                yield return "    std::uint64_t hs_bits = 0;";
+                yield return $"    std::memcpy(&hs_bits, static_cast<unsigned char*>(hs_self) + {fieldByteOffset}, {fieldByteCount});";
+                yield return $"    hs_bits = (hs_bits & ~({fieldMask} << {bitShift})) | ((static_cast<std::uint64_t>({value}) & {fieldMask}) << {bitShift});";
+                yield return $"    std::memcpy(static_cast<unsigned char*>(hs_self) + {fieldByteOffset}, &hs_bits, {fieldByteCount});";
+            }
+
+            foreach (var line in SymbolCatchTail(function.ReturnKind))
+            {
+                yield return line;
+            }
+
+            yield break;
+        }
+
         if (function.FieldBitOffset is { } fieldBits
             && function.Kind is AbiFunctionKind.Get or AbiFunctionKind.Set)
         {
