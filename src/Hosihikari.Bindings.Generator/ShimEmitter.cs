@@ -694,7 +694,7 @@ internal static class ShimEmitter
 
         foreach (var parameter in function.Parameters)
         {
-            if (parameter.IsVector || parameter.IsMap)
+            if (parameter.IsVector || parameter.IsMap || parameter.Kind == AbiKind.Placeholder)
             {
                 continue;
             }
@@ -1056,7 +1056,7 @@ internal static class ShimEmitter
         for (var index = 0; index < function.Parameters.Count; index++)
         {
             var parameter = function.Parameters[index];
-            if (parameter.IsVector || parameter.IsMap)
+            if (parameter.IsVector || parameter.IsMap || parameter.Kind == AbiKind.Placeholder)
             {
                 continue;
             }
@@ -1777,6 +1777,11 @@ internal static class ShimEmitter
         string? nameOverride = null)
     {
         var name = nameOverride ?? CppParameterName(parameter, index);
+        if (parameter.Kind == AbiKind.Placeholder)
+        {
+            return parameter.SpecialValue == SpecialValueKind.Nullopt ? "std::nullopt" : "nullptr";
+        }
+
         if (parameter.IsBitset)
         {
             return $"std::bitset<{parameter.BitsetBits}>({name})";
@@ -2670,7 +2675,7 @@ internal static class ShimEmitter
         for (var index = 0; index < function.Parameters.Count; index++)
         {
             var parameter = function.Parameters[index];
-            if (parameter.IsVector)
+            if (parameter.IsVector || parameter.Kind == AbiKind.Placeholder)
             {
                 continue;
             }
@@ -3303,6 +3308,14 @@ internal static class ShimEmitter
                 continue;
             }
 
+            if (parameter.Kind == AbiKind.Placeholder)
+            {
+                callParameters.Add(parameter.SpecialValue == SpecialValueKind.Nullopt
+                    ? "std::nullopt_t"
+                    : "std::nullptr_t");
+                continue;
+            }
+
             var optionalType = SymbolOptionalType(parameter, layoutsByQualifiedName);
             if (optionalType is not null)
             {
@@ -3542,6 +3555,9 @@ internal static class ShimEmitter
 
                 callArguments.Add(parameter.Kind switch
                 {
+                    AbiKind.Placeholder => parameter.SpecialValue == SpecialValueKind.Nullopt
+                        ? "std::nullopt"
+                        : "nullptr",
                     // A borrowed-string constructor receives the holder-owned copies so the
                     // fields keep pointing at live storage after the call returns.
                     AbiKind.StringView when borrowedStrings is not null

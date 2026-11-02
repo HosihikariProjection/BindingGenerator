@@ -25,6 +25,7 @@ internal enum AbiKind
     Vector,
     Shared,
     MapView,
+    Placeholder,
 }
 
 internal enum AbiFunctionKind
@@ -198,6 +199,8 @@ internal enum SpecialValueKind
     TypeId,
     StrongOrdering,
     Path,
+    Nullptr,
+    Nullopt,
 }
 
 internal enum TimeConversion
@@ -5422,6 +5425,37 @@ internal sealed class AbiPlan
             return true;
         }
 
+        // Defaulted placeholder arguments (nullptr / nullopt) carry no information across
+        // the boundary: the shim supplies the literal at the call site and the C ABI omits
+        // the slot, so managed callers never see these parameters.
+        var placeholderName = StripTopLevelQualifiers(text);
+        if (!IsReferenceType(text) && !IsPointerType(text))
+        {
+            if (placeholderName is "std::nullptr_t" or "nullptr_t")
+            {
+                parameter = new AbiParameter
+                {
+                    Name = name,
+                    Kind = AbiKind.Placeholder,
+                    NativeType = text,
+                    SpecialValue = SpecialValueKind.Nullptr,
+                };
+                return true;
+            }
+
+            if (placeholderName is "std::nullopt_t" or "nullopt_t")
+            {
+                parameter = new AbiParameter
+                {
+                    Name = name,
+                    Kind = AbiKind.Placeholder,
+                    NativeType = text,
+                    SpecialValue = SpecialValueKind.Nullopt,
+                };
+                return true;
+            }
+        }
+
         // gsl::not_null<T*> is a single-pointer struct with a defaulted copy constructor, so
         // it crosses the ABI exactly like T*. Only the pointer form unwraps; not_null of an
         // owning wrapper keeps that wrapper's ABI, which no plain pointer can stand in for.
@@ -6904,6 +6938,12 @@ internal sealed class AbiPlan
 
         foreach (var parameter in function.Parameters)
         {
+            // Placeholders are supplied by the shim itself and never cross the C ABI.
+            if (parameter.Kind == AbiKind.Placeholder)
+            {
+                continue;
+            }
+
             var optionalRefParameter = parameter.IsOptionalRef && parameter.Kind == AbiKind.Opaque;
             var optionalRecordParameter = parameter.IsOptional
                 && !optionalRefParameter
@@ -6976,6 +7016,7 @@ internal sealed class AbiPlan
                 case AbiKind.F32:
                 case AbiKind.F64:
                 case AbiKind.Shared:
+                case AbiKind.Placeholder:
                     break;
                 case AbiKind.StringView:
                     if (!IsStringType(parameter.NativeType) && !IsStringViewType(parameter.NativeType))

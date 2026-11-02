@@ -739,7 +739,7 @@ internal static class InteropEmitter
 
         foreach (var parameter in function.Parameters)
         {
-            if (parameter.IsVector || parameter.IsMap)
+            if (parameter.IsVector || parameter.IsMap || parameter.Kind == AbiKind.Placeholder)
             {
                 continue;
             }
@@ -819,18 +819,40 @@ internal static class InteropEmitter
                     baseName += "_";
                 }
 
-                return (Member: member, Name: baseName, Key: MemberKey(member, plan));
+                var planned = member.Kind == "constructor"
+                    && plan.CreateByMember.TryGetValue(member.Id, out var create)
+                        ? create
+                        : member.Kind is "method" or "operator"
+                            && plan.MethodByMember.TryGetValue(member.Id, out var method)
+                                ? method
+                                : null;
+                var placeholderFree = planned is null
+                    || !planned.Parameters.Any(parameter => parameter.Kind == AbiKind.Placeholder);
+                return (Member: member, Name: baseName, Key: MemberKey(member, plan), PlaceholderFree: placeholderFree);
             })
             .ToList();
 
         foreach (var group in candidates.GroupBy(candidate => (candidate.Name, candidate.Key)))
         {
-            var duplicate = group.Count() > 1;
-            foreach (var candidate in group)
+            var list = group.ToList();
+            if (list.Count == 1)
             {
-                var name = duplicate
-                    ? candidate.Name + "_" + CSharpNaming.ShortHash(candidate.Member.Id)
-                    : candidate.Name;
+                result[list[0].Member.Id] = list[0].Name;
+                continue;
+            }
+
+            // Hiding a placeholder parameter can collapse two overloads onto the same C#
+            // signature. Keep the plain name for the overload that never had a placeholder
+            // and suffix only the collapsed ones; a genuine overload collision still
+            // suffixes every member.
+            var plainId = list.Count(candidate => candidate.PlaceholderFree) == 1
+                ? list.Find(candidate => candidate.PlaceholderFree).Member.Id
+                : null;
+            foreach (var candidate in list)
+            {
+                var name = candidate.Member.Id == plainId
+                    ? candidate.Name
+                    : candidate.Name + "_" + CSharpNaming.ShortHash(candidate.Member.Id);
                 result[candidate.Member.Id] = name;
             }
         }
@@ -842,13 +864,13 @@ internal static class InteropEmitter
     {
         if (member.Kind == "constructor" && plan.CreateByMember.TryGetValue(member.Id, out var create))
         {
-            return "constructor:" + string.Join(",", create.Parameters.Select(ParameterKey));
+            return "constructor:" + string.Join(",", create.Parameters.Select(ParameterKey).Where(key => key is not null));
         }
 
         if (member.Kind is "method" or "operator"
             && plan.MethodByMember.TryGetValue(member.Id, out var method))
         {
-            return member.Kind + ":" + string.Join(",", method.Parameters.Select(ParameterKey));
+            return member.Kind + ":" + string.Join(",", method.Parameters.Select(ParameterKey).Where(key => key is not null));
         }
 
         if (member.Kind is "method" or "function" or "operator" or "constructor" or "destructor")
@@ -862,8 +884,10 @@ internal static class InteropEmitter
         return "field";
     }
 
-    private static string ParameterKey(AbiParameter parameter) =>
-        parameter.IsUniquePtrParam
+    private static string? ParameterKey(AbiParameter parameter) =>
+        parameter.Kind == AbiKind.Placeholder
+            ? null
+            : parameter.IsUniquePtrParam
             ? "unique_ptr:" + parameter.NativePointee
             : parameter.Kind == AbiKind.Shared
             ? "shared:" + AbiPlan.CSharpParameterType(parameter)
@@ -1402,6 +1426,11 @@ internal static class InteropEmitter
         for (var index = 0; index < parameters.Count; index++)
         {
             var parameter = parameters[index];
+            if (parameter.Kind == AbiKind.Placeholder)
+            {
+                continue;
+            }
+
             if (parameter.Kind == AbiKind.Callback)
             {
                 var (invoke, userData, release) = CallbackNames(parameters, index);
@@ -1479,6 +1508,11 @@ internal static class InteropEmitter
         for (var index = 0; index < parameters.Count; index++)
         {
             var parameter = parameters[index];
+            if (parameter.Kind == AbiKind.Placeholder)
+            {
+                continue;
+            }
+
             var name = CSharpParameterName(parameters, index);
             if (parameter.IsOptional)
             {
