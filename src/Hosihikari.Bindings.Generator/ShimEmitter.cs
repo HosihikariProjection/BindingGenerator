@@ -2173,12 +2173,14 @@ internal static class ShimEmitter
             "#include <cstring>",
             "#include <exception>",
             "#include <memory>",
+            "#include <mutex>",
             "#include <new>",
             "#include <optional>",
             "#include <stdexcept>",
             "#include <string>",
             "#include <string_view>",
             "#include <typeindex>",
+            "#include <unordered_map>",
             "#include <utility>",
             "#include <vector>",
             "#ifdef _WIN32",
@@ -2210,6 +2212,37 @@ internal static class ShimEmitter
             "        }",
             "    }",
             "};",
+            "",
+            "// Keeps the strings a borrowed-string class refers to alive until the object is",
+            "// destroyed; the registry is keyed by the object pointer.",
+            "struct hs_symbol_holder",
+            "{",
+            "    std::vector<std::string> strings;",
+            "};",
+            "",
+            "inline std::mutex hs_symbolHolderMutex;",
+            "inline std::unordered_map<void*, hs_symbol_holder*> hs_symbolHolders;",
+            "",
+            "inline void hs_register_symbol_holder(void* target, hs_symbol_holder* holder)",
+            "{",
+            "    std::lock_guard<std::mutex> lock(hs_symbolHolderMutex);",
+            "    hs_symbolHolders[target] = holder;",
+            "}",
+            "",
+            "inline void hs_release_symbol_holder(void* target)",
+            "{",
+            "    hs_symbol_holder* holder = nullptr;",
+            "    {",
+            "        std::lock_guard<std::mutex> lock(hs_symbolHolderMutex);",
+            "        auto it = hs_symbolHolders.find(target);",
+            "        if (it != hs_symbolHolders.end())",
+            "        {",
+            "            holder = it->second;",
+            "            hs_symbolHolders.erase(it);",
+            "        }",
+            "    }",
+            "    delete holder;",
+            "}",
             "",
         };
 
@@ -3404,6 +3437,10 @@ internal static class ShimEmitter
             yield return "    if (hs_fn != nullptr) { hs_fn(hs_self); }";
             var align = layout?.Align > 0 ? layout!.Align : 8;
             yield return $"    hs_deallocate(hs_self, {align.ToString(CultureInfo.InvariantCulture)});";
+            if (function.BorrowedStrings)
+            {
+                yield return "    hs_release_symbol_holder(hs_self);";
+            }
         }
         else
         {
@@ -3420,6 +3457,29 @@ internal static class ShimEmitter
                 yield return "        setLastError(\"the returned record copy or destructor symbol was not resolved\");";
                 yield return "        return nullptr;";
                 yield return "    }";
+            }
+
+            // A class that stores string_view/reference fields keeps pointers into its
+            // constructor arguments; the holder owns the strings for the object's lifetime.
+            Dictionary<int, int>? borrowedStrings = null;
+            if (function.Kind == AbiFunctionKind.Create && function.BorrowedStrings)
+            {
+                borrowedStrings = new Dictionary<int, int>();
+                var ordinal = 0;
+                for (var index = 0; index < function.Parameters.Count; index++)
+                {
+                    if (function.Parameters[index].Kind == AbiKind.StringView)
+                    {
+                        borrowedStrings[index] = ordinal++;
+                    }
+                }
+
+                yield return "    auto* const hs_holder = new hs_symbol_holder();";
+                yield return $"    hs_holder->strings.reserve({ordinal.ToString(CultureInfo.InvariantCulture)});";
+                foreach (var index in borrowedStrings.Keys.OrderBy(value => value))
+                {
+                    yield return $"    hs_holder->strings.emplace_back(hs_str{index});";
+                }
             }
 
             var callArguments = new List<string>();
@@ -3482,6 +3542,11 @@ internal static class ShimEmitter
 
                 callArguments.Add(parameter.Kind switch
                 {
+                    // A borrowed-string constructor receives the holder-owned copies so the
+                    // fields keep pointing at live storage after the call returns.
+                    AbiKind.StringView when borrowedStrings is not null
+                        && borrowedStrings.TryGetValue(index, out var borrowedOrdinal) =>
+                            $"hs_holder->strings[{borrowedOrdinal.ToString(CultureInfo.InvariantCulture)}]",
                     // An rvalue reference parameter has to receive an rvalue; the shim's
                     // local string is movable and is destroyed by the shim afterwards.
                     AbiKind.StringView => parameter.IsRValueReference
@@ -3503,6 +3568,11 @@ internal static class ShimEmitter
             else if (function.Kind == AbiFunctionKind.Create)
             {
                 yield return $"    {call};";
+                if (function.BorrowedStrings)
+                {
+                    yield return "    hs_register_symbol_holder(hs_memory, hs_holder);";
+                }
+
                 yield return "    return hs_memory;";
             }
             else if (function.ReturnKind == AbiKind.Void)

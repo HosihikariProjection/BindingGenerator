@@ -297,6 +297,12 @@ internal sealed class AbiFunction
 
     public bool CreateViaBorrowedHolder { get; init; }
     public bool DestroyViaBorrowedHolder { get; init; }
+
+    /// <summary>
+    /// True when the class stores string_view/reference fields; symbol dispatch keeps the
+    /// constructor's strings alive in a registered holder until the object is destroyed.
+    /// </summary>
+    public bool BorrowedStrings { get; init; }
     public bool ReturnExpected { get; init; }
     public string? ExpectedErrorType { get; init; }
     public bool NeedsPresenceFlag => ReturnOptional || ReturnExpected;
@@ -1023,10 +1029,6 @@ internal sealed class AbiPlan
                     else if (!layoutDeclarationIds.Contains(declaration.Id))
                     {
                         reason = "the class layout is unavailable";
-                    }
-                    else if (ownsBorrowedString)
-                    {
-                        reason = "classes that store borrowed strings are not supported by symbol dispatch";
                     }
                 }
                 else if (!(virtualDispatch ? constructor.Inline
@@ -2907,7 +2909,8 @@ internal sealed class AbiPlan
             ReturnKind = AbiKind.Opaque,
             NativeReturnType = "void*",
             Parameters = parameters,
-            CreateViaBorrowedHolder = ownsBorrowedString,
+            CreateViaBorrowedHolder = ownsBorrowedString && !symbolDispatch,
+            BorrowedStrings = ownsBorrowedString,
         };
         return true;
     }
@@ -2982,6 +2985,7 @@ internal sealed class AbiPlan
             ReturnKind = AbiKind.Void,
             NativeReturnType = "void",
             DestroyViaBorrowedHolder = borrowed,
+            BorrowedStrings = borrowed,
         };
 
     private static bool TryBuildMethod(
