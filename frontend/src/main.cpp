@@ -920,7 +920,17 @@ private:
         }
         const Decl* Anchor = accessAnchor(D);
         AccessSpecifier Resolved = Anchor->getAccess();
-        return Resolved != AS_none ? Resolved : accessFromLexicalContext(Anchor);
+        if (Resolved != AS_none) {
+            return Resolved;
+        }
+        // A friend declaration sits in a class body but belongs to the enclosing
+        // namespace, so its semantic context differs from its lexical context. It is
+        // not a member and takes no access from the class body; AS_none keeps the
+        // pre-existing "no access restriction" reading. Only a true member is scanned.
+        if (Anchor->getDeclContext() != Anchor->getLexicalDeclContext()) {
+            return AS_none;
+        }
+        return accessFromLexicalContext(Anchor);
     }
 
     bool isDeclAccessible(const Decl* D) const {
