@@ -121,4 +121,4 @@ python frontend/merge-ir.py --base <base-ir> --supplement <module-ir> --output <
 
 The frontend is not part of the .NET fixture job; it requires the pinned LLVM toolchain, zlib/zstd, and the MSVC/SDK or libstdc++ headers. The `endstone-linux-ir` CI job builds it on Linux, generates `linux-x64-server` IR from Endstone 0.11.14, emits from that IR, and compiles the resulting shim.
 
-`build.ps1`, `run-local.ps1`, and `run-umbrella.ps1` cover the local Windows slice; `build.sh` and `run-endstone.sh` cover the Linux slice.
+`build.ps1`, `run-local.ps1`, and `run-umbrella.ps1` cover the local Windows slice; `build.sh` and `run-endstone.sh` cover the Linux slice. `new-carrier.ps1` drives a whole carrier bump across the binding surfaces; see the repository README.

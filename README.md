@@ -90,6 +90,25 @@ The complete LLAPI umbrella currently selects 496 link-safe functions, or 3,819 
 
 `frontend/run-endstone.sh` generates the `linux-x64-server` configuration on Linux. The `endstone-linux-ir` CI job builds the frontend against LLVM 23.1.4, generates and validates the IR, emits the Interop and shim, compares the emitted Interop byte-for-byte with the committed Windows-IR output, and compiles the shim. Fixed-width spellings, standard-library iterator types, and `system_clock::time_point` durations are normalized to the Windows form so declaration ids, table field hashes, and coverage stay identical across platforms (ADR 0018).
 
+## Carrier updates
+
+`frontend/new-carrier.ps1` runs a carrier bump end to end: it resolves a `Third/` checkout (adding a git worktree with `-Fetch`), validates the Bedrock header list and can prune paths the carrier dropped (`-PruneHeaderList`, which repoints a uniquely named file and never overwrites the input list), builds the carrier with xmake when the `llapi` surface needs `LeviLamina.lib`, runs the frontend and emitters, checks the committed provenance against the checkout, and optionally runs the runtime smoke.
+
+```shell
+# preview: resolve the carrier and validate the header list only
+powershell -File frontend/new-carrier.ps1 -Carrier levilamina -Version v26.61.0 -Fetch -DryRun
+
+# Bedrock and LLAPI from a rebuilt carrier
+powershell -File frontend/new-carrier.ps1 -Carrier levilamina -Version v26.61.0 -Fetch -BuildCarrier
+
+# Endstone only
+powershell -File frontend/new-carrier.ps1 -Carrier endstone -Version v0.11.16 -Fetch -Surface endstone
+```
+
+`frontend/carriers.json` records the carrier versions the surfaces are generated from. The `carrier-canary` workflow compares those pins with the newest upstream `vX.Y.Z` tag every Monday and opens or updates a `carrier-update` issue when one is newer; the issue body carries the matching `new-carrier.ps1` command.
+
+The script stops before the product-level follow-ups: package `<Version>` values, README and profile coverage numbers, coverage baselines, and `frontend/carriers.json` itself.
+
 ## Related repositories
 
 - `HosihikariProjection/BindingIr`: schema, models, reader/writer, validator.

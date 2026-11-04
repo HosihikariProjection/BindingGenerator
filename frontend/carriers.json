@@ -1,0 +1,10 @@
+{
+  "levilamina": {
+    "repository": "LiteLDev/LeviLamina",
+    "tag": "v26.60.0"
+  },
+  "endstone": {
+    "repository": "EndstoneMC/endstone",
+    "tag": "v0.11.15"
+  }
+}

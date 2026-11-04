@@ -75,6 +75,25 @@ powershell -File frontend/smoke-shim.ps1 -IrDirectory artifacts/llapi-full-ir -L
 
 `frontend/run-endstone.sh` 在 Linux 上生成 `linux-x64-server` 配置。`endstone-linux-ir` CI 作业构建针对 LLVM 23.1.4 的前端，生成并校验 IR，发射 Interop 与 shim，将发射出的 Interop 与已提交的 Windows-IR 输出逐字节比对，并编译 shim。固定宽度类型的拼写、标准库迭代器类型与 `system_clock::time_point` 的 duration 会归一到 Windows 形态，使声明 id、函数表字段哈希与覆盖在平台间保持一致（ADR 0018）。
 
+## 载体更新
+
+`frontend/new-carrier.ps1` 端到端完成一次载体升级：解析 `Third/` 下的检出（`-Fetch` 时补建 git worktree）、校验 Bedrock 头文件列表并可按需裁剪载体已删除的路径（`-PruneHeaderList` 会把文件名唯一的路径重指向实际位置，且从不覆盖输入列表）、在 `llapi` 面需要 `LeviLamina.lib` 时用 xmake 构建载体、运行前端与发射器、对照检出校验已提交的来源信息，并可选地在真实服务器里跑运行期 smoke。
+
+```shell
+# 预览：只解析载体并校验头文件列表
+powershell -File frontend/new-carrier.ps1 -Carrier levilamina -Version v26.61.0 -Fetch -DryRun
+
+# 从重新构建的载体生成 Bedrock 与 LLAPI
+powershell -File frontend/new-carrier.ps1 -Carrier levilamina -Version v26.61.0 -Fetch -BuildCarrier
+
+# 只生成 Endstone
+powershell -File frontend/new-carrier.ps1 -Carrier endstone -Version v0.11.16 -Fetch -Surface endstone
+```
+
+`frontend/carriers.json` 记录各互操作面当前发射所用的载体版本。`carrier-canary` 工作流每周一对照上游最新的 `vX.Y.Z` tag，发现更新时创建或更新带 `carrier-update` 标签的 issue，正文给出对应的 `new-carrier.ps1` 命令。
+
+脚本不处理产品层面的收尾：包 `<Version>`、README 与 profile 的覆盖数字、覆盖基线以及 `frontend/carriers.json` 本身。
+
 ## 相关仓库
 
 - `HosihikariProjection/BindingIr`：schema、模型、读写器与校验器。
