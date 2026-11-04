@@ -46,10 +46,24 @@ if ([string]::IsNullOrWhiteSpace($FmtLib)) {
 
 if ([string]::IsNullOrWhiteSpace($BedrockRuntimeData)) {
     $DataCandidates = Get-ChildItem "$env:LOCALAPPDATA\.xmake\packages\b\bedrockdata" -Recurse -Filter bedrock_runtime_data -ErrorAction SilentlyContinue
-    $Data = $DataCandidates |
-        Where-Object { $_.FullName -match '-server\.(\d+)' } |
-        Sort-Object { [int]($_.FullName -replace '.*-server\.(\d+).*', '$1') } -Descending |
-        Select-Object -First 1
+    # The carrier pins one bedrockdata revision; the highest build number is not
+    # necessarily the one it targets (26.60 pins server.5 while server.12 is 26.51).
+    $Pinned = $null
+    $CarrierLua = Join-Path $LeviLaminaRoot "xmake.lua"
+    if (Test-Path $CarrierLua) {
+        $Match = Select-String -Path $CarrierLua -Pattern 'bedrockdata\s+(v[0-9.]+-server\.\d+)' | Select-Object -First 1
+        if ($Match) {
+            $PinnedVersion = $Match.Matches[0].Groups[1].Value
+            $Pinned = $DataCandidates | Where-Object { $_.FullName -match [regex]::Escape("\$PinnedVersion\") } | Select-Object -First 1
+        }
+    }
+    $Data = $Pinned
+    if (-not $Data) {
+        $Data = $DataCandidates |
+            Where-Object { $_.FullName -match '-server\.(\d+)' } |
+            Sort-Object { [int]($_.FullName -replace '.*-server\.(\d+).*', '$1') } -Descending |
+            Select-Object -First 1
+    }
     if (-not $Data) {
         $Data = $DataCandidates | Select-Object -First 1
     }

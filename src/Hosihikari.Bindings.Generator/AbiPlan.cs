@@ -105,6 +105,13 @@ internal sealed class AbiParameter
     public string? VectorPairKeyType { get; init; }
     public string? VectorPairValueType { get; init; }
     public bool IsWeakPtr { get; init; }
+
+    /// <summary>
+    /// Which control-block wrapper a <see cref="AbiKind.Shared"/> parameter arrived as.
+    /// The ABI is the same for all of them; the kind records that the handle owns a
+    /// control block rather than a raw pointer.
+    /// </summary>
+    public SharedWrapperKind SharedWrapper { get; init; }
     public bool IsBitset { get; init; }
     public int BitsetBits { get; init; }
     public bool IsUniquePtrParam { get; init; }
@@ -1295,6 +1302,13 @@ internal sealed class AbiPlan
                 {
                     reason = "the member is pure virtual";
                 }
+                else if (linkCarrier && IsUninstantiatedTemplateMember(method))
+                {
+                    // The body addresses CommandRegistry::parse<T>, a static member of a
+                    // class template that the carrier never instantiates and never exports,
+                    // so compiling the inline body leaves an unresolved import.
+                    reason = "the inline body addresses a template member the carrier does not export";
+                }
                 else if (method.MemberTemplate)
                 {
                     reason = "member function templates are not projected";
@@ -2289,6 +2303,16 @@ internal sealed class AbiPlan
 
         return text;
     }
+
+    /// <summary>
+    /// True for the one shape known to leave an unresolved import: a static helper on a
+    /// template instance whose inline body takes the address of another template's static
+    /// member. `ParamTraitsBase<T>::parseFn` returns `&CommandRegistry::parse<T>`, and the
+    /// carrier instantiates that only for its own types, never exporting it.
+    /// </summary>
+    private static bool IsUninstantiatedTemplateMember(MemberRecord method) =>
+        method.Name == "parseRule"
+        && method.DeclarationId.Contains("ParamTraitsBase<", StringComparison.Ordinal);
 
     private static bool HasExportedSymbol(DeclarationRecord declaration, MemberRecord member) =>
         member.Inline
@@ -4997,6 +5021,9 @@ internal sealed class AbiPlan
         return false;
     }
 
+    private static bool IsEntityContextGameRef(string pointee) =>
+        pointee is "EntityContext" or "EntityContext const" or "EntityId";
+
     private static bool TryParseSharedWrapper(
         string canonical,
         out SharedWrapperKind wrapper,
@@ -5492,6 +5519,29 @@ internal sealed class AbiPlan
                 NativeType = NormalizeTypeName(text),
                 NativePointee = weakPointee,
                 IsWeakPtr = true,
+                IsReference = IsReferenceType(text),
+                IsConst = IsConstType(text),
+            };
+            return true;
+        }
+
+        if (!IsPointerType(text)
+            && TryParseReferenceWrapper(text, out var parameterWrapper, out var parameterPointee)
+            && !(parameterWrapper == SharedWrapperKind.SharedPtr && IsEntityContextGameRef(parameterPointee)))
+        {
+            // OwnerPtr, StackRefResult, WeakRef and Bedrock::NonOwnerPointer all carry a
+            // shared control block, so a parameter crosses the ABI as a shared handle just
+            // like std::shared_ptr; only the shim-side unpacking differs. GameRefs for
+            // EntityContext is not reached here: OwnerPtr<EntityContext> stores an
+            // optional<EntityContext>, not a shared_ptr.
+            parameter = new AbiParameter
+            {
+                Name = name,
+                Kind = AbiKind.Shared,
+                NativeType = NormalizeTypeName(text),
+                NativePointee = parameterPointee,
+                IsWeakPtr = parameterWrapper == SharedWrapperKind.WeakPtr,
+                SharedWrapper = parameterWrapper,
                 IsReference = IsReferenceType(text),
                 IsConst = IsConstType(text),
             };
