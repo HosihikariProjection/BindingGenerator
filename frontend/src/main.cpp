@@ -869,20 +869,44 @@ private:
         }
     }
 
-    bool isDeclAccessible(const Decl* D) const {
-        if (const auto* Tag = dyn_cast<TagDecl>(D)) {
-            AccessSpecifier Access = Tag->getAccess();
-            if (Access == AS_private || Access == AS_protected) {
-                return false;
+    // An implicit specialization of a member template is declared in the enclosing
+    // namespace, not in the class that owns the template, and getAccess() on it is
+    // AS_none. Resolve both the access and the enclosing context through the templated
+    // declaration, otherwise a private nested template specialization looks public.
+    static const Decl* accessAnchor(const Decl* D) {
+        if (const auto* Spec = dyn_cast<ClassTemplateSpecializationDecl>(D)) {
+            if (const auto* Template = Spec->getSpecializedTemplate()) {
+                return Template->getTemplatedDecl();
             }
         }
-        for (const DeclContext* Context = D->getDeclContext(); Context; Context = Context->getParent()) {
+        return D;
+    }
+
+    AccessSpecifier effectiveAccess(const Decl* D) const {
+        AccessSpecifier Access = D->getAccess();
+        if (Access != AS_none) {
+            return Access;
+        }
+        return accessAnchor(D)->getAccess();
+    }
+
+    bool isDeclAccessible(const Decl* D) const {
+        AccessSpecifier Own = effectiveAccess(D);
+        if (Own == AS_private || Own == AS_protected) {
+            return false;
+        }
+        for (const DeclContext* Context = accessAnchor(D)->getDeclContext(); Context; Context = Context->getParent()) {
             if (const auto* Tag = dyn_cast<TagDecl>(Context)) {
-                AccessSpecifier Access = Tag->getAccess();
+                // The enclosing context can itself be a specialization (a member template
+                // nested in a class template); getAccess() is AS_none there too.
+                AccessSpecifier Access = effectiveAccess(Tag);
                 if (Access == AS_private || Access == AS_protected) {
                     return false;
                 }
-            } else if (!isa<NamespaceDecl>(Context) && !isa<TranslationUnitDecl>(Context)) {
+                Context = accessAnchor(Tag)->getDeclContext();
+                continue;
+            }
+            if (!isa<NamespaceDecl>(Context) && !isa<TranslationUnitDecl>(Context)) {
                 break;
             }
         }
@@ -1107,7 +1131,7 @@ private:
         Object["surface"] = Opt.Surface;
         Object["kind"] = Kind;
         Object["qualifiedName"] = qualifiedNameFor(Decl);
-        Object["access"] = accessString(Decl->getAccess());
+        Object["access"] = accessString(effectiveAccess(Decl));
         Object["linkage"] = Decl->isExternallyVisible() ? "external" : "internal";
         Object["source"] = makeSource(Decl->getLocation());
 
