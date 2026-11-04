@@ -869,12 +869,15 @@ private:
         }
     }
 
-    // An implicit specialization of a member template is declared in the enclosing
-    // namespace, not in the class that owns the template, and getAccess() on it is
-    // AS_none. Resolve both the access and the enclosing context through the templated
-    // declaration, otherwise a private nested template specialization looks public.
+    // An implicit specialization of a member template is declared in the class that
+    // instantiated it, and neither its getAccess() nor the templated declaration's
+    // reports the access: both are AS_none. Recover it from the pattern declaration by
+    // scanning the class body for the AccessSpecDecl that precedes it.
     static const Decl* accessAnchor(const Decl* D) {
         if (const auto* Spec = dyn_cast<ClassTemplateSpecializationDecl>(D)) {
+            if (const auto* Pattern = Spec->getTemplateInstantiationPattern()) {
+                return Pattern;
+            }
             if (const auto* Template = Spec->getSpecializedTemplate()) {
                 return Template->getTemplatedDecl();
             }
@@ -882,12 +885,42 @@ private:
         return D;
     }
 
-    AccessSpecifier effectiveAccess(const Decl* D) const {
-        AccessSpecifier Access = D->getAccess();
-        if (Access != AS_none) {
-            return Access;
+    static AccessSpecifier accessFromLexicalContext(const Decl* D) {
+        const DeclContext* Context = D->getLexicalDeclContext();
+        if (Context == nullptr) {
+            return AS_none;
         }
-        return accessAnchor(D)->getAccess();
+        // A class body starts in private access and a struct or union in public; AS_none
+        // here means "no specifier seen yet", not "unset".
+        AccessSpecifier Current = isa<CXXRecordDecl>(Context)
+            && cast<CXXRecordDecl>(Context)->isClass()
+            ? AS_private
+            : AS_public;
+        for (const Decl* Child : Context->decls()) {
+            if (const auto* Spec = dyn_cast<AccessSpecDecl>(Child)) {
+                Current = Spec->getAccess();
+                continue;
+            }
+            if (Child == D) {
+                return Current;
+            }
+            if (const auto* Template = dyn_cast<RedeclarableTemplateDecl>(Child)) {
+                if (Template->getTemplatedDecl() == D) {
+                    return Current;
+                }
+            }
+        }
+        return Current;
+    }
+
+    AccessSpecifier effectiveAccess(const Decl* D) const {
+        AccessSpecifier Own = D->getAccess();
+        if (Own != AS_none) {
+            return Own;
+        }
+        const Decl* Anchor = accessAnchor(D);
+        AccessSpecifier Resolved = Anchor->getAccess();
+        return Resolved != AS_none ? Resolved : accessFromLexicalContext(Anchor);
     }
 
     bool isDeclAccessible(const Decl* D) const {
@@ -897,8 +930,6 @@ private:
         }
         for (const DeclContext* Context = accessAnchor(D)->getDeclContext(); Context; Context = Context->getParent()) {
             if (const auto* Tag = dyn_cast<TagDecl>(Context)) {
-                // The enclosing context can itself be a specialization (a member template
-                // nested in a class template); getAccess() is AS_none there too.
                 AccessSpecifier Access = effectiveAccess(Tag);
                 if (Access == AS_private || Access == AS_protected) {
                     return false;
