@@ -844,7 +844,9 @@ internal sealed class AbiPlan
             if (symbolDispatch)
             {
                 return destructor is null
-                    || (destructor.Access == "public" && HasSymbolAddress(destructor));
+                    || (destructor.Access == "public"
+                        && HasSymbolAddress(destructor)
+                        && !HasUnavailableAnnotation(destructor));
             }
 
             var hasOutOfLineMethod = declarationMembers.Any(member =>
@@ -876,7 +878,8 @@ internal sealed class AbiPlan
             {
                 explicitDestructor = destructor is not null
                     && destructor.Access == "public"
-                    && HasSymbolAddress(destructor);
+                    && HasSymbolAddress(destructor)
+                    && !HasUnavailableAnnotation(destructor);
                 return destructor is null || explicitDestructor;
             }
 
@@ -1036,7 +1039,11 @@ internal sealed class AbiPlan
                          && !member.Id.Contains("@support:", StringComparison.Ordinal)))
             {
                 string? reason = null;
-                if (symbolDispatch)
+                if (HasUnavailableAnnotation(constructor))
+                {
+                    reason = UnavailableMemberReason;
+                }
+                else if (symbolDispatch)
                 {
                     if (!HasSymbolAddress(constructor))
                     {
@@ -1127,7 +1134,9 @@ internal sealed class AbiPlan
                     member.Kind == "destructor" && member.Access == "public");
                 if (destructor is not null)
                 {
-                    skipReasons[destructor.Id] = "the class has no accessible destructor";
+                    skipReasons[destructor.Id] = HasUnavailableAnnotation(destructor)
+                        ? UnavailableMemberReason
+                        : "the class has no accessible destructor";
                 }
             }
 
@@ -1273,7 +1282,11 @@ internal sealed class AbiPlan
                          member.Kind is "method" or "operator" && member.Access == "public"))
             {
                 string? reason = null;
-                if (symbolDispatch)
+                if (HasUnavailableAnnotation(method))
+                {
+                    reason = UnavailableMemberReason;
+                }
+                else if (symbolDispatch)
                 {
                     if (!HasDispatchEntry(method))
                     {
@@ -2328,6 +2341,16 @@ internal sealed class AbiPlan
 
     private static bool HasExportMacro(IEnumerable<MacroUseInfo> macros) =>
         macros.Any(macro => macro.Name is "LLAPI" or "LLNDAPI" or "LLCAPI" or "MCAPI" or "MCNAPI" or "ENDSTONE_EVENT");
+
+    // MCNAPI is the carrier's "known but not exported" marker. Such a member has a
+    // mangled name, but the server never exports it: a prelink against the pinned
+    // runtime data resolves 2 of 27,673 MCNAPI names against 3,871 of 4,183 MCAPI
+    // names, so planning a call would only produce a function that fails at run time.
+    internal const string UnavailableMemberReason =
+        "the carrier annotates this member MCNAPI, so the run time does not export it";
+
+    internal static bool HasUnavailableAnnotation(MemberRecord member) =>
+        member.Macros.Any(macro => string.Equals(macro.Name, "MCNAPI", StringComparison.Ordinal));
 
     internal static string NormalizeTemplateTypeName(string value) => NormalizeTypeName(value);
 

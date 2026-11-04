@@ -862,26 +862,83 @@ internal static class InteropEmitter
 
     private static string MemberKey(MemberRecord member, AbiPlan plan)
     {
+        AbiFunction? planned = null;
         if (member.Kind == "constructor" && plan.CreateByMember.TryGetValue(member.Id, out var create))
         {
-            return "constructor:" + string.Join(",", create.Parameters.Select(ParameterKey).Where(key => key is not null));
+            planned = create;
         }
-
-        if (member.Kind is "method" or "operator"
+        else if (member.Kind is "method" or "operator"
             && plan.MethodByMember.TryGetValue(member.Id, out var method))
         {
-            return member.Kind + ":" + string.Join(",", method.Parameters.Select(ParameterKey).Where(key => key is not null));
+            planned = method;
         }
 
-        if (member.Kind is "method" or "function" or "operator" or "constructor" or "destructor")
+        if (planned is not null)
         {
-            var parameters = member.Signature?.Parameters
-                .Select(parameter => TypeNames.ToCSharpType(new TypeRef { Kind = "fundamental", Canonical = parameter.Type }))
-                ?? [];
-            return member.Kind + ":" + string.Join(",", parameters);
+            return EmittedParameterTypes(planned);
         }
 
-        return "field";
+        return member.Kind is "method" or "function" or "operator" or "constructor" or "destructor"
+            ? StubParameterTypes(member)
+            : "field";
+    }
+
+    // C# distinguishes overloads by parameter type alone, so the key must be the type as
+    // written. AbiFunction -> C# is not injective: a stubbed member and a planned one with
+    // the same spelling, or a by-value record and its `T?` form, collapse to one signature.
+    // Keying on the planned ABI kind would keep them apart and emit CS0111.
+    private static string EmittedParameterTypes(AbiFunction function)
+    {
+        var types = new List<string>();
+        foreach (var parameter in function.Parameters)
+        {
+            if (parameter.Kind == AbiKind.Placeholder)
+            {
+                continue;
+            }
+
+            if (parameter.Kind == AbiKind.Callback)
+            {
+                types.Add("nint");
+                types.Add("nint");
+                types.Add("nint");
+                continue;
+            }
+
+            var type = CSharpDeclarationType(parameter);
+            if (function.MutableStringOutRef && parameter.IsMutableString)
+            {
+                type = "ref " + type;
+            }
+
+            // A generated wrapper and SharedHandle are classes, so `T` and `T?` are one
+            // type to the overload resolver. Only a nullable value type is distinct.
+            if (type.EndsWith("?", StringComparison.Ordinal)
+                && parameter.Kind is AbiKind.Opaque or AbiKind.Shared)
+            {
+                type = type[..^1];
+            }
+
+            types.Add(type);
+        }
+
+        return string.Join(",", types);
+    }
+
+    private static string StubParameterTypes(MemberRecord member)
+    {
+        if (member.Signature is null)
+        {
+            return "";
+        }
+
+        var types = new List<string>();
+        foreach (var parameter in member.Signature.Parameters)
+        {
+            types.Add(TypeNames.ToCSharpType(new TypeRef { Kind = "fundamental", Canonical = parameter.Type }));
+        }
+
+        return string.Join(",", types);
     }
 
     private static string? ParameterKey(AbiParameter parameter) =>
