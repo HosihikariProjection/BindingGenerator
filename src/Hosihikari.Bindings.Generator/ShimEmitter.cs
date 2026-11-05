@@ -549,6 +549,16 @@ internal static class ShimEmitter
             var visited = new HashSet<string>(StringComparer.Ordinal);
             foreach (var argument in declaration.Template.Arguments)
             {
+                if (argument.Complete is false
+                    && GameRefArgumentHeader(argument.Value) is { } gameRefHeader)
+                {
+                    // An incomplete OwnerPtr/WeakRef/StackRefResult has no declaration of its
+                    // own in the IR, so the include walk cannot find it: name its header and
+                    // the GameRefs specialization directly.
+                    includes.Add(gameRefHeader);
+                    includes.Add("mc/deps/ecs/gamerefs_entity/GameRefsEntity.h");
+                }
+
                 if (string.Equals(argument.Kind, "pack", StringComparison.Ordinal))
                 {
                     foreach (var part in AbiPlan.PackArgumentParts(argument.Value))
@@ -575,14 +585,31 @@ internal static class ShimEmitter
             .Select(NormalizeInclude)
             .Distinct(StringComparer.Ordinal)
             .ToList();
-        if (normalized.Any(path => path.StartsWith("mc/deps/game_refs/", StringComparison.Ordinal)))
+        // OwnerPtr, StackRefResult and WeakRef derive from a GameRefs<T> nested type, so a
+        // template argument spelled with one needs the EntityContext specialization before
+        // the base can form, even though no member names OwnerPtr's own header.
+        if (normalized.Any(path => path.StartsWith("mc/deps/game_refs/", StringComparison.Ordinal)
+                || path.StartsWith("mc/deps/ecs/gamerefs_entity/", StringComparison.Ordinal))
+            && !normalized.Contains("mc/deps/ecs/gamerefs_entity/GameRefsEntity.h"))
         {
-            // The 26.5x OwnerPtr, StackRefResult, and WeakRef headers need the
-            // EntityContext specialization before they can form their base class.
             normalized.Add("mc/deps/ecs/gamerefs_entity/GameRefsEntity.h");
         }
 
         return normalized.OrderBy(file => file, StringComparer.Ordinal);
+    }
+
+    /// <summary>Header of a game-reference wrapper the IR records as an incomplete type.</summary>
+    private static string? GameRefArgumentHeader(string value)
+    {
+        var type = AbiPlan.NormalizeTemplateTypeName(value);
+        var name = type.Contains('<') ? type[..type.IndexOf('<')] : type;
+        return name switch
+        {
+            "OwnerPtr" => "mc/deps/game_refs/OwnerPtr.h",
+            "WeakRef" => "mc/deps/game_refs/WeakRef.h",
+            "StackRefResult" => "mc/deps/game_refs/StackRefResult.h",
+            _ => null,
+        };
     }
 
     private static void CollectTemplateDependencyIncludes(

@@ -740,7 +740,7 @@ internal sealed class AbiPlan
             else if (declaration.Template is not null
                 && ((linkCarrier || virtualDispatch)
                     ? HasInaccessibleTemplateArgument(declaration)
-                        || HasUnsafeIncompleteTemplateArgument(declaration)
+                        || HasBareIncompleteTemplateArgument(declaration)
                     : !AreTemplateArgumentsUsable(declaration, allDeclarationsByQualifiedName)))
             {
                 declarationReason = "the template arguments are inaccessible or incomplete";
@@ -2548,11 +2548,17 @@ internal sealed class AbiPlan
         declaration.Template?.Arguments.Any(argument =>
             argument.Accessible.HasValue && !argument.Accessible.Value) ?? false;
 
-    private static bool HasUnsafeIncompleteTemplateArgument(DeclarationRecord declaration) =>
+    // A class template has no layout of its own; the shim only compiles when the argument
+    // is spelled by its own name it is written with. An incomplete argument is one the
+    // header set never defines, so `sizeof` and the member bodies fail. An argument that is
+    // itself an instantiation is complete as a type — its own layout is never asked for —
+    // and naming it expands correctly, so only a bare record argument can break the build.
+    private static bool HasBareIncompleteTemplateArgument(DeclarationRecord declaration) =>
         declaration.Template?.Arguments.Any(argument =>
             argument.Complete.HasValue
             && !argument.Complete.Value
-            && !IsStandardOrThirdPartyType(NormalizeTypeName(argument.Value))) ?? false;
+            && !IsStandardOrThirdPartyType(NormalizeTypeName(argument.Value))
+            && !NormalizeTypeName(argument.Value).Contains('<')) ?? false;
 
     private static bool AreTemplateArgumentsUsable(
         DeclarationRecord declaration,
