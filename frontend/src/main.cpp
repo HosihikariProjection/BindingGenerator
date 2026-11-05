@@ -1511,8 +1511,13 @@ private:
         } else if (auto* Method = dyn_cast<CXXMethodDecl>(Member)) {
             Object["virtual"] = Method->isVirtual();
             Object["pure"] = Method->isPureVirtual();
-            Object["inline"] = Method->isInlined();
-            bool HasOwnBody = Method->hasBody();
+            // The in-class declaration need not repeat `inline`; the definition in a later
+            // header carries it. Report whether the body the shim would call is inline.
+            // `defined` still means a real body exists: a defaulted assignment can be
+            // implicitly deleted in some template instantiations and must stay excluded.
+            const FunctionDecl* Definition = nullptr;
+            bool HasOwnBody = Method->hasBody(Definition);
+            Object["inline"] = (Definition != nullptr ? Definition : Method)->isInlined();
             Object["defined"] = HasOwnBody;
             // An implicit class-template specialization reports no body of its own; the
             // body lives on the pattern declaration the shim would instantiate.
