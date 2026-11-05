@@ -1083,9 +1083,16 @@ internal sealed class AbiPlan
                 else if (linkCarrier
                     && declaration.Template is not null
                     && constructor.Inline
-                    && !constructor.Defined)
+                    && !constructor.Defined
+                    && (!constructor.PatternDefined
+                        || IsCopyOrMoveConstructor(constructor)))
                 {
-                    reason = "the template constructor has no visible definition";
+                    // The pattern body is enough for ordinary constructors, but a copy or
+                    // move constructor still copies the payload inline and needs symbols
+                    // the carrier does not export.
+                    reason = constructor.PatternDefined
+                        ? "template copy and move constructors are not projected"
+                        : "the template constructor has no visible definition";
                 }
                 else if (!virtualDispatch && constructor.Pure)
                 {
@@ -6782,8 +6789,37 @@ internal sealed class AbiPlan
     /// shim bit-casts between the two. References and pointers to such a pointer are
     /// excluded: their value is the address of the pointer object, not the pointer.
     /// </summary>
-    internal static bool IsMemberFunctionPointerType(string canonical) =>
-        StripTopLevelQualifiers(canonical).Contains("::*)", StringComparison.Ordinal);
+    internal static bool IsMemberFunctionPointerType(string canonical)
+    {
+        // The `::*)` marker must sit outside template arguments: a class such as
+        // TypedStorageImpl<8, 8, bool (C::*)(...)> embeds a member pointer as payload and is
+        // not itself one.
+        var text = StripTopLevelQualifiers(canonical);
+        var depth = 0;
+        for (var index = 0; index + 3 < text.Length; index++)
+        {
+            switch (text[index])
+            {
+                case '<':
+                    depth++;
+                    continue;
+                case '>':
+                    depth--;
+                    continue;
+            }
+
+            if (depth == 0
+                && text[index] == ':'
+                && text[index + 1] == ':'
+                && text[index + 2] == '*'
+                && text[index + 3] == ')')
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     internal static bool IsArrayType(string canonical) =>
         StripTopLevelQualifiers(canonical).Contains('[', StringComparison.Ordinal);
@@ -6842,9 +6878,22 @@ internal sealed class AbiPlan
         return text;
     }
 
-    private static bool IsCopyConstructor(MemberRecord member, string qualifiedName)
+    /// <summary>
+    /// True when the only parameter is the class type itself (optionally by reference), which
+    /// makes the constructor a copy or move constructor. The class spelling is taken from the
+    /// signature's canonical name because a template argument prints as <c>2ULL</c> in the
+    /// declaration name but as <c>2</c> in a parameter type.
+    /// </summary>
+    private static bool IsCopyOrMoveConstructor(MemberRecord member)
     {
         if (member.Signature is null || member.Signature.Parameters.Count != 1)
+        {
+            return false;
+        }
+
+        var canonical = member.Signature.Canonical;
+        var separator = canonical.LastIndexOf("::", StringComparison.Ordinal);
+        if (separator <= 0)
         {
             return false;
         }
@@ -6855,13 +6904,10 @@ internal sealed class AbiPlan
             type = type[..^1].TrimEnd();
         }
 
-        type = type
-            .Replace("const ", "", StringComparison.Ordinal)
-            .Replace(" const", "", StringComparison.Ordinal)
-            .Replace("volatile ", "", StringComparison.Ordinal)
-            .Replace(" volatile", "", StringComparison.Ordinal)
-            .Trim();
-        return string.Equals(type, qualifiedName, StringComparison.Ordinal);
+        // Only top-level qualifiers are removed; a `const` inside a template argument or a
+        // member pointer signature is part of the type.
+        type = StripTopLevelQualifiers(type).Trim();
+        return string.Equals(type, canonical[..separator], StringComparison.Ordinal);
     }
 
     private static void CollectInheritedSymbolFields(

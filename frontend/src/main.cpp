@@ -1512,7 +1512,16 @@ private:
             Object["virtual"] = Method->isVirtual();
             Object["pure"] = Method->isPureVirtual();
             Object["inline"] = Method->isInlined();
-            Object["defined"] = Method->hasBody();
+            bool HasOwnBody = Method->hasBody();
+            Object["defined"] = HasOwnBody;
+            // An implicit class-template specialization reports no body of its own; the
+            // body lives on the pattern declaration the shim would instantiate.
+            if (!HasOwnBody) {
+                if (auto* Pattern = Method->getTemplateInstantiationPattern();
+                    Pattern != nullptr && Pattern != Method && Pattern->hasBody()) {
+                    Object["patternDefined"] = true;
+                }
+            }
             Object["consteval"] = Method->isConsteval();
             Object["signature"] = makeSignature(Method);
             if (Opt.EmitMangledNames) {
@@ -1628,7 +1637,7 @@ int main(int argc, char** argv) {
 
     llvm::json::Object Manifest;
     Manifest["schema"] = "hosihikari.bindings.ir/1";
-    Manifest["irVersion"] = "1.6.0";
+    Manifest["irVersion"] = "1.7.0";
 
     llvm::json::Object Frontend;
     Frontend["name"] = "libtooling";
