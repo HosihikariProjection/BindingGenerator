@@ -1322,6 +1322,24 @@ internal sealed class AbiPlan
                     // so compiling the inline body leaves an unresolved import.
                     reason = "the inline body addresses a template member the carrier does not export";
                 }
+                else if (linkCarrier
+                    && IsOverriddenBaseMember(
+                        declaration,
+                        method,
+                        allDeclarationsByQualifiedName,
+                        membersByDeclaration))
+                {
+                    // The derived specialization replaces this base member because the
+                    // base body does not compile for that argument type.
+                    reason = "the derived specialization overrides this member and the base body is not instantiable";
+                }
+                else if (linkCarrier && IsUnavailableParserMember(method))
+                {
+                    // The inline body takes the address of CommandRegistry::parse<T>; the
+                    // carrier instantiates that only for the parameter types its own
+                    // commands register, so these have no import to link against.
+                    reason = "the carrier does not export the parser instantiation addressed by the inline body";
+                }
                 else if (method.MemberTemplate)
                 {
                     reason = "member function templates are not projected";
@@ -2327,6 +2345,52 @@ internal sealed class AbiPlan
         method.Name == "parseRule"
         && method.DeclarationId.Contains("ParamTraitsBase<", StringComparison.Ordinal);
 
+    /// <summary>
+    /// The carrier never instantiates <c>CommandRegistry::parse&lt;T&gt;</c> for these
+    /// command parameter types, so the prelinked runtime import library has no symbol for
+    /// the parser that <c>ParamTraitsBase&lt;T&gt;::parseFn</c> returns.
+    /// </summary>
+    private static readonly string[] UninstantiatedParserTypes =
+    [
+        "CommandOperator",
+        "CommandCompareOperator",
+    ];
+
+    private static bool IsUnavailableParserMember(MemberRecord method) =>
+        method.Name == "parseFn"
+        && method.DeclarationId.Contains("ParamTraitsBase<", StringComparison.Ordinal)
+        && UninstantiatedParserTypes.Any(type =>
+            method.DeclarationId.Contains("<" + type + ">", StringComparison.Ordinal));
+
+    /// <summary>
+    /// True when <c>ParamTraits&lt;T&gt;</c> replaces a <c>ParamTraitsBase&lt;T&gt;</c>
+    /// member with its own definition. The base body is then not meant to be instantiated:
+    /// <c>ParamTraitsBase&lt;RuntimeSoftEnum&gt;::parseFn</c> would instantiate
+    /// <c>CommandRegistry::parse&lt;RuntimeSoftEnum&gt;</c>, whose body fails the parser
+    /// static assertion. The derived member stays projectable on its own.
+    /// </summary>
+    private static bool IsOverriddenBaseMember(
+        DeclarationRecord declaration,
+        MemberRecord member,
+        IReadOnlyDictionary<string, DeclarationRecord> declarationsByQualifiedName,
+        IReadOnlyDictionary<string, List<MemberRecord>> membersByDeclaration)
+    {
+        const string basePrefix = "ParamTraitsBase<";
+        if (member.Kind != "method"
+            || member.Name != "parseFn"
+            || !declaration.QualifiedName.Contains(basePrefix, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var derivedName = declaration.QualifiedName.Replace(basePrefix, "ParamTraits<", StringComparison.Ordinal);
+        return declarationsByQualifiedName.TryGetValue(derivedName, out var derived)
+            && membersByDeclaration.TryGetValue(derived.Id, out var derivedMembers)
+            && derivedMembers.Any(candidate =>
+                candidate.Kind == "method"
+                && string.Equals(candidate.Name, member.Name, StringComparison.Ordinal));
+    }
+
     private static bool HasExportedSymbol(DeclarationRecord declaration, MemberRecord member) =>
         member.Inline
         || HasExportAttribute(declaration.Attributes)
@@ -3022,10 +3086,17 @@ internal sealed class AbiPlan
             return false;
         }
 
-        if (parameter.NativePointee is not { Length: > 0 } pointee
-            || !declarationsByQualifiedName.TryGetValue(pointee, out var pointeeDeclaration))
+        if (parameter.NativePointee is not { Length: > 0 } pointee)
         {
             return false;
+        }
+
+        if (!declarationsByQualifiedName.TryGetValue(pointee, out var pointeeDeclaration))
+        {
+            // The scanned headers only forward-declare the pointee (the game's Actor or
+            // Player, for example). Binding a reference to it needs no definition, and the
+            // constructor itself is already declared by a header the shim includes.
+            return true;
         }
 
         return pointeeDeclaration.Access == "public"
@@ -4073,6 +4144,15 @@ internal sealed class AbiPlan
             nativeType = canonical.Trim();
             array = true;
             returnSpan = true;
+            return true;
+        }
+
+        if (IsMemberFunctionPointerType(nativeType))
+        {
+            // A pointer-to-member-function is pointer-sized; the shim bit-casts it to a
+            // pointer-sized integer and the managed side carries it as an opaque value.
+            kind = AbiKind.ISize;
+            nativeType = canonical.Trim();
             return true;
         }
 
@@ -5481,6 +5561,19 @@ internal sealed class AbiPlan
             return true;
         }
 
+        if (IsMemberFunctionPointerType(text))
+        {
+            // A pointer-to-member-function is pointer-sized; the shim bit-casts it back
+            // to the declared type at the call site.
+            parameter = new AbiParameter
+            {
+                Name = name,
+                Kind = AbiKind.ISize,
+                NativeType = text,
+            };
+            return true;
+        }
+
         // Defaulted placeholder arguments (nullptr / nullopt) carry no information across
         // the boundary: the shim supplies the literal at the call site and the C ABI omits
         // the slot, so managed callers never see these parameters.
@@ -6606,6 +6699,16 @@ internal sealed class AbiPlan
 
     internal static bool IsRValueReference(string canonical) =>
         StripTopLevelQualifiers(canonical).EndsWith("&&", StringComparison.Ordinal);
+
+    /// <summary>
+    /// A plain pointer-to-member-function value (for example
+    /// <c>bool (CommandRegistry::*)(...)</c>). Its MSVC representation is a single
+    /// pointer-sized value, so it crosses the ABI as <see cref="AbiKind.ISize"/> and the
+    /// shim bit-casts between the two. References and pointers to such a pointer are
+    /// excluded: their value is the address of the pointer object, not the pointer.
+    /// </summary>
+    internal static bool IsMemberFunctionPointerType(string canonical) =>
+        StripTopLevelQualifiers(canonical).Contains("::*)", StringComparison.Ordinal);
 
     internal static bool IsArrayType(string canonical) =>
         StripTopLevelQualifiers(canonical).Contains('[', StringComparison.Ordinal);

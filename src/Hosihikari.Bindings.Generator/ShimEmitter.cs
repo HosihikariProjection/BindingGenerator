@@ -1048,6 +1048,13 @@ internal static class ShimEmitter
             yield return "    *hs_hasValue = result.has_value();";
             yield return $"    return result ? static_cast<{returnType}>(*result) : {returnType}{{}};";
         }
+        else if (function.ReturnKind == AbiKind.ISize
+            && AbiPlan.IsMemberFunctionPointerType(function.NativeReturnType))
+        {
+            // A pointer-to-member-function travels as a pointer-sized value; the cast
+            // between the two is a bit-cast, not an arithmetic conversion.
+            yield return $"    return std::bit_cast<{returnType}>({call});";
+        }
         else
         {
             yield return $"    return static_cast<{returnType}>({call});";
@@ -1812,6 +1819,12 @@ internal static class ShimEmitter
         if (parameter.IsBitset)
         {
             return $"std::bitset<{parameter.BitsetBits}>({name})";
+        }
+
+        if (parameter.Kind == AbiKind.ISize
+            && AbiPlan.IsMemberFunctionPointerType(parameter.NativeType))
+        {
+            return $"std::bit_cast<{parameter.NativeType}>({name})";
         }
 
         if (parameter.IsMap)
