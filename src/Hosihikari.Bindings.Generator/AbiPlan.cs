@@ -396,6 +396,21 @@ internal sealed class VariantRegistry
     public void Add(VariantAbiInfo info) => _byKey[(info.Surface, info.NativeType)] = info;
 }
 
+/// <summary>
+/// A public free function that stays in the surface but whose signature the emitter cannot
+/// map. The interop emits it as a reasoned stub so the gap is visible at the call site.
+/// </summary>
+internal sealed class AbiFunctionStub
+{
+    public string Surface { get; init; } = "";
+    public string NamespaceName { get; init; } = "";
+    public string ClassName { get; init; } = "";
+    public string CSharpMemberName { get; init; } = "";
+    public string ReturnType { get; init; } = "void";
+    public IReadOnlyList<ParameterInfo> Parameters { get; init; } = [];
+    public string Reason { get; init; } = "";
+}
+
 internal sealed class AbiPlan
 {
     private static readonly string[] CallbackTypePrefixes =
@@ -415,9 +430,11 @@ internal sealed class AbiPlan
         IReadOnlyDictionary<string, string> skipReasons,
         IReadOnlyDictionary<string, IReadOnlyList<MemberRecord>> syntheticMembers,
         IReadOnlyList<VariantAbiInfo> usedVariants,
-        IReadOnlyList<CallableAbiInfo> usedCallables)
+        IReadOnlyList<CallableAbiInfo> usedCallables,
+        IReadOnlyList<AbiFunctionStub> functionStubs)
     {
         Functions = functions;
+        FunctionStubs = functionStubs;
         SyntheticMembers = syntheticMembers;
         DeclarationNames = declarationNames;
         LinkCarrier = linkCarrier;
@@ -448,6 +465,7 @@ internal sealed class AbiPlan
     }
 
     public IReadOnlyList<AbiFunction> Functions { get; }
+    public IReadOnlyList<AbiFunctionStub> FunctionStubs { get; }
     public IReadOnlyDictionary<string, DeclarationName> DeclarationNames { get; }
     public bool LinkCarrier { get; }
     public bool LlAllocator { get; }
@@ -467,7 +485,7 @@ internal sealed class AbiPlan
     public IReadOnlyDictionary<string, AbiFunction> DestroyByDeclaration { get; }
     public IReadOnlyDictionary<string, List<AbiFunction>> FunctionsByDeclaration { get; }
 
-    public static AbiPlan Empty { get; } = new([], new Dictionary<string, DeclarationName>(StringComparer.Ordinal), false, false, false, false, new Dictionary<string, string>(StringComparer.Ordinal), new Dictionary<string, IReadOnlyList<MemberRecord>>(StringComparer.Ordinal), [], []);
+    public static AbiPlan Empty { get; } = new([], new Dictionary<string, DeclarationName>(StringComparer.Ordinal), false, false, false, false, new Dictionary<string, string>(StringComparer.Ordinal), new Dictionary<string, IReadOnlyList<MemberRecord>>(StringComparer.Ordinal), [], [], []);
 
     public IEnumerable<AbiFunction> FunctionsForSurface(string surface) =>
         Functions.Where(function => string.Equals(function.Surface, surface, StringComparison.Ordinal));
@@ -1768,18 +1786,25 @@ internal sealed class AbiPlan
             }
 
             var pointee = StripTopLevelQualifiers(core[..^1].TrimEnd());
-            return !pointee.EndsWith("*", StringComparison.Ordinal)
-                && !pointee.EndsWith("&", StringComparison.Ordinal)
+            if (pointee.EndsWith("*", StringComparison.Ordinal))
+            {
+                // A pointer-to-pointer parameter (hook's `FuncPtr* originalFunc`) is the
+                // address of the caller's pointer, so it crosses the ABI as a raw nint.
+                return IsValidCppQualifiedName(pointee[..^1].TrimEnd());
+            }
+
+            return !pointee.EndsWith("&", StringComparison.Ordinal)
                 && IsValidCppQualifiedName(pointee);
         }
 
+        var functionStubs = new List<AbiFunctionStub>();
         if (linkCarrier || virtualDispatch)
         {
             var occupiedFunctionTypeNames = declarationNames.Values
                 .Select(name => name.NamespaceName + "." + name.ClassName)
                 .ToHashSet(StringComparer.Ordinal);
             var functionClassNamesByNamespace = new Dictionary<string, DeclarationName>(StringComparer.Ordinal);
-            var freeFunctionCandidates = new List<(DeclarationRecord Function, DeclarationName ClassName, string BaseName)>();
+            var freeFunctionCandidates = new List<(DeclarationRecord Function, DeclarationName ClassName, string BaseName, string? StubReason)>();
 
             foreach (var function in records.OfType<DeclarationRecord>()
                          .Where(declaration => declaration.Kind == "function")
@@ -1802,19 +1827,11 @@ internal sealed class AbiPlan
                     && IsValidCppQualifiedName(string.Join(
                         "::",
                         nameParts.Take(nameParts.Count - 1).Append(mappedOperatorName ?? nameParts[^1])));
+                var signature = function.Signature;
                 if (function.Access != "public"
                     || function.Template is not null
-                    || function.Signature is null
-                    || function.Signature.Variadic
-                    || function.Consteval
-                    || (!callableInline && !callableImported)
+                    || signature is null
                     || function.Source is null
-                    || !validName
-                    || HasMsvcInternalTypeName(function.QualifiedName)
-                    || HasMsvcInternalTypeName(function.Signature!.ReturnType)
-                    || HasUnnameableTypeName(function.Signature.ReturnType)
-                    || function.Signature.Parameters.Any(parameter =>
-                        HasMsvcInternalTypeName(parameter.Type) || HasUnnameableTypeName(parameter.Type))
                     || !IsNativeSourceAvailable(nativeRoot, function.Source.File))
                 {
                     continue;
@@ -1828,11 +1845,41 @@ internal sealed class AbiPlan
 
                 var nativeName = parts[^1];
                 var baseName = nativeName.StartsWith("operator", StringComparison.Ordinal)
-                    ? OperatorMethodName(nativeName)
+                    ? OperatorMethodName(nativeName) ?? TypeNames.Sanitize(nativeName)
                     : TypeNames.Sanitize(nativeName);
                 if (string.IsNullOrEmpty(baseName))
                 {
                     continue;
+                }
+
+                // A public function that cannot be projected still keeps a reasoned stub, so
+                // the declaration never disappears from the surface without a trace.
+                string? stubReason = null;
+                if (signature.Variadic)
+                {
+                    stubReason = "variadic functions are not supported";
+                }
+                else if (function.Consteval)
+                {
+                    stubReason = "consteval functions cannot be called at runtime";
+                }
+                else if (!callableInline && !callableImported)
+                {
+                    stubReason = "the function is not exported by the carrier";
+                }
+                else if (!validName || HasMsvcInternalTypeName(function.QualifiedName))
+                {
+                    stubReason = "the native name is not a valid C++ qualified name";
+                }
+                else if (HasMsvcInternalTypeName(signature.ReturnType)
+                    || signature.Parameters.Any(parameter => HasMsvcInternalTypeName(parameter.Type)))
+                {
+                    stubReason = "the signature uses an implementation-specific standard library type";
+                }
+                else if (HasUnnameableTypeName(signature.ReturnType)
+                    || signature.Parameters.Any(parameter => HasUnnameableTypeName(parameter.Type)))
+                {
+                    stubReason = "the signature uses a type the binding cannot name";
                 }
 
                 var surfaceNamespace = "Hosihikari.Bindings." + TypeNames.SurfaceNamespace(function.Surface) + ".Interop";
@@ -1857,7 +1904,7 @@ internal sealed class AbiPlan
                     functionClassNamesByNamespace[namespaceName] = className;
                 }
 
-                freeFunctionCandidates.Add((function, className, baseName));
+                freeFunctionCandidates.Add((function, className, baseName, stubReason));
             }
 
             foreach (var group in freeFunctionCandidates.GroupBy(
@@ -1866,6 +1913,27 @@ internal sealed class AbiPlan
                 var duplicate = group.Count() > 1;
                 foreach (var candidate in group)
                 {
+                    var csharpMemberName = duplicate
+                        ? candidate.BaseName + "_" + CSharpNaming.ShortHash(candidate.Function.Id)
+                        : candidate.BaseName;
+                    void AddFunctionStub(string reason) =>
+                        functionStubs.Add(new AbiFunctionStub
+                        {
+                            Surface = candidate.Function.Surface,
+                            NamespaceName = candidate.ClassName.NamespaceName,
+                            ClassName = candidate.ClassName.ClassName,
+                            CSharpMemberName = csharpMemberName,
+                            ReturnType = candidate.Function.Signature!.ReturnType,
+                            Parameters = candidate.Function.Signature.Parameters,
+                            Reason = reason,
+                        });
+
+                    if (candidate.StubReason is not null)
+                    {
+                        AddFunctionStub(candidate.StubReason);
+                        continue;
+                    }
+
                     if (!TryMapReturnType(
                             candidate.Function.Surface,
                             candidate.Function.Signature!.ReturnType,
@@ -1909,8 +1977,9 @@ internal sealed class AbiPlan
                             out var expectedErrorType,
                             out var returnVariant,
                             out var returnCallable,
-                            out _))
+                            out var returnReason))
                     {
+                        AddFunctionStub(returnReason ?? "the return type is not supported");
                         continue;
                     }
 
@@ -1930,9 +1999,16 @@ internal sealed class AbiPlan
                                 symbolDispatch,
                                 variants,
                                 out var mapped,
-                                out _)
-                            || !IsFreeFunctionParameterSupported(mapped))
+                                out var parameterReason))
                         {
+                            AddFunctionStub(parameterReason ?? "the parameter type is not supported");
+                            usable = false;
+                            break;
+                        }
+
+                        if (!IsFreeFunctionParameterSupported(mapped))
+                        {
+                            AddFunctionStub("the parameter type is not supported by a free function");
                             usable = false;
                             break;
                         }
@@ -1964,9 +2040,7 @@ internal sealed class AbiPlan
                         // A comparison operator may be a hidden friend of a class template;
                         // the unqualified name lets ADL find it.
                         NativeMemberName = operatorLeaf ?? candidate.Function.QualifiedName,
-                        CSharpMemberName = duplicate
-                            ? candidate.BaseName + "_" + CSharpNaming.ShortHash(candidate.Function.Id)
-                            : candidate.BaseName,
+                        CSharpMemberName = csharpMemberName,
                         ReturnKind = returnKind,
                         NativeReturnType = nativeReturnType,
                         ReturnWrapperType = returnWrapperType,
@@ -2110,7 +2184,8 @@ internal sealed class AbiPlan
                 pair => (IReadOnlyList<MemberRecord>)pair.Value,
                 StringComparer.Ordinal),
             usedVariants,
-            usedCallables);
+            usedCallables,
+            functionStubs);
     }
 
     public static string CppType(AbiKind kind) => kind switch
@@ -2282,7 +2357,7 @@ internal sealed class AbiPlan
     internal static string CompactTemplateName(string name) =>
         System.Text.RegularExpressions.Regex.Replace(name, @",\s+", ",");
 
-    private static string StripTopLevelQualifiers(string canonical)
+    internal static string StripTopLevelQualifiers(string canonical)
     {
         var text = canonical.Trim();
         var changed = true;

@@ -338,15 +338,29 @@ internal static class InteropEmitter
 
     private static void EmitFreeFunctionClasses(string outputDirectory, AbiPlan plan)
     {
-        foreach (var group in plan.Functions
-                     .Where(function => function.Kind == AbiFunctionKind.FreeFunction)
-                     .GroupBy(function => (
-                         function.Surface,
-                         function.ClassName.NamespaceName,
-                         function.ClassName.ClassName))
-                     .OrderBy(group => group.Key.Surface, StringComparer.Ordinal)
-                     .ThenBy(group => group.Key.NamespaceName, StringComparer.Ordinal)
-                     .ThenBy(group => group.Key.ClassName, StringComparer.Ordinal))
+        var functionsByKey = plan.Functions
+            .Where(function => function.Kind == AbiFunctionKind.FreeFunction)
+            .GroupBy(function => (
+                Surface: function.Surface,
+                NamespaceName: function.ClassName.NamespaceName,
+                ClassName: function.ClassName.ClassName))
+            .ToDictionary(group => group.Key, group => group.ToList());
+        var stubsByKey = plan.FunctionStubs
+            .GroupBy(stub => (
+                Surface: stub.Surface,
+                NamespaceName: stub.NamespaceName,
+                ClassName: stub.ClassName))
+            .ToDictionary(group => group.Key, group => group.ToList());
+
+        var keys = functionsByKey.Keys
+            .Concat(stubsByKey.Keys)
+            .Distinct()
+            .OrderBy(key => key.Surface, StringComparer.Ordinal)
+            .ThenBy(key => key.NamespaceName, StringComparer.Ordinal)
+            .ThenBy(key => key.ClassName, StringComparer.Ordinal)
+            .ToList();
+
+        foreach (var key in keys)
         {
             var lines = new List<string>
             {
@@ -354,30 +368,60 @@ internal static class InteropEmitter
                 "#nullable enable",
                 "#pragma warning disable CS0618",
                 "",
-                $"namespace {group.Key.NamespaceName};",
+                $"namespace {key.NamespaceName};",
                 "",
-                $"public static unsafe partial class {group.Key.ClassName}",
+                $"public static unsafe partial class {key.ClassName}",
                 "{",
             };
             var first = true;
-            foreach (var function in group.OrderBy(function => function.CSharpMemberName, StringComparer.Ordinal))
+            if (functionsByKey.TryGetValue(key, out var functions))
             {
-                if (!first)
+                foreach (var function in functions.OrderBy(function => function.CSharpMemberName, StringComparer.Ordinal))
                 {
-                    lines.Add("");
-                }
+                    if (!first)
+                    {
+                        lines.Add("");
+                    }
 
-                first = false;
-                EmitMethod(lines, function.CSharpMemberName, function);
+                    first = false;
+                    EmitMethod(lines, function.CSharpMemberName, function);
+                }
+            }
+
+            if (stubsByKey.TryGetValue(key, out var stubs))
+            {
+                foreach (var stub in stubs.OrderBy(stub => stub.CSharpMemberName, StringComparer.Ordinal))
+                {
+                    if (!first)
+                    {
+                        lines.Add("");
+                    }
+
+                    first = false;
+                    EmitFunctionStub(lines, stub);
+                }
             }
 
             lines.Add("}");
-            var fileName = group.Key.ClassName + "_"
-                + CSharpNaming.ShortHash(group.Key.NamespaceName + "." + group.Key.ClassName) + ".g.cs";
-            var path = Path.Combine(outputDirectory, "interop", group.Key.Surface, fileName);
+            var fileName = key.ClassName + "_"
+                + CSharpNaming.ShortHash(key.NamespaceName + "." + key.ClassName) + ".g.cs";
+            var path = Path.Combine(outputDirectory, "interop", key.Surface, fileName);
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             File.WriteAllText(path, string.Join("\n", lines) + "\n", new UTF8Encoding(false));
         }
+    }
+
+    private static void EmitFunctionStub(List<string> lines, AbiFunctionStub stub)
+    {
+        var stubMessage = $"BindingShim cannot project this member: {stub.Reason}.";
+        EmitUnsupportedAttribute(lines, stubMessage);
+        var returnType = TypeNames.ToCSharpType(new TypeRef
+        {
+            Kind = "fundamental",
+            Canonical = stub.ReturnType,
+        });
+        lines.Add($"    public static {returnType} {stub.CSharpMemberName}({CSharpParameters(stub.Parameters)}) =>");
+        lines.Add($"        throw new global::System.NotSupportedException({CSharpLiteral(stubMessage)});");
     }
 
     private static void EmitNativeMethods(string outputDirectory, AbiPlan plan)
@@ -2194,18 +2238,16 @@ internal static class InteropEmitter
         lines.Add("    }");
     }
 
-    private static string CSharpParameters(MemberRecord member)
-    {
-        if (member.Signature is null)
-        {
-            return "";
-        }
+    private static string CSharpParameters(MemberRecord member) =>
+        member.Signature is null ? "" : CSharpParameters(member.Signature.Parameters);
 
+    private static string CSharpParameters(IReadOnlyList<ParameterInfo> parameters)
+    {
         var used = new HashSet<string>(StringComparer.Ordinal);
         var declarations = new List<string>();
-        for (var index = 0; index < member.Signature.Parameters.Count; index++)
+        for (var index = 0; index < parameters.Count; index++)
         {
-            var parameter = member.Signature.Parameters[index];
+            var parameter = parameters[index];
             var candidate = TypeNames.Sanitize(
                 string.IsNullOrWhiteSpace(parameter.Name)
                     ? "arg" + index.ToString(System.Globalization.CultureInfo.InvariantCulture)

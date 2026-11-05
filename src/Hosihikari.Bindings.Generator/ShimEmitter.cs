@@ -1934,6 +1934,18 @@ internal static class ShimEmitter
             {
                 var pointee = parameter.NativePointee ?? "void";
                 var constPrefix = parameter.IsConst ? "const " : "";
+                var core = AbiPlan.StripTopLevelQualifiers(parameter.NativeType);
+                var withoutLast = core.EndsWith("*", StringComparison.Ordinal)
+                    ? AbiPlan.StripTopLevelQualifiers(core[..^1].TrimEnd())
+                    : core;
+                if (!parameter.IsReference
+                    && withoutLast.EndsWith("*", StringComparison.Ordinal))
+                {
+                    // Pointer-to-pointer: the native pointee is flattened to its base type,
+                    // so cast to the declared type and keep the second indirection.
+                    return $"static_cast<{core}>({name})";
+                }
+
                 return parameter.IsReference
                     ? (parameter.IsRValueReference
                         ? $"std::move(*static_cast<{constPrefix}{pointee}*>({name}))"
