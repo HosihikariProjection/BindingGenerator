@@ -338,6 +338,13 @@ internal sealed class AbiFunction
     public bool Static { get; init; }
 
     /// <summary>
+    /// The member's body is an inline definition in the headers, so the shim calls it
+    /// directly instead of resolving a game symbol. Inline bodies in a template class are
+    /// the only way to reach those members: the carrier never instantiates or exports them.
+    /// </summary>
+    public bool InlineBody { get; init; }
+
+    /// <summary>
     /// The member is declared with an <c>&amp;&amp;</c> qualifier, so the shim has to call it on
     /// an rvalue even though the wrapper keeps calling the same object.
     /// </summary>
@@ -730,7 +737,14 @@ internal sealed class AbiPlan
                     && (byValueReturnNames.Contains(declaration.QualifiedName)
                         || (ShortDefaultedResultSpelling(declaration.QualifiedName) is { } shortResultName
                             && byValueReturnNames.Contains(shortResultName)));
-                if (declaration.Template is not null && !byValueReturnTemplate)
+                // A template instance whose members are all inline bodies needs no symbol: the
+                // shim includes the header and calls them directly. Keep the declaration so
+                // those members are planned; the ones without a body still fall out below.
+                var inlineBodyTemplate = declaration.Template is not null
+                    && membersByDeclaration.TryGetValue(declaration.Id, out var templateMemberList)
+                    && templateMemberList.Any(member =>
+                        member.Access == "public" && member.Inline && member.Defined);
+                if (declaration.Template is not null && !byValueReturnTemplate && !inlineBodyTemplate)
                 {
                     declarationReason = "template classes are not supported by symbol dispatch";
                 }
@@ -1313,7 +1327,12 @@ internal sealed class AbiPlan
                 }
                 else if (symbolDispatch)
                 {
-                    if (!HasDispatchEntry(method))
+                    if (method.Inline && method.Defined)
+                    {
+                        // The body is in the header the shim includes; a template instance
+                        // never gets a game symbol, so calling it directly is the only route.
+                    }
+                    else if (!HasDispatchEntry(method))
                     {
                         reason = "the member has no symbol or vtable slot in the IR";
                     }
@@ -3492,6 +3511,10 @@ internal sealed class AbiPlan
             Parameters = parameters,
             Static = method.Static,
             RvalueQualified = method.RefQualifier == "rvalue",
+            // Only a template instance needs the inline route: a non-template inline member is
+            // usually exported too, and its header can reach game headers that do not compile
+            // on their own (MolangScriptArg's implicit copy assignment is deleted under C++20).
+            InlineBody = symbolDispatch && declaration.Template is not null && method.Inline && method.Defined,
         };
         return true;
     }
