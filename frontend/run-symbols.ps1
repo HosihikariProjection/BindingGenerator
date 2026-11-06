@@ -10,7 +10,7 @@ param(
     [string]$Version = "1.21.3",
     [string[]]$Classes = @("Actor", "BlockPos"),
     [string]$ClassesFile = "",
-    [string]$LlvmRoot = "$env:LOCALAPPDATA\Temp\hosihikari-llvm\clang+llvm-23.1.4-x86_64-pc-windows-msvc",
+    [string]$LlvmRoot = "$env:LOCALAPPDATA\Temp\hosihikari-llvm\clang+llvm-23.1.0-x86_64-pc-windows-msvc",
     [switch]$SkipBuild
 )
 

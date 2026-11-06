@@ -4,10 +4,10 @@ The native frontend parses the three header sets and emits the versioned IR defi
 
 ## Toolchain
 
-Pin LLVM/Clang **23.1.4**.
+Pin LLVM/Clang **23.1**.
 
-- **Windows**: the LLVM MSI is toolchain-only and does not contain `clang/Tooling` headers, `clangTooling.lib` or `ClangConfig.cmake`. Use the official `clang+llvm-23.1.4-x86_64-pc-windows-msvc.tar.xz` (or build LLVM), and point `CMAKE_PREFIX_PATH` at the extracted tree.
-- **Linux**: use the official `LLVM-23.1.4-Linux-X64.tar.xz`. Distribution `libclang-23-dev` may be a different patch level; do not mix.
+- **Windows**: the LLVM MSI is toolchain-only and does not contain `clang/Tooling` headers, `clangTooling.lib` or `ClangConfig.cmake`. Use the official `clang+llvm-23.1.0-x86_64-pc-windows-msvc.tar.xz` (or build LLVM), and point `CMAKE_PREFIX_PATH` at the extracted tree.
+- **Linux**: use the official `LLVM-23.1.0-Linux-X64.tar.xz`. Distribution `libclang-23-dev` may be a different patch level; do not mix.
 
 ## Build
 
@@ -19,7 +19,7 @@ Pin LLVM/Clang **23.1.4**.
 ./frontend/build.sh --llvm-root <llvm-root>
 ```
 
-The Windows script expects the extracted `clang+llvm-23.1.4-x86_64-pc-windows-msvc` tree and uses the Visual Studio 18 generator. The Linux script uses Ninja when available and builds `build/frontend-linux/hosihikari-ir-frontend`. A manual CMake invocation works too:
+The Windows script expects the extracted `clang+llvm-23.1.0-x86_64-pc-windows-msvc` tree and uses the Visual Studio 18 generator. The Linux script uses Ninja when available and builds `build/frontend-linux/hosihikari-ir-frontend`. A manual CMake invocation works too:
 
 ```shell
 cmake -S frontend -B build/frontend -G "Visual Studio 18 2026" -A x64 -DCMAKE_PREFIX_PATH=<llvm-root>

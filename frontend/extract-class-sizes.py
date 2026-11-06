@@ -163,7 +163,7 @@ def main():
         "--llvm-root",
         default=os.environ.get(
             "HOSIHIKARI_LLVM", os.path.join(os.environ.get("LOCALAPPDATA", ""), "Temp", "hosihikari-llvm",
-                                            "clang+llvm-23.1.4-x86_64-pc-windows-msvc")),
+                                            "clang+llvm-23.1.0-x86_64-pc-windows-msvc")),
     )
     parser.add_argument("--publics-cache", default="")
     parser.add_argument("--delete-target", default=SIZED_DELETE_CALL,

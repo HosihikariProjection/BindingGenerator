@@ -2,7 +2,7 @@ param(
     [string]$LeviLaminaRoot = "",
     [string]$EnttRoot = "C:\Users\root\AppData\Local\Temp\entt-41aab92\src",
     [string]$Output = "artifacts/levi-1.21.3-header-ir",
-    [string]$LlvmRoot = "$env:LOCALAPPDATA\Temp\hosihikari-llvm\clang+llvm-23.1.4-x86_64-pc-windows-msvc",
+    [string]$LlvmRoot = "$env:LOCALAPPDATA\Temp\hosihikari-llvm\clang+llvm-23.1.0-x86_64-pc-windows-msvc",
     [string[]]$AdditionalIncludePath = @(),
     [string[]]$ExternalRoot = @(),
     [string]$HeaderList = "",

@@ -1524,7 +1524,7 @@ bool emitIr(const Inputs& Inputs, const Configuration& Windows, const Configurat
     json::Object Frontend;
     Frontend["name"] = "symbols";
     Frontend["version"] = "0.1.0";
-    Frontend["llvm"] = "23.1.4";
+    Frontend["llvm"] = "23.1.0";
     Manifest["frontend"] = std::move(Frontend);
 
     json::Array Sources;

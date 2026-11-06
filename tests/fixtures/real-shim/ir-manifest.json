@@ -1,7 +1,7 @@
 {
   "schema": "hosihikari.bindings.ir/1",
   "irVersion": "1.3.0",
-  "frontend": { "name": "libtooling", "version": "0.2.0", "llvm": "23.1.4" },
+  "frontend": { "name": "libtooling", "version": "0.2.0", "llvm": "23.1.0" },
   "sources": [
     { "surface": "levilamina", "repo": "HosihikariProjection/BindingGenerator", "commit": "fixture", "path": "tests/fixtures/real-shim/native" }
   ],

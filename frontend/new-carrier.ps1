@@ -62,7 +62,7 @@
     When set, run the repository's runtime smoke against this server directory.
 
 .PARAMETER LlvmRoot
-    LLVM 23.1.4 root used by the frontend and clang-cl.
+    LLVM 23.1 root used by the frontend and clang-cl.
 
 .PARAMETER EnttRoot
     Optional entt src root forwarded to the Bedrock frontend.
@@ -101,7 +101,7 @@ param(
     [switch]$DryRun,
 
     [string]$ServerRoot = "",
-    [string]$LlvmRoot = "$env:LOCALAPPDATA\Temp\hosihikari-llvm\clang+llvm-23.1.4-x86_64-pc-windows-msvc",
+    [string]$LlvmRoot = "$env:LOCALAPPDATA\Temp\hosihikari-llvm\clang+llvm-23.1.0-x86_64-pc-windows-msvc",
     [string]$EnttRoot = "",
     [string]$Xmake = "xmake"
 )
