@@ -1,0 +1,228 @@
+---
+# C++23 style modelled on Microsoft .NET / C# 14 conventions:
+# Allman braces, 4-space indent, 120 columns, one argument per wrapped line,
+# leading operators on continuations, class members at one indent level with
+# access labels outdented to the class column, unindented namespace bodies,
+# trailing comma in enums, left-aligned type qualifiers and pointer/reference
+# on the type, padded brace-list literals, and inline one-statement members.
+Language:        Cpp
+Standard:        c++23
+ColumnLimit:     120
+IndentWidth:     4
+TabWidth:        4
+UseTab:          Never
+AccessModifierOffset: -4
+IndentAccessModifiers: false
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterCaseLabel:  true
+  AfterClass:      true
+  AfterControlStatement: Always
+  AfterEnum:       true
+  AfterExternBlock: true
+  AfterFunction:   true
+  AfterNamespace:  true
+  AfterObjCDeclaration: true
+  AfterStruct:     true
+  AfterUnion:      true
+  BeforeCatch:     true
+  BeforeElse:      true
+  BeforeLambdaBody: true
+  BeforeWhile:     false
+  IndentBraces:    false
+  SplitEmptyFunction: true
+  SplitEmptyRecord: true
+  SplitEmptyNamespace: true
+AllowShortBlocksOnASingleLine: Never
+AllowShortEnumsOnASingleLine: false
+AllowShortFunctionsOnASingleLine:
+  Empty:           true
+  Inline:          true
+  Other:           false
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortCaseLabelsOnASingleLine: false
+AllowShortLoopsOnASingleLine: false
+AllowShortNamespacesOnASingleLine: false
+AllowShortRecordOnASingleLine: Never
+AllowShortLambdasOnASingleLine: All
+AllowShortCompoundRequirementOnASingleLine: true
+InsertBraces:    true
+RemoveBracesLLVM: false
+RemoveParentheses: ReturnStatement
+RemoveSemicolon: true
+AlignAfterOpenBracket: AlwaysBreak
+AlignOperands:   DontAlign
+AlignTrailingComments:
+  Kind:            Never
+  OverEmptyLines:  0
+AlignEscapedNewlines: Left
+AlignArrayOfStructures: None
+AlignConsecutiveAssignments:
+  Enabled:         false
+AlignConsecutiveBitFields:
+  Enabled:         false
+AlignConsecutiveDeclarations:
+  Enabled:         false
+AlignConsecutiveMacros:
+  Enabled:         false
+AlignConsecutiveShortCaseStatements:
+  Enabled:         false
+BreakBeforeBinaryOperators: NonAssignment
+BreakBeforeTernaryOperators: true
+BreakConstructorInitializers: BeforeColon
+BreakInheritanceList: BeforeColon
+BreakAfterAttributes: Always
+BreakTemplateDeclarations: Yes
+BreakStringLiterals: true
+BreakArrays:     true
+BreakBeforeReturnType: None
+BreakAfterReturnType: None
+BreakFunctionDeclarationParameters: false
+BreakFunctionDefinitionParameters: false
+BreakAdjacentStringLiterals: true
+Cpp11BracedListStyle: Block
+SpaceBeforeCpp11BracedList: true
+SpaceInEmptyBraces: Always
+SpacesInContainerLiterals: true
+SpacesInParens:  Never
+SpacesInAngles:  Never
+SpacesInSquareBrackets: false
+SpaceBeforeSquareBrackets: false
+SpaceBeforeParens: Custom
+SpaceBeforeParensOptions:
+  AfterControlStatements: true
+  AfterForeachMacros: true
+  AfterFunctionDefinitionName: false
+  AfterFunctionDeclarationName: false
+  AfterIfMacros:   true
+  AfterNot:        false
+  AfterOverloadedOperator: false
+  AfterPlacementOperator: true
+  AfterRequiresInClause: false
+  AfterRequiresInExpression: false
+  BeforeNonEmptyParentheses: false
+SpaceBeforeAssignmentOperators: true
+SpaceBeforeCaseColon: false
+SpaceBeforeCtorInitializerColon: true
+SpaceBeforeEnumUnderlyingTypeColon: true
+SpaceBeforeInheritanceColon: true
+SpaceBeforeRangeBasedForLoopColon: true
+SpaceAfterCStyleCast: false
+SpaceAfterLogicalNot: false
+SpaceAfterOperatorKeyword: false
+SpaceAfterTemplateKeyword: true
+SpaceAroundPointerQualifiers: Default
+PointerAlignment: Left
+ReferenceAlignment: Left
+DerivePointerAlignment: false
+QualifierAlignment: Left
+EnumTrailingComma: Insert
+BitFieldColonSpacing: Both
+PackArguments:
+  BinPack:         OnePerLine
+  BreakAfter:      1
+PackParameters:
+  BinPack:         OnePerLine
+  BreakAfter:      1
+PackConstructorInitializers: BinPack
+BinPackLongBracedList: false
+AllowAllArgumentsOnNextLine: true
+AllowAllParametersOfDeclarationOnNextLine: true
+LambdaBodyIndentation: OuterScope
+IndentCaseLabels: true
+IndentCaseBlocks: false
+IndentGotoLabels: OuterIndent
+IndentRequiresClause: true
+IndentPPDirectives: None
+IndentWrappedFunctionNames: false
+IndentExternBlock: AfterExternBlock
+IndentExportBlock: true
+NamespaceIndentation: None
+ShortNamespaceLines: 0
+CompactNamespaces: false
+FixNamespaceComments: false
+SeparateDefinitionBlocks: Always
+EmptyLineAfterAccessModifier: Never
+EmptyLineBeforeAccessModifier: LogicalBlock
+MaxEmptyLinesToKeep: 1
+KeepEmptyLines:
+  AtEndOfFile:     false
+  AtStartOfBlock:  true
+  AtStartOfFile:   true
+ConstructorInitializerIndentWidth: 4
+ContinuationIndentWidth: 4
+BracedInitializerIndentWidth: -1
+ReflowComments:  true
+SpacesBeforeTrailingComments: 1
+SpacesInLineCommentPrefix:
+  Minimum:         1
+  Maximum:         -1
+PenaltyReturnTypeOnItsOwnLine: 1000
+PenaltyBreakBeforeFirstCallParameter: 19
+PenaltyBreakBeforeMemberAccess: 150
+PenaltyBreakComment: 300
+PenaltyBreakString: 1000
+PenaltyExcessCharacter: 1000000
+SortIncludes:
+  Enabled:         true
+  IgnoreCase:      true
+  IgnoreExtension: false
+IncludeBlocks:   Regroup
+# Win32 SDK headers that Windows.h itself pulls in (or that must precede it)
+# are lifted into their own groups so they can never be sorted behind it.
+IncludeCategories:
+  - Regex:           '^<winsock2\.h>'
+    Priority:        1
+    SortPriority:    0
+    CaseSensitive:   false
+  - Regex:           '^<windows\.h>'
+    Priority:        2
+    SortPriority:    0
+    CaseSensitive:   false
+  - Regex:           '^<[^>]*\.(h|hpp|hxx|hh|inl)>'
+    Priority:        3
+    SortPriority:    0
+    CaseSensitive:   false
+  - Regex:           '^<[^>]*'
+    Priority:        4
+    SortPriority:    0
+    CaseSensitive:   false
+  - Regex:           '^"'
+    Priority:        5
+    SortPriority:    0
+    CaseSensitive:   false
+  - Regex:           '.*'
+    Priority:        6
+    SortPriority:    0
+    CaseSensitive:   false
+IncludeIsMainRegex: '(Test)?$'
+IncludeIsMainSourceRegex: ''
+SortUsingDeclarations: LexicographicNumeric
+MainIncludeChar: Quote
+LineEnding:      LF
+InsertNewlineAtEOF: true
+KeepFormFeed:    false
+DisableFormat:   false
+OneLineFormatOffRegex: ''
+CommentPragmas:  '^ IWYU pragma:'
+ExperimentalAutoDetectBinPacking: false
+ForEachMacros:
+  - foreach
+  - Q_FOREACH
+  - BOOST_FOREACH
+IfMacros:
+  - KJ_IF_MAYBE
+AttributeMacros:
+  - __capability
+StatementAttributeLikeMacros:
+  - Q_EMIT
+StatementMacros:
+  - Q_UNUSED
+  - QT_REQUIRE_VERSION
+WhitespaceSensitiveMacros:
+  - BOOST_PP_STRINGIZE
+  - CF_SWIFT_NAME
+  - NS_SWIFT_NAME
+  - PP_STRINGIZE
+  - STRINGIZE
+...

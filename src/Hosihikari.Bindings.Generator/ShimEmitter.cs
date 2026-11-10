@@ -4,7 +4,7 @@ using Hosihikari.Bindings.Ir;
 
 namespace Hosihikari.Bindings.Generator;
 
-internal static class ShimEmitter
+internal static partial class ShimEmitter
 {
     private const string SelfParameter = "hs_self";
 
@@ -446,6 +446,31 @@ internal static class ShimEmitter
         source.Add("    return result;");
         source.Add("}");
         source.Add("");
+        // The game-ref specializations for EntityContext store the object in an
+        // optional-based storage record instead of a shared_ptr, so a shared handle has to
+        // keep a copy of that record rather than a control block. The shim only ever calls
+        // `.get()`-less forms below; the pointee address is the record's own object.
+        source.Add("template <class T>");
+        source.Add("void hs_release_game_ref_handle(void* holder)");
+        source.Add("{");
+        source.Add("    delete static_cast<T*>(holder);");
+        source.Add("}");
+        source.Add("");
+        source.Add("template <class T>");
+        source.Add("HosihikariSharedHandle hs_make_game_ref_handle(T const& value)");
+        source.Add("{");
+        source.Add("    if (!static_cast<bool>(value)) { return HosihikariSharedHandle{nullptr, nullptr, nullptr}; }");
+        source.Add("    auto* holder = new T(value);");
+        source.Add("    return HosihikariSharedHandle{holder, const_cast<void*>(static_cast<void const*>(&*holder)), &hs_release_game_ref_handle<T>};");
+        source.Add("}");
+        source.Add("");
+        source.Add("template <class T>");
+        source.Add("T const& hs_game_ref_from_handle(HosihikariSharedHandle handle)");
+        source.Add("{");
+        source.Add("    if (handle.holder == nullptr) { throw std::invalid_argument(\"empty game reference handle\"); }");
+        source.Add("    return *static_cast<T const*>(handle.holder);");
+        source.Add("}");
+        source.Add("");
 
         foreach (var function in functions)
         {
@@ -692,6 +717,12 @@ internal static class ShimEmitter
     private static string NormalizeInclude(string sourceFile)
     {
         var path = sourceFile.Replace('\\', '/').TrimStart('/');
+        // The header search reaches src-server through a relative parent path.
+        if (path.StartsWith("../src-server/", StringComparison.Ordinal))
+        {
+            return path["../src-server/".Length..];
+        }
+
         if (path.StartsWith("src-server/", StringComparison.Ordinal))
         {
             return path["src-server/".Length..];
@@ -966,7 +997,22 @@ internal static class ShimEmitter
         }
         else if (function.ReturnKind == AbiKind.Shared)
         {
-            if (function.SharedWrapper == SharedWrapperKind.WeakPtr)
+            if (function.ReturnGameRef)
+            {
+                // A game reference over EntityContext keeps its object in an optional-based
+                // storage record, not a control block; binding the record keeps it alive.
+                if (function.SharedWrapper == SharedWrapperKind.WeakPtr)
+                {
+                    yield return $"    auto hs_locked = ({call}).lock();";
+                    yield return "    return hs_make_game_ref_handle(hs_locked);";
+                }
+                else
+                {
+                    yield return $"    auto hs_owned = {call};";
+                    yield return "    return hs_make_game_ref_handle(hs_owned);";
+                }
+            }
+            else if (function.SharedWrapper == SharedWrapperKind.WeakPtr)
             {
                 yield return $"    auto hs_locked = ({call}).lock();";
                 yield return "    return hs_make_shared_handle(std::move(hs_locked));";
@@ -1267,10 +1313,17 @@ internal static class ShimEmitter
                 }
                 else if (function.ReturnKind == AbiKind.Shared)
                 {
-                    var sharedExpression = function.SharedWrapper is SharedWrapperKind.NotNull or SharedWrapperKind.Nullable
-                        ? $"({target}).get()"
-                        : target;
-                    yield return $"    return hs_make_shared_handle({sharedExpression});";
+                    if (function.ReturnGameRef)
+                    {
+                        yield return $"    return hs_make_game_ref_handle({target});";
+                    }
+                    else
+                    {
+                        var sharedExpression = function.SharedWrapper is SharedWrapperKind.NotNull or SharedWrapperKind.Nullable
+                            ? $"({target}).get()"
+                            : target;
+                        yield return $"    return hs_make_shared_handle({sharedExpression});";
+                    }
                 }
                 else if (function.ReturnKind == AbiKind.Opaque)
                 {
@@ -1382,8 +1435,8 @@ internal static class ShimEmitter
                     : function.RvalueQualified
                         // An &&-qualified member may only be called on an rvalue; the
                         // wrapper keeps the same object and re-borrows it for the call.
-                        ? $"std::move(*static_cast<{function.ClassCppName}*>({SelfParameter})).{memberName}"
-                        : $"static_cast<{function.ClassCppName}*>({SelfParameter})->{memberName}";
+                        ? $"std::move(*{SelfCast(function)}).{memberName}"
+                        : $"{SelfCast(function)}->{memberName}";
                 var call = $"{target}({string.Join(", ", BuildNativeArguments(function))})";
                 foreach (var line in EmitCallResult(function, call))
                 {
@@ -1774,13 +1827,18 @@ internal static class ShimEmitter
         _ => "return 0;",
     };
 
+    private static string SelfCast(AbiFunction function) =>
+        function.SelfConst
+            ? $"static_cast<{function.ClassCppName} const*>({SelfParameter})"
+            : $"static_cast<{function.ClassCppName}*>({SelfParameter})";
+
     private static string FieldTarget(AbiFunction function)
     {
         var className = function.ClassCppName;
         var field = function.NativeMemberName;
         return function.Static
             ? $"{className}::{field}"
-            : $"static_cast<{className}*>({SelfParameter})->{field}";
+            : $"{SelfCast(function)}->{field}";
     }
 
     private static IEnumerable<string> BuildNativeArguments(AbiFunction function)
@@ -1935,6 +1993,14 @@ internal static class ShimEmitter
             case AbiKind.Shared:
             {
                 var pointee = parameter.NativePointee ?? "void";
+                if (parameter.IsGameRefParam)
+                {
+                    // The handle holds a copy of the storage record; bind it as it is. A
+                    // weak reference is locked first, exactly as the native caller would.
+                    var gameRefType = AbiPlan.StripTopLevelQualifiers(parameter.NativeType).Trim();
+                    return $"hs_game_ref_from_handle<{gameRefType}>({name})";
+                }
+
                 var helper = parameter.IsWeakPtr ? "hs_weak_from_handle" : "hs_shared_from_handle";
                 return $"{helper}<{pointee}>({name})";
             }
@@ -2198,13 +2264,11 @@ internal static class ShimEmitter
             : null;
     }
 
-    private static string CppParameterName(AbiParameter parameter, int index)
-    {
-        var name = string.IsNullOrWhiteSpace(parameter.Name)
+    private static string CppParameterName(AbiParameter parameter, int index) =>
+        parameter.CppName
+        ?? (string.IsNullOrWhiteSpace(parameter.Name)
             ? "arg" + index.ToString(CultureInfo.InvariantCulture)
-            : parameter.Name;
-        return name;
-    }
+            : parameter.Name);
 
     /// <summary>
     /// Standard headers the carrier's own precompiled header supplies. The shim includes
@@ -2243,9 +2307,175 @@ internal static class ShimEmitter
     /// template spells its arguments as types, and the shim can only name the type once the
     /// argument's own header is in the translation unit.
     /// </summary>
+    /// <summary>
+    /// Sorts headers so a header's field-type headers come before it. A container's
+    /// destructor is instantiated where the class is destroyed, so the element type has to be
+    /// complete at that point; the generated headers only forward-declare it. Cycles break at
+    /// the declaration order the manifest produced.
+    /// </summary>
+    private static List<string> OrderByFieldDependencies(
+        List<string> headers,
+        IrManifest manifest,
+        string surface,
+        IReadOnlyDictionary<string, List<DeclarationRecord>> declarationsByInclude,
+        IReadOnlyDictionary<string, IReadOnlyList<MemberRecord>> membersByDeclaration,
+        HashSet<string> unknownArguments)
+    {
+        var byInclude = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var header in headers)
+        {
+            var normalized = NormalizeInclude(header);
+            if (!byInclude.ContainsKey(normalized))
+            {
+                byInclude[normalized] = header;
+            }
+        }
+
+        var dependencies = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (normalized, header) in byInclude)
+        {
+            var list = new List<string>();
+            if (declarationsByInclude.TryGetValue(normalized, out var group))
+            {
+                foreach (var declaration in group)
+                {
+                    foreach (var include in FieldHeaders(declaration, declarationsByQualifiedName: GroupedDeclarations(declarationsByInclude), membersByDeclaration, new HashSet<string>(StringComparer.Ordinal), unknownArguments))
+                    {
+                        var dependency = NormalizeInclude(include);
+                        if (dependency != normalized && byInclude.ContainsKey(dependency))
+                        {
+                            list.Add(dependency);
+                        }
+                    }
+                }
+            }
+
+            dependencies[normalized] = list;
+        }
+
+        // Headers the IR never declared still carry forward declares of the types their
+        // storage needs; add those edges from the files themselves.
+        foreach (var (normalized, _) in byInclude)
+        {
+            var edges = dependencies[normalized];
+            foreach (var name in ForwardDeclaredStorageTypes(manifest, surface, normalized))
+            {
+                if (FindHeaderByName(manifest, surface, name) is { } dependencyHeader)
+                {
+                    var dependency = NormalizeInclude(dependencyHeader);
+                    if (dependency != normalized && byInclude.ContainsKey(dependency))
+                    {
+                        edges.Add(dependency);
+                    }
+                }
+            }
+        }
+
+        var ordered = new List<string>();
+        var state = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (var start in byInclude.Keys)
+        {
+            Visit(start);
+        }
+
+        void Visit(string node)
+        {
+            if (!state.TryAdd(node, 1))
+            {
+                return;
+            }
+
+            if (dependencies.TryGetValue(node, out var nodeDependencies))
+            {
+                foreach (var dependency in nodeDependencies)
+                {
+                    Visit(dependency);
+                }
+            }
+
+            state[node] = 2;
+            ordered.Add(byInclude[node]);
+        }
+
+        return ordered;
+    }
+
+    private static IReadOnlyDictionary<string, DeclarationRecord> GroupedDeclarations(
+        IReadOnlyDictionary<string, List<DeclarationRecord>> declarationsByInclude)
+    {
+        var byName = new Dictionary<string, DeclarationRecord>(StringComparer.Ordinal);
+        foreach (var group in declarationsByInclude.Values)
+        {
+            foreach (var declaration in group)
+            {
+                byName.TryAdd(declaration.QualifiedName, declaration);
+            }
+        }
+
+        return byName;
+    }
+
+
+    /// <summary>
+    /// Types an include's file forward-declares and then stores by value in a container or
+    /// <c>ll::TypedStorage</c>. The generated headers do not include such a type's own
+    /// header, so the container's destructor sees an incomplete type.
+    /// </summary>
+    private static IEnumerable<string> ForwardDeclaredStorageTypes(IrManifest manifest, string surface, string include)
+    {
+        var relative = NormalizeInclude(include);
+        var file = manifest.Sources
+            .Where(pin => string.Equals(pin.Surface, surface, StringComparison.Ordinal))
+            .Select(pin => Path.Combine(pin.Path, relative.Replace('/', Path.DirectorySeparatorChar)))
+            .FirstOrDefault(File.Exists);
+        if (file is null)
+        {
+            yield break;
+        }
+
+        string text;
+        try
+        {
+            text = File.ReadAllText(file);
+        }
+        catch (IOException)
+        {
+            yield break;
+        }
+
+        var forwardDeclared = System.Text.RegularExpressions.Regex
+            .Matches(text, @"^\s*(?:class|struct)\s+(\w+)\s*;", System.Text.RegularExpressions.RegexOptions.Multiline)
+            .Select(match => match.Groups[1].Value)
+            .ToHashSet(StringComparer.Ordinal);
+        if (forwardDeclared.Count == 0)
+        {
+            yield break;
+        }
+
+        // The spellings nest — TypedStorage<8, 8, ::std::unique_ptr<::T>> — so match each
+        // forward-declared name against the storage-containing lines that mention it.
+        var storageLines = text
+            .Split((char)10)
+            .Where(line => StorageRegex().IsMatch(line))
+            .ToList();
+        foreach (var name in forwardDeclared)
+        {
+            var mention = new System.Text.RegularExpressions.Regex(@"(?<![A-Za-z0-9_])" + name + @"(?![A-Za-z0-9_])");
+            if (storageLines.Any(line => mention.IsMatch(line)))
+            {
+                yield return name;
+            }
+        }
+    }
+
+    [System.Text.RegularExpressions.GeneratedRegex(
+        @"(?:vector|unique_ptr|optional|unordered_map|map|set|deque|TypedStorage(?:Impl)?)<")]
+    private static partial System.Text.RegularExpressions.Regex StorageRegex();
+
     private static IEnumerable<string> InlineBodyHeaders(
         DeclarationRecord declaration,
         IReadOnlyDictionary<string, DeclarationRecord> declarationsByQualifiedName,
+        IReadOnlyDictionary<string, IReadOnlyList<MemberRecord>> membersByDeclaration,
         HashSet<string> unknownArguments)
     {
         if (!string.IsNullOrWhiteSpace(declaration.Source?.File))
@@ -2265,6 +2495,10 @@ internal static class ShimEmitter
             yield break;
         }
 
+        // A template's own header names its argument types, but the shim also stores the
+        // class by value and reads its fields, so every field type of the specialization has
+        // to be complete as well: std::vector<T> instantiates T's destructor, and
+        // std::unique_ptr<T> deletes T. Those headers are not reachable from the arguments.
         var visited = new HashSet<string>(StringComparer.Ordinal);
         var arguments = declaration.Template.Arguments
             .Select(argument => argument.Value)
@@ -2275,6 +2509,72 @@ internal static class ShimEmitter
             foreach (var include in ArgumentHeaders(argument, declarationsByQualifiedName, visited, unknownArguments))
             {
                 yield return include;
+            }
+        }
+
+        foreach (var include in FieldHeaders(declaration, declarationsByQualifiedName, membersByDeclaration, visited, unknownArguments))
+        {
+            yield return include;
+        }
+    }
+
+    /// <summary>
+    /// The headers of the types the specialization declares fields of, transitively. The shim
+    /// compiles the class's own inline bodies, so whether a field's type is complete decides
+    /// if those bodies compile at all.
+    /// </summary>
+    private static IEnumerable<string> FieldHeaders(
+        DeclarationRecord declaration,
+        IReadOnlyDictionary<string, DeclarationRecord> declarationsByQualifiedName,
+        IReadOnlyDictionary<string, IReadOnlyList<MemberRecord>> membersByDeclaration,
+        HashSet<string> visited,
+        HashSet<string> unknownArguments)
+    {
+        var pending = new Queue<DeclarationRecord>();
+        pending.Enqueue(declaration);
+        var seenDeclarations = new HashSet<string>(StringComparer.Ordinal) { declaration.Id };
+        while (pending.Count > 0)
+        {
+            var current = pending.Dequeue();
+            if (!membersByDeclaration.TryGetValue(current.Id, out var members))
+            {
+                continue;
+            }
+
+            foreach (var member in members.Where(member => member.Kind == "field"))
+            {
+                foreach (var spelling in AbiPlan.TypeMentions(member.Type?.Canonical))
+                {
+                    if (!visited.Add(spelling))
+                    {
+                        continue;
+                    }
+
+                    if (!declarationsByQualifiedName.TryGetValue(spelling, out var dependency))
+                    {
+                        // The header list never declared this type, but the frontend could
+                        // name it, so a header of that name exists; FindHeaderByName decides.
+                        var unqualified = spelling[(spelling.LastIndexOf(':') + 1)..];
+                        if (unqualified.Length > 0)
+                        {
+                            unknownArguments.Add(unqualified);
+                        }
+
+                        continue;
+                    }
+
+                    if (seenDeclarations.Add(dependency.Id))
+                    {
+                        // Follow every field type, not only template ones: the field is
+                        // stored inline, so its own fields have to be complete too.
+                        pending.Enqueue(dependency);
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(dependency.Source?.File))
+                    {
+                        yield return dependency.Source!.File;
+                    }
+                }
             }
         }
     }
@@ -2364,10 +2664,21 @@ internal static class ShimEmitter
             return cached;
         }
 
+        // The symbol IR pins only the shared source root; the server-only headers live in a
+        // sibling tree, so it is searched as well.
+        var roots = manifest.Sources
+            .Where(pin => string.Equals(pin.Surface, surface, StringComparison.Ordinal))
+            .Select(pin => pin.Path)
+            .SelectMany(root => new[]
+            {
+                root,
+                Path.GetFullPath(Path.Combine(root.TrimEnd((char)47, (char)92), "..", "src-server")),
+            })
+            .Select(root => root.Trim())
+            .ToList();
         string? found = null;
-        foreach (var pin in manifest.Sources.Where(pin => string.Equals(pin.Surface, surface, StringComparison.Ordinal)))
+        foreach (var root in roots)
         {
-            var root = pin.Path;
             if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root))
             {
                 continue;
@@ -2456,22 +2767,122 @@ internal static class ShimEmitter
         // instance never gets a game symbol, so its inline bodies are the only route to
         // those members; the headers are included for exactly that.
         var unknownArguments = new HashSet<string>(StringComparer.Ordinal);
+        // Inline bodies are compiled for exactly the declarations that carry one; the
+        // members tell FieldHeaders which field types the class stores by value.
+        var inlineBodyMembers = records.OfType<MemberRecord>()
+            .Where(member => string.Equals(member.Configuration, configuration.Id, StringComparison.Ordinal))
+            .GroupBy(member => member.DeclarationId, StringComparer.Ordinal)
+            .ToDictionary(
+                group => group.Key,
+                group => (IReadOnlyList<MemberRecord>)group.ToList(),
+                StringComparer.Ordinal);
         var inlineHeaders = records.OfType<DeclarationRecord>()
             .Where(declaration => string.Equals(declaration.Surface, surface, StringComparison.Ordinal))
             .Where(declaration => functions.Any(function =>
                 function.InlineBody && string.Equals(function.DeclarationId, declaration.Id, StringComparison.Ordinal)))
-            .SelectMany(declaration => InlineBodyHeaders(declaration, declarationsByQualifiedName, unknownArguments))
+            .SelectMany(declaration => InlineBodyHeaders(declaration, declarationsByQualifiedName, inlineBodyMembers, unknownArguments))
             .Distinct(StringComparer.OrdinalIgnoreCase)
-            // Records follow the parse order of the header list, so keeping it lets a header
-            // that needs another one see it first, exactly as the frontend did.
             .ToList();
-        foreach (var unknown in unknownArguments)
+        // A header can name types whose own headers it does not include (the carrier
+        // generated them independently), and a class reached only as a template argument can
+        // still store an incomplete type. Close the set over field types until it stops
+        // growing, so every class the shim instantiates or deletes is complete.
+        // A header commonly declares several records; every one of them contributes.
+        var declarationsByInclude = new Dictionary<string, List<DeclarationRecord>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var declaration in records.OfType<DeclarationRecord>())
         {
-            if (FindHeaderByName(manifest, surface, unknown) is { } unknownHeader)
+            if (string.IsNullOrWhiteSpace(declaration.Source?.File))
             {
-                inlineHeaders.Add(unknownHeader);
+                continue;
+            }
+
+            var key = NormalizeInclude(declaration.Source!.File);
+            if (!declarationsByInclude.TryGetValue(key, out var group))
+            {
+                declarationsByInclude[key] = group = [];
+            }
+
+            group.Add(declaration);
+        }
+
+        var expanded = new HashSet<string>(inlineHeaders.Select(NormalizeInclude), StringComparer.OrdinalIgnoreCase);
+        for (var pass = 0; pass < 64; pass++)
+        {
+            var additions = new List<string>();
+            foreach (var expandedHeader in expanded.ToList())
+            {
+                if (!declarationsByInclude.TryGetValue(expandedHeader, out var group))
+                {
+                    continue;
+                }
+
+                foreach (var declaration in group)
+                {
+                    foreach (var include in FieldHeaders(declaration, declarationsByQualifiedName, inlineBodyMembers, new HashSet<string>(StringComparer.Ordinal), unknownArguments))
+                    {
+                        if (expanded.Add(NormalizeInclude(include)))
+                        {
+                            additions.Add(include);
+                        }
+                    }
+                }
+            }
+
+            if (additions.Count == 0)
+            {
+                break;
+            }
+
+            inlineHeaders.AddRange(additions);
+        }
+        // A class the IR never declared can still be an inline-body dependency (a base
+        // header pulled in by another one). Its own forward declares name the types its
+        // storage needs; read them from the file rather than the records. A header found
+        // this way can forward-declare further types, so repeat until the set is stable.
+        var scanned = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        for (var pass = 0; pass < 16; pass++)
+        {
+            var before = inlineHeaders.Count;
+            foreach (var listedHeader in inlineHeaders.ToList())
+            {
+                if (!scanned.Add(NormalizeInclude(listedHeader)))
+                {
+                    continue;
+                }
+
+                foreach (var unknown in ForwardDeclaredStorageTypes(manifest, surface, listedHeader))
+                {
+                    if (Environment.GetEnvironmentVariable("HS_DUMP_HEADERS") is not null)
+                    {
+                        Console.Error.WriteLine($"forward-declared storage type {unknown} in {listedHeader}");
+                    }
+
+                    unknownArguments.Add(unknown);
+                }
+            }
+
+            foreach (var unknown in unknownArguments)
+            {
+                if (FindHeaderByName(manifest, surface, unknown) is { } unknownHeader)
+                {
+                    inlineHeaders.Add(unknownHeader);
+                }
+            }
+
+            inlineHeaders = inlineHeaders.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            if (inlineHeaders.Count == before)
+            {
+                break;
             }
         }
+
+        inlineHeaders = inlineHeaders.Select(NormalizeInclude).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+
+        // The generated headers forward-declare types whose by-value storage they use
+        // (std::vector<T>, std::unique_ptr<T>, ll::TypedStorage<...>), so the include order
+        // decides whether T is complete where the container instantiates its destructor.
+        // Order the set so every field type's own header precedes its user.
+        inlineHeaders = OrderByFieldDependencies(inlineHeaders, manifest, surface, declarationsByInclude, inlineBodyMembers, unknownArguments);
 
         if (inlineHeaders.Count > 0)
         {
@@ -2718,6 +3129,28 @@ internal static class ShimEmitter
         source.Add("std::weak_ptr<T> hs_weak_from_handle(HosihikariSharedHandle handle)");
         source.Add("{");
         source.Add("    return std::weak_ptr<T>(hs_shared_from_handle<T>(handle));");
+        source.Add("}");
+        source.Add("");
+
+        source.Add("template <class T>");
+        source.Add("void hs_release_game_ref_handle(void* holder)");
+        source.Add("{");
+        source.Add("    delete static_cast<T*>(holder);");
+        source.Add("}");
+        source.Add("");
+        source.Add("template <class T>");
+        source.Add("HosihikariSharedHandle hs_make_game_ref_handle(T const& value)");
+        source.Add("{");
+        source.Add("    if (!static_cast<bool>(value)) { return HosihikariSharedHandle{nullptr, nullptr, nullptr}; }");
+        source.Add("    auto* holder = new T(value);");
+        source.Add("    return HosihikariSharedHandle{holder, const_cast<void*>(static_cast<void const*>(&*holder)), &hs_release_game_ref_handle<T>};");
+        source.Add("}");
+        source.Add("");
+        source.Add("template <class T>");
+        source.Add("T const& hs_game_ref_from_handle(HosihikariSharedHandle handle)");
+        source.Add("{");
+        source.Add("    if (handle.holder == nullptr) { throw std::invalid_argument(\"empty game reference handle\"); }");
+        source.Add("    return *static_cast<T const*>(handle.holder);");
         source.Add("}");
         source.Add("");
 
@@ -3114,7 +3547,17 @@ internal static class ShimEmitter
             }
 
             var name = CppParameterName(parameter, index);
-            if (parameter.IsWeakPtr)
+            if (parameter.IsGameRefParam)
+            {
+                // The handle keeps a copy of the storage record; hand the record back as it
+                // is and lock a weak one for the call.
+                var gameRefType = AbiPlan.StripTopLevelQualifiers(parameter.NativeType).Trim();
+                // The call parameter is the wrapper by value, so the record is copied in.
+                yield return parameter.IsWeakPtr
+                    ? $"    auto hs_weak{index} = hs_game_ref_from_handle<{gameRefType}>({name});"
+                    : $"    auto hs_shared{index} = hs_game_ref_from_handle<{gameRefType}>({name});";
+            }
+            else if (parameter.IsWeakPtr)
             {
                 yield return $"    auto hs_weak{index} = hs_weak_from_handle<void>({name});";
             }
@@ -3643,7 +4086,9 @@ internal static class ShimEmitter
 
             if (parameter.Kind == AbiKind.Shared)
             {
-                callParameters.Add(parameter.IsWeakPtr ? "std::weak_ptr<void>" : "std::shared_ptr<void>");
+                callParameters.Add(parameter.IsGameRefParam
+                    ? AbiPlan.StripTopLevelQualifiers(parameter.NativeType).Trim()
+                    : parameter.IsWeakPtr ? "std::weak_ptr<void>" : "std::shared_ptr<void>");
                 continue;
             }
 
@@ -3709,7 +4154,11 @@ internal static class ShimEmitter
         // puts the buffer first for members as well, and returns small trivially copyable
         // optionals in registers, so Linux uses the typed return.
         var sharedReturnType = function.ReturnKind == AbiKind.Shared
-            ? (function.SharedWrapper == SharedWrapperKind.WeakPtr ? "std::weak_ptr<void>" : "std::shared_ptr<void>")
+            ? function.ReturnGameRef
+                // The EntityContext specialization is the record the callee constructs in
+                // the return buffer; its base is not a shared_ptr.
+                ? function.ReturnGameRefType ?? function.NativeReturnType
+                : function.SharedWrapper == SharedWrapperKind.WeakPtr ? "std::weak_ptr<void>" : "std::shared_ptr<void>"
             : null;
         var uniquePtrReturn = function.ReturnUniquePtr;
         var manualOptionalSret = optionalReturnType is not null
@@ -3917,7 +4366,21 @@ internal static class ShimEmitter
             {
                 yield return $"    {call};";
                 yield return "    auto& hs_shared = *reinterpret_cast<HsTypedResult*>(hs_typedStorage);";
-                if (function.SharedWrapper == SharedWrapperKind.WeakPtr)
+                if (function.ReturnGameRef)
+                {
+                    // The record stores its object directly; the handle keeps a copy so the
+                    // returned record can be destroyed with the rest of the buffer.
+                    if (function.SharedWrapper == SharedWrapperKind.WeakPtr)
+                    {
+                        yield return "    auto hs_locked = hs_shared.lock();";
+                        yield return "    auto hs_result = hs_make_game_ref_handle(hs_locked);";
+                    }
+                    else
+                    {
+                        yield return "    auto hs_result = hs_make_game_ref_handle(hs_shared);";
+                    }
+                }
+                else if (function.SharedWrapper == SharedWrapperKind.WeakPtr)
                 {
                     yield return "    auto hs_locked = hs_shared.lock();";
                     yield return "    auto hs_result = hs_make_shared_handle<void>(std::move(hs_locked));";

@@ -50,6 +50,14 @@ internal enum AbiCastKind
 internal sealed class AbiParameter
 {
     public string Name { get; init; } = "";
+
+    /// <summary>
+    /// The name the emitted C++ uses. A signature may repeat a parameter name (the
+    /// <c>function_invoke_base::operator()</c> family spells every argument <c>args</c>), so
+    /// planning replaces it with a unique one.
+    /// </summary>
+    public string? CppName { get; set; }
+
     public AbiKind Kind { get; init; }
     public string NativeType { get; init; } = "";
     public string? NativePointee { get; init; }
@@ -112,6 +120,13 @@ internal sealed class AbiParameter
     /// control block rather than a raw pointer.
     /// </summary>
     public SharedWrapperKind SharedWrapper { get; init; }
+
+    /// <summary>
+    /// The parameter is a game reference (<c>OwnerPtr</c>/<c>WeakRef</c>/<c>StackRefResult</c>)
+    /// over <c>EntityContext</c>. The handle carries a copy of that storage record, which the
+    /// shim rebinds instead of a <c>shared_ptr</c>.
+    /// </summary>
+    public bool IsGameRefParam { get; init; }
     public bool IsBitset { get; init; }
     public int BitsetBits { get; init; }
     public bool IsUniquePtrParam { get; init; }
@@ -277,6 +292,17 @@ internal sealed class AbiFunction
     public string? ArrayElementWrapperType { get; init; }
     public string? ArrayElementNativeType { get; init; }
     public SharedWrapperKind SharedWrapper { get; init; }
+
+    /// <summary>
+    /// The result is a game reference (<c>OwnerPtr</c>/<c>WeakRef</c>/<c>StackRefResult</c>)
+    /// over <c>EntityContext</c>. Those specializations store an <c>optional</c>-based
+    /// storage record rather than a <c>shared_ptr</c>, so the shim binds the record itself
+    /// instead of reading a control block. <see cref="ReturnGameRefType"/> is its spelling.
+    /// </summary>
+    public bool ReturnGameRef { get; init; }
+
+    /// <summary>The game-reference spelling of a <see cref="ReturnGameRef"/> result.</summary>
+    public string? ReturnGameRefType { get; init; }
     public AbiKind MapKeyKind { get; init; }
     public AbiKind MapValueKind { get; init; }
     public string? MapValueWrapperType { get; init; }
@@ -343,6 +369,12 @@ internal sealed class AbiFunction
     /// the only way to reach those members: the carrier never instantiates or exports them.
     /// </summary>
     public bool InlineBody { get; init; }
+
+    /// <summary>
+    /// The member is const, so <c>hs_self</c> is cast to a const pointer. A const overload of
+    /// an inline template member otherwise resolves against the non-const object.
+    /// </summary>
+    public bool SelfConst { get; init; }
 
     /// <summary>
     /// The member is declared with an <c>&amp;&amp;</c> qualifier, so the shim has to call it on
@@ -743,7 +775,9 @@ internal sealed class AbiPlan
                 var inlineBodyTemplate = declaration.Template is not null
                     && membersByDeclaration.TryGetValue(declaration.Id, out var templateMemberList)
                     && templateMemberList.Any(member =>
-                        member.Access == "public" && member.Inline && member.Defined);
+                        member.Access == "public"
+                        && member.Inline
+                        && (member.Defined || IsPatternCallable(member)));
                 if (declaration.Template is not null && !byValueReturnTemplate && !inlineBodyTemplate)
                 {
                     declarationReason = "template classes are not supported by symbol dispatch";
@@ -1077,7 +1111,12 @@ internal sealed class AbiPlan
                 }
                 else if (symbolDispatch)
                 {
-                    if (!HasSymbolAddress(constructor))
+                    if (IsInlineBodyConstructor(declaration, constructor))
+                    {
+                        // Compiled from the header instead of a symbol; the layout is not
+                        // needed because the constructor itself allocates.
+                    }
+                    else if (!HasSymbolAddress(constructor))
                     {
                         reason = "the constructor has no symbol in the IR";
                     }
@@ -1327,10 +1366,13 @@ internal sealed class AbiPlan
                 }
                 else if (symbolDispatch)
                 {
-                    if (method.Inline && method.Defined)
+                    if (method.Inline
+                        && (method.Defined || IsPatternCallable(method)))
                     {
                         // The body is in the header the shim includes; a template instance
                         // never gets a game symbol, so calling it directly is the only route.
+                        // An implicit specialization has no body of its own; the body on the
+                        // instantiation pattern is what the shim compiles.
                     }
                     else if (!HasDispatchEntry(method))
                     {
@@ -1419,6 +1461,7 @@ internal sealed class AbiPlan
                         symbolOptionalRecords,
                         variants,
                         callables,
+                        membersByDeclaration,
                         out var function,
                         out reason))
                 {
@@ -2003,6 +2046,8 @@ internal sealed class AbiPlan
                             out var expectedErrorType,
                             out var returnVariant,
                             out var returnCallable,
+                            out var returnGameRef,
+                            out var returnGameRefType,
                             out var returnReason))
                     {
                         AddFunctionStub(returnReason ?? "the return type is not supported");
@@ -2763,6 +2808,31 @@ internal sealed class AbiPlan
         return inner is null ? [value] : SplitTemplateArguments(inner);
     }
 
+    /// <summary>
+    /// Every type name a spelling mentions, including the parts of its template arguments:
+    /// <c>ll::TypedStorageImpl&lt;8, 24, std::vector&lt;ChunkPos&gt;&gt;</c> yields the wrapper,
+    /// the vector, and the element. Wrappers are kept so the caller can resolve them too.
+    /// </summary>
+    internal static IEnumerable<string> TypeMentions(string? canonical)
+    {
+        if (string.IsNullOrWhiteSpace(canonical))
+        {
+            yield break;
+        }
+
+        var text = StripTopLevelQualifiers(canonical);
+        foreach (var part in System.Text.RegularExpressions.Regex.Split(text, @"[,<>]"))
+        {
+            var name = NormalizeTypeName(part);
+            if (!string.IsNullOrWhiteSpace(name)
+                && !IsFundamentalTemplateArgument(name)
+                && !IsLiteralTemplateArgument(name))
+            {
+                yield return name;
+            }
+        }
+    }
+
     private static bool IsUsableTemplateType(
         string value,
         IReadOnlyDictionary<string, DeclarationRecord> declarationsByQualifiedName,
@@ -3100,6 +3170,8 @@ internal sealed class AbiPlan
             parameters.Add(abiParameter);
         }
 
+        AssignUniqueParameterNames(parameters);
+
         if (ownsBorrowedString)
         {
             var stringParameters = parameters
@@ -3138,6 +3210,7 @@ internal sealed class AbiPlan
             Parameters = parameters,
             CreateViaBorrowedHolder = ownsBorrowedString && !symbolDispatch,
             BorrowedStrings = ownsBorrowedString,
+            InlineBody = symbolDispatch && IsInlineBodyConstructor(declaration, constructor),
         };
         return true;
     }
@@ -3238,6 +3311,7 @@ internal sealed class AbiPlan
         IReadOnlyDictionary<string, DeclarationRecord> symbolOptionalRecords,
         VariantRegistry variants,
         CallableRegistry callables,
+        IReadOnlyDictionary<string, List<MemberRecord>> membersByDeclaration,
         out AbiFunction function,
         out string? reason)
     {
@@ -3276,6 +3350,8 @@ internal sealed class AbiPlan
         string? arrayElementWrapperType = null;
         string? arrayElementNativeType = null;
         var sharedWrapper = SharedWrapperKind.None;
+        var returnGameRefOut = false;
+        string? returnGameRefTypeOut = null;
         var timeConversion = TimeConversion.None;
         string? timeClockType = null;
         string? timeDurationType = null;
@@ -3398,11 +3474,16 @@ internal sealed class AbiPlan
                 out expectedErrorType,
                 out returnVariant,
                 out returnCallable,
+                out returnGameRefOut,
+                out returnGameRefTypeOut,
                 out var returnReason))
         {
             reason = returnReason;
             return false;
         }
+
+        var gameRefReturn = returnGameRefOut;
+        var gameRefReturnType = returnGameRefTypeOut;
 
         var parameters = new List<AbiParameter>();
         foreach (var parameter in method.Signature.Parameters)
@@ -3427,6 +3508,8 @@ internal sealed class AbiPlan
 
             parameters.Add(abiParameter);
         }
+
+        AssignUniqueParameterNames(parameters);
 
         // A mutable std::string argument is rewritten by the callee. A void method can
         // return the text in place of its result; any other return keeps its own value,
@@ -3486,6 +3569,10 @@ internal sealed class AbiPlan
             ArrayElementWrapperType = arrayElementWrapperType,
             ArrayElementNativeType = arrayElementNativeType,
             SharedWrapper = sharedWrapper,
+            // A game reference over EntityContext stores an optional-based record, not a
+            // control block; the shim has to bind the record itself.
+            ReturnGameRef = gameRefReturn,
+            ReturnGameRefType = gameRefReturnType,
             TimeConversion = timeConversion,
             TimeClockType = timeClockType,
             TimeDurationType = timeDurationType,
@@ -3510,11 +3597,16 @@ internal sealed class AbiPlan
             CallableInfo = returnCallable,
             Parameters = parameters,
             Static = method.Static,
+            SelfConst = method.Signature.Const,
             RvalueQualified = method.RefQualifier == "rvalue",
             // Only a template instance needs the inline route: a non-template inline member is
             // usually exported too, and its header can reach game headers that do not compile
             // on their own (MolangScriptArg's implicit copy assignment is deleted under C++20).
-            InlineBody = symbolDispatch && declaration.Template is not null && method.Inline && method.Defined,
+            InlineBody = symbolDispatch
+                && declaration.Template is not null
+                && method.Inline
+                && (method.Defined || IsPatternCallable(method))
+                && !HasAlgorithmRequiringCopy(method, declaration, membersByDeclaration, declarationsByQualifiedName),
         };
         return true;
     }
@@ -3562,6 +3654,8 @@ internal sealed class AbiPlan
         out string? expectedErrorType,
         out VariantAbiInfo? returnVariant,
         out CallableAbiInfo? returnCallable,
+        out bool gameRef,
+        out string? gameRefType,
         out string? reason)
     {
         kind = AbiKind.Void;
@@ -3579,6 +3673,8 @@ internal sealed class AbiPlan
         arrayElementWrapperType = null;
         arrayElementNativeType = null;
         sharedWrapper = SharedWrapperKind.None;
+        gameRef = false;
+        gameRefType = null;
         timeConversion = TimeConversion.None;
         timeClockType = null;
         timeDurationType = null;
@@ -3667,6 +3763,8 @@ internal sealed class AbiPlan
                     out _,
                     out var nestedVariant,
                     out var nestedCallable,
+                    out gameRef,
+                    out gameRefType,
                     out var expectedValueReason))
             {
                 reason = $"expected value type '{expectedValueType}': {expectedValueReason}";
@@ -4136,6 +4234,10 @@ internal sealed class AbiPlan
             kind = AbiKind.Shared;
             nativeType = referencePointee;
             sharedWrapper = referenceWrapper;
+            // The EntityContext specializations store an optional-based record instead of
+            // a shared_ptr; the record itself is what the shim has to keep alive.
+            gameRef = IsEntityContextGameRef(referencePointee);
+            gameRefType = gameRef ? StripTopLevelQualifiers(canonical).Trim() : null;
             nullable = true;
             return true;
         }
@@ -5753,8 +5855,7 @@ internal sealed class AbiPlan
         }
 
         if (!IsPointerType(text)
-            && TryParseReferenceWrapper(text, out var parameterWrapper, out var parameterPointee)
-            && !(parameterWrapper == SharedWrapperKind.SharedPtr && IsEntityContextGameRef(parameterPointee)))
+            && TryParseReferenceWrapper(text, out var parameterWrapper, out var parameterPointee))
         {
             // OwnerPtr, StackRefResult, WeakRef and Bedrock::NonOwnerPointer all carry a
             // shared control block, so a parameter crosses the ABI as a shared handle just
@@ -5769,6 +5870,7 @@ internal sealed class AbiPlan
                 NativePointee = parameterPointee,
                 IsWeakPtr = parameterWrapper == SharedWrapperKind.WeakPtr,
                 SharedWrapper = parameterWrapper,
+                IsGameRefParam = IsEntityContextGameRef(parameterPointee),
                 IsReference = IsReferenceType(text),
                 IsConst = IsConstType(text),
             };
@@ -6907,6 +7009,100 @@ internal sealed class AbiPlan
     /// signature's canonical name because a template argument prints as <c>2ULL</c> in the
     /// declaration name but as <c>2</c> in a parameter type.
     /// </summary>
+    /// <summary>
+    /// A constructor of a template instance whose body the shim can compile. An implicit
+    /// specialization carries the body on its instantiation pattern; a copy or move
+    /// constructor copies the payload inline and still needs exported symbols, so it keeps
+    /// the symbol route.
+    /// </summary>
+    /// <summary>
+    /// Gives every parameter a distinct C++ name. The signature is the source of the names,
+    /// and a repeated one would collide in the emitted declaration.
+    /// </summary>
+    private static void AssignUniqueParameterNames(List<AbiParameter> parameters)
+    {
+        var used = new HashSet<string>(StringComparer.Ordinal);
+        for (var index = 0; index < parameters.Count; index++)
+        {
+            var parameter = parameters[index];
+            var baseName = string.IsNullOrWhiteSpace(parameter.Name)
+                ? "arg" + index.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                : parameter.Name;
+            var name = baseName;
+            var counter = 1;
+            while (!used.Add(name))
+            {
+                name = baseName + counter.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                counter++;
+            }
+
+            parameter.CppName = name;
+        }
+    }
+
+    private static bool IsInlineBodyConstructor(DeclarationRecord declaration, MemberRecord constructor) =>
+        declaration.Template is not null
+        && constructor.Inline
+        && (constructor.Defined || IsPatternCallable(constructor))
+        && !IsCopyOrMoveConstructor(constructor);
+
+    /// <summary>
+    /// A member whose body only exists on the instantiation pattern is called by name with
+    /// the substituted types. A parameter would have to satisfy the callee's own constraints
+    /// again (the members that take one are member templates, whose deduction is not
+    /// reproducible from the recorded types), so only a parameterless member is admitted.
+    /// </summary>
+    private static bool IsPatternCallable(MemberRecord member) =>
+        member.PatternDefined
+        && !member.PatternTemplate
+        && (member.Kind == "destructor" || (member.Signature is not null && member.Signature.Parameters.Count == 0));
+
+    /// <summary>
+    /// <c>std::pop_heap</c> and <c>std::make_heap</c> copy elements, and so does
+    /// <c>std::vector</c> growth. A class whose field is a sequence of a non-copyable record
+    /// (a move-only element behind a user-declared destructor) therefore has inline bodies
+    /// that do not compile even though the class itself does, so those members fall back to
+    /// their game symbols.
+    /// </summary>
+    private static bool HasAlgorithmRequiringCopy(
+        MemberRecord method,
+        DeclarationRecord declaration,
+        IReadOnlyDictionary<string, List<MemberRecord>> membersByDeclaration,
+        IReadOnlyDictionary<string, DeclarationRecord> declarationsByQualifiedName)
+    {
+        if (method.Kind is not ("method" or "operator"))
+        {
+            return false;
+        }
+
+        if (!membersByDeclaration.TryGetValue(declaration.Id, out var members))
+        {
+            return false;
+        }
+
+        foreach (var member in members.Where(member => member.Kind == "field"))
+        {
+            var canonical = member.Type?.Canonical ?? "";
+            if (!canonical.Contains("vector<", StringComparison.Ordinal)
+                && !canonical.Contains("deque<", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            foreach (var part in SplitTemplateArguments(canonical[(canonical.IndexOf('<') + 1)..canonical.LastIndexOf('>')]))
+            {
+                var element = NormalizeTypeName(part);
+                if (declarationsByQualifiedName.TryGetValue(element, out var elementDeclaration)
+                    && !elementDeclaration.CopyConstructible)
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
     private static bool IsCopyOrMoveConstructor(MemberRecord member)
     {
         if (member.Signature is null || member.Signature.Parameters.Count != 1)

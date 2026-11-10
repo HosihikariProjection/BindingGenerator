@@ -1525,6 +1525,18 @@ private:
                 if (auto* Pattern = Method->getTemplateInstantiationPattern();
                     Pattern != nullptr && Pattern != Method && Pattern->hasBody()) {
                     Object["patternDefined"] = true;
+                    // A member function template re-deduces its own parameters at the call
+                    // site, and the recorded argument types are those of one instantiation.
+                    // Calling it by name can therefore fail its constraints; record the shape
+                    // so the planner can decide. A plain member of a class template instance
+                    // has member-specialization info instead.
+                    if (Method->getTemplateSpecializationInfo() != nullptr) {
+                        Object["patternTemplate"] = true;
+                    }
+                    if (std::getenv("HS_DUMP_PATTERN") != nullptr) {
+                        llvm::errs() << "PATTERN " << Member->getNameAsString() << " ctx="
+                                     << Pattern->getDeclContext()->getDeclKindName() << "\n";
+                    }
                 }
             }
             Object["consteval"] = Method->isConsteval();
