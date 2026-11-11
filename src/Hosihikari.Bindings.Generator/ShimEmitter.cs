@@ -2371,6 +2371,22 @@ internal static partial class ShimEmitter
             }
         }
 
+        // A listed header is parsed together with everything its own include list pulls in,
+        // so a listed header it includes has to be treated as coming first even when the IR
+        // shows no field edge between them. Without this, a header that transitively reaches
+        // a forward-declaring file is ordered before the header that completes its type.
+        foreach (var (normalized, _) in byInclude)
+        {
+            var edges = dependencies[normalized];
+            foreach (var included in DirectIncludes(manifest, surface, normalized))
+            {
+                if (included != normalized && byInclude.ContainsKey(included))
+                {
+                    edges.Add(included);
+                }
+            }
+        }
+
         var ordered = new List<string>();
         var state = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         foreach (var start in byInclude.Keys)
@@ -2471,6 +2487,41 @@ internal static partial class ShimEmitter
     [System.Text.RegularExpressions.GeneratedRegex(
         @"(?:vector|unique_ptr|optional|unordered_map|map|set|deque|TypedStorage(?:Impl)?)<")]
     private static partial System.Text.RegularExpressions.Regex StorageRegex();
+
+    /// <summary>
+    /// The files an include pulls in itself. A listed header is parsed together with this
+    /// set, so ordering has to respect it even where the IR records no field edge.
+    /// </summary>
+    private static IEnumerable<string> DirectIncludes(IrManifest manifest, string surface, string include)
+    {
+        var relative = NormalizeInclude(include);
+        var file = manifest.Sources
+            .Where(pin => string.Equals(pin.Surface, surface, StringComparison.Ordinal))
+            .Select(pin => Path.Combine(pin.Path, relative.Replace('/', Path.DirectorySeparatorChar)))
+            .FirstOrDefault(File.Exists);
+        if (file is null)
+        {
+            yield break;
+        }
+
+        string text;
+        try
+        {
+            text = File.ReadAllText(file);
+        }
+        catch (IOException)
+        {
+            yield break;
+        }
+
+        foreach (System.Text.RegularExpressions.Match match in System.Text.RegularExpressions.Regex.Matches(
+                     text,
+                     @"^\s*#\s*include\s+""([^""]+)""",
+                     System.Text.RegularExpressions.RegexOptions.Multiline))
+        {
+            yield return NormalizeInclude(match.Groups[1].Value);
+        }
+    }
 
     private static IEnumerable<string> InlineBodyHeaders(
         DeclarationRecord declaration,
