@@ -1173,7 +1173,7 @@ internal static class InteropEmitter
                     lines.Add("        }");
                     break;
                 case AbiKind.Opaque when getter.ReturnWrapperType is not null:
-                    lines.Add($"        get => new {getter.ReturnWrapperType}((nint){call}, false);");
+                    lines.Add($"        get => {call} is null ? null : new {getter.ReturnWrapperType}((nint){call}, false);");
                     break;
                 case AbiKind.Opaque:
                     lines.Add($"        get => (nint){call};");
@@ -1217,7 +1217,7 @@ internal static class InteropEmitter
                 break;
             }
         }
-        lines.Add($"    public static {className} {name}({declarations})");
+        lines.Add($"    public static {className}? {name}({declarations})");
         lines.Add("    {");
         EmitPinnedBody(
             lines,
@@ -1236,9 +1236,11 @@ internal static class InteropEmitter
 
     private static void EmitHandleCheck(List<string> lines, string indent = "        ", string local = "handle")
     {
+        // The shim already recorded why it failed; a null handle means "no object", so the
+        // factory returns null rather than throwing an object with a dead handle.
         lines.Add(indent + $"if ({local} == null)");
         lines.Add(indent + "{");
-        lines.Add(indent + "    throw new global::System.InvalidOperationException(NativeMethods.GetLastError() ?? \"BindingShim create call failed.\");");
+        lines.Add(indent + "    return null;");
         lines.Add(indent + "}");
         lines.Add("");
     }
@@ -1272,7 +1274,7 @@ internal static class InteropEmitter
             AbiKind.StringView => method.ReturnOptional ? "string?" : "string",
             AbiKind.Opaque => method.ReturnWrapperType is not null
                 && (method.ReturnOwned || method.ReturnBorrowed)
-                ? method.ReturnWrapperType + (method.ReturnNullable ? "?" : "")
+                ? method.ReturnWrapperType + "?"
                 : method.ReturnOptional ? "nint?" : "nint",
             AbiKind.ArrayView => method.ArrayElementKind == AbiKind.StringView
                 ? "string[]"
@@ -1447,25 +1449,18 @@ internal static class InteropEmitter
                 if (method.ReturnWrapperType is not null
                     && (method.ReturnOwned || method.ReturnBorrowed))
                 {
+                    // A shim returns a null handle when the symbol it needs was not resolved
+                    // (the shim records the reason with setLastError). Constructing a wrapper
+                    // around that null handle yields an object whose every later call fails,
+                    // so map it to null instead and let the caller see the absence.
+                    lines.Add(indent + $"var __hs_handle = {call};");
+                    var condition = method.ReturnOptional
+                        ? "__hs_hasValue && __hs_handle != null"
+                        : "__hs_handle != null";
                     var constructor = method.ReturnBorrowed
                         ? $"new {method.ReturnWrapperType}((nint)__hs_handle, false)"
                         : $"new {method.ReturnWrapperType}((nint)__hs_handle)";
-                    if (method.ReturnNullable)
-                    {
-                        lines.Add(indent + $"var __hs_handle = {call};");
-                        var condition = method.ReturnOptional
-                            ? "__hs_hasValue && __hs_handle != null"
-                            : "__hs_handle != null";
-                        lines.Add(indent + $"return {condition} ? {constructor} : null;");
-                    }
-                    else if (method.ReturnBorrowed)
-                    {
-                        lines.Add(indent + $"return new {method.ReturnWrapperType}((nint){call}, false);");
-                    }
-                    else
-                    {
-                        lines.Add(indent + $"return new {method.ReturnWrapperType}((nint){call});");
-                    }
+                    lines.Add(indent + $"return {condition} ? {constructor} : null;");
                 }
                 else if (method.ReturnOptional)
                 {
