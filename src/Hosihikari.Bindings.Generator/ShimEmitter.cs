@@ -3078,6 +3078,15 @@ internal static partial class ShimEmitter
         source.Add("        return released;");
         source.Add("    }");
         source.Add("};");
+        source.Add("");
+        // The callee constructs a non-trivial result in the shim's raw storage; the scope
+        // destroys it on every exit, including the ones that skip the explicit hand-off.
+        source.Add("template <typename T>");
+        source.Add("struct hs_typed_scope");
+        source.Add("{");
+        source.Add("    unsigned char* storage;");
+        source.Add("    ~hs_typed_scope() { reinterpret_cast<T*>(storage)->~T(); }");
+        source.Add("};");
 
         var stringDestructor = StringDestructor(manifest, configuration);
         if (stringDestructor is not null)
@@ -3090,6 +3099,12 @@ internal static partial class ShimEmitter
             source.Add("    auto* mutableValue = const_cast<std::basic_string<char>*>(value);");
             source.Add("    if (destroy != nullptr) { destroy(mutableValue); } else { mutableValue->~basic_string(); }");
             source.Add("}");
+            source.Add("");
+            source.Add("struct hs_string_scope");
+            source.Add("{");
+            source.Add("    std::basic_string<char> const* value;");
+            source.Add("    ~hs_string_scope() { hs_destroy_string(value); }");
+            source.Add("};");
         }
 
         source.Add("");
@@ -4448,6 +4463,7 @@ internal static partial class ShimEmitter
             {
                 yield return $"    {call};";
                 yield return "    auto& hs_shared = *reinterpret_cast<HsTypedResult*>(hs_typedStorage);";
+                yield return "    hs_typed_scope<HsTypedResult> hs_sharedScope{hs_typedStorage};";
                 if (function.ReturnGameRef)
                 {
                     // The record stores its object directly; the handle keeps a copy so the
@@ -4476,7 +4492,6 @@ internal static partial class ShimEmitter
                     yield return "    auto hs_result = hs_make_shared_handle<void>(std::move(hs_shared));";
                 }
 
-                yield return "    hs_shared.~HsTypedResult();";
                 yield return "    return hs_result;";
             }
             else if (optionalReturnType is not null)
@@ -4485,6 +4500,7 @@ internal static partial class ShimEmitter
                 {
                     yield return $"    {call};";
                     yield return "    auto& hs_result = *reinterpret_cast<HsTypedResult*>(hs_typedStorage);";
+                    yield return "    hs_typed_scope<HsTypedResult> hs_resultScope{hs_typedStorage};";
                 }
                 else
                 {
@@ -4499,7 +4515,7 @@ internal static partial class ShimEmitter
                     var align = (optionalRecordLayout.Align > 0 ? optionalRecordLayout.Align : 8).ToString(CultureInfo.InvariantCulture);
                     if (manualOptionalSret)
                     {
-                        yield return "    if (!*hs_hasValue) { hs_result.~HsTypedResult(); return nullptr; }";
+                        yield return "    if (!*hs_hasValue) { return nullptr; }";
                     }
                     else
                     {
@@ -4547,42 +4563,22 @@ internal static partial class ShimEmitter
                             yield return "    reinterpret_cast<void (*)(void*)>(const_cast<void*>(hs_optionalDtor))(hs_result->data);";
                         }
 
-                        if (manualOptionalSret)
-                        {
-                            yield return "    hs_result.~HsTypedResult();";
-                        }
-
                         yield return "    return hs_optionalRecordOwnership.release();";
                     }
                     else
                     {
                         yield return $"    std::memcpy(hs_record, hs_result->data, static_cast<std::size_t>({size}));";
-                        if (manualOptionalSret)
-                        {
-                            yield return "    hs_result.~HsTypedResult();";
-                        }
-
                         yield return "    return hs_optionalRecordOwnership.release();";
                     }
                 }
                 else if (function.ReturnKind == AbiKind.StringView)
                 {
                     yield return "    g_stringResult.assign(hs_result ? hs_result->data() : \"\", hs_result ? hs_result->size() : 0);";
-                    if (manualOptionalSret)
-                    {
-                        yield return "    hs_result.~HsTypedResult();";
-                    }
-
                     yield return "    return HosihikariStringView{g_stringResult.data(), g_stringResult.size()};";
                 }
                 else
                 {
                     yield return $"    auto hs_value = hs_result ? static_cast<{returnType}>(*hs_result) : {returnType}{{}};";
-                    if (manualOptionalSret)
-                    {
-                        yield return "    hs_result.~HsTypedResult();";
-                    }
-
                     yield return "    return hs_value;";
                 }
             }
@@ -4590,8 +4586,10 @@ internal static partial class ShimEmitter
             {
                 yield return $"    {call};";
                 yield return "    auto& hs_result = *reinterpret_cast<HsString*>(hs_stringStorage);";
+                yield return destroyStringViaGame
+                    ? "    hs_string_scope hs_resultScope{&hs_result};"
+                    : "    hs_typed_scope<HsString> hs_resultScope{hs_stringStorage};";
                 yield return "    g_stringResult.assign(hs_result.data(), hs_result.size());";
-                yield return destroyStringViaGame ? "    hs_destroy_string(&hs_result);" : "    hs_result.~HsString();";
                 yield return "    return HosihikariStringView{g_stringResult.data(), g_stringResult.size()};";
             }
             else if (function.ReturnKind == AbiKind.StringView)
@@ -4719,8 +4717,8 @@ internal static partial class ShimEmitter
             {
                 yield return $"    {call};";
                 yield return "    auto& hs_unique = *reinterpret_cast<HsTypedResult*>(hs_typedStorage);";
+                yield return "    hs_typed_scope<HsTypedResult> hs_uniqueScope{hs_typedStorage};";
                 yield return "    void* hs_result = hs_unique.release();";
-                yield return "    hs_unique.~HsTypedResult();";
                 yield return "    return hs_result;";
             }
             else if (ownedRecordReturn)
