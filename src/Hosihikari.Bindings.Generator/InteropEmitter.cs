@@ -1283,7 +1283,7 @@ internal static class InteropEmitter
             AbiKind.Opaque => method.ReturnWrapperType is not null
                 && (method.ReturnOwned || method.ReturnBorrowed)
                 ? method.ReturnWrapperType + "?"
-                : method.ReturnOptional ? "nint?" : "nint",
+                : "nint?",
             AbiKind.ArrayView => method.ArrayElementKind == AbiKind.StringView
                 ? "string[]"
                 : method.ArrayElementOwnership != ArrayElementOwnership.None
@@ -1489,7 +1489,15 @@ internal static class InteropEmitter
                 }
                 else
                 {
-                    lines.Add(indent + $"return (nint){call};");
+                    // The same null-handle rule as the wrapper paths: a handle the shim could
+                    // not produce is absent, not zero.
+                    lines.Add(indent + $"var __hs_handle = {call};");
+                    lines.Add(indent + "if (__hs_handle == null)");
+                    lines.Add(indent + "{");
+                    lines.Add(indent + "    NativeMethods.GetLastError();");
+                    lines.Add(indent + "    return null;");
+                    lines.Add(indent + "}");
+                    lines.Add(indent + "return (nint)__hs_handle;");
                 }
 
                 break;
