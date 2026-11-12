@@ -180,8 +180,12 @@ if (uniqueHeavyMethod is not null)
     }
 }
 
-var objectA = block.makeObject(10);
-var objectB = block.makeObject(20);
+// A raw handle is nullable: the shim reports a handle it could not produce as absent
+// rather than as zero.
+var objectA = block.makeObject(10)
+    ?? throw new InvalidOperationException("The first object handle is null.");
+var objectB = block.makeObject(20)
+    ?? throw new InvalidOperationException("The second object handle is null.");
 if (block.sumObjectValues([objectA, objectB]) != 32)
 {
     throw new InvalidOperationException("The pointer vector parameter is incorrect.");
