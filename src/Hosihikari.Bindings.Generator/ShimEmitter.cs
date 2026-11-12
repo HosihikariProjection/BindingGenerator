@@ -3058,6 +3058,26 @@ internal static partial class ShimEmitter
         source.Add("    if (align > 16) { ::operator delete(pointer, std::align_val_t(align)); }");
         source.Add("    else { ::operator delete(pointer); }");
         source.Add("}");
+        source.Add("");
+        // The shim hands a heap allocation to the caller by returning its pointer; a throw
+        // between the allocation and the hand-off would otherwise leak it. Unwinding runs
+        // the destructor, so the pointer is given back on every exceptional exit.
+        source.Add("struct hs_owned_allocation");
+        source.Add("{");
+        source.Add("    void* pointer;");
+        source.Add("    std::size_t align;");
+        source.Add("    hs_owned_allocation(std::size_t size, std::size_t alignment)");
+        source.Add("        : pointer(hs_allocate(size, alignment)), align(alignment) { }");
+        source.Add("    hs_owned_allocation(hs_owned_allocation const&) = delete;");
+        source.Add("    hs_owned_allocation& operator=(hs_owned_allocation const&) = delete;");
+        source.Add("    ~hs_owned_allocation() { hs_deallocate(pointer, align); }");
+        source.Add("    void* release() noexcept");
+        source.Add("    {");
+        source.Add("        void* const released = pointer;");
+        source.Add("        pointer = nullptr;");
+        source.Add("        return released;");
+        source.Add("    }");
+        source.Add("};");
 
         var stringDestructor = StringDestructor(manifest, configuration);
         if (stringDestructor is not null)
@@ -3995,7 +4015,8 @@ internal static partial class ShimEmitter
         if (function.Kind == AbiFunctionKind.Create)
         {
             var align = layout!.Align > 0 ? layout.Align : 8;
-            yield return $"    auto* const hs_memory = static_cast<void*>(hs_allocate(static_cast<std::size_t>({layout.Size.ToString(CultureInfo.InvariantCulture)}), {align.ToString(CultureInfo.InvariantCulture)}));";
+            yield return $"    hs_owned_allocation hs_memoryOwnership(static_cast<std::size_t>({layout.Size.ToString(CultureInfo.InvariantCulture)}), {align.ToString(CultureInfo.InvariantCulture)});";
+            yield return "    auto* const hs_memory = hs_memoryOwnership.pointer;";
         }
 
         var ownedRecordReturn = function.Kind == AbiFunctionKind.Method
@@ -4242,7 +4263,8 @@ internal static partial class ShimEmitter
         else if (largeRecordReturn)
         {
             var align = returnLayout!.Align > 0 ? returnLayout.Align : 8;
-            yield return $"    auto* const hs_record = static_cast<void*>(hs_allocate(static_cast<std::size_t>({returnLayout.Size.ToString(CultureInfo.InvariantCulture)}), {align.ToString(CultureInfo.InvariantCulture)}));";
+            yield return $"    hs_owned_allocation hs_recordOwnership(static_cast<std::size_t>({returnLayout.Size.ToString(CultureInfo.InvariantCulture)}), {align.ToString(CultureInfo.InvariantCulture)});";
+            yield return "    auto* const hs_record = hs_recordOwnership.pointer;";
         }
         else if (arrayReturn && !borrowedVectorReturn)
         {
@@ -4313,7 +4335,8 @@ internal static partial class ShimEmitter
                     }
                 }
 
-                yield return "    auto* const hs_holder = new hs_symbol_holder();";
+                yield return "    std::unique_ptr<hs_symbol_holder> hs_holderOwnership(new hs_symbol_holder());";
+                yield return "    auto* const hs_holder = hs_holderOwnership.get();";
                 yield return $"    hs_holder->strings.reserve({ordinal.ToString(CultureInfo.InvariantCulture)});";
                 foreach (var index in borrowedStrings.Keys.OrderBy(value => value))
                 {
@@ -4412,10 +4435,10 @@ internal static partial class ShimEmitter
                 yield return $"    {call};";
                 if (function.BorrowedStrings)
                 {
-                    yield return "    hs_register_symbol_holder(hs_memory, hs_holder);";
+                    yield return "    hs_register_symbol_holder(hs_memory, hs_holderOwnership.release());";
                 }
 
-                yield return "    return hs_memory;";
+                yield return "    return hs_memoryOwnership.release();";
             }
             else if (function.ReturnKind == AbiKind.Void)
             {
@@ -4483,7 +4506,8 @@ internal static partial class ShimEmitter
                         yield return "    if (!*hs_hasValue) { return nullptr; }";
                     }
 
-                    yield return $"    auto* const hs_record = static_cast<void*>(hs_allocate(static_cast<std::size_t>({size}), {align}));";
+                    yield return $"    hs_owned_allocation hs_optionalRecordOwnership(static_cast<std::size_t>({size}), {align});";
+                    yield return "    auto* const hs_record = hs_optionalRecordOwnership.pointer;";
                     if (function.ReturnOptionalRecordNeedsCopy)
                     {
                         MemberRecord? optionalCopyConstructor = null;
@@ -4517,9 +4541,6 @@ internal static partial class ShimEmitter
                             yield return "    if (hs_optionalCopy == nullptr || hs_optionalDtor == nullptr)";
                             yield return "    {";
                             yield return "        setLastError(\"the optional payload copy or destructor symbol was not resolved\");";
-                            // The record was allocated before the symbols were looked up, so a
-                            // missing one has to give it back rather than only drop it.
-                            yield return $"        hs_deallocate(hs_record, static_cast<std::size_t>({align}));";
                             yield return "        return nullptr;";
                             yield return "    }";
                             yield return "    reinterpret_cast<void (*)(void*, void const*)>(const_cast<void*>(hs_optionalCopy))(hs_record, hs_result->data);";
@@ -4531,7 +4552,7 @@ internal static partial class ShimEmitter
                             yield return "    hs_result.~HsTypedResult();";
                         }
 
-                        yield return "    return hs_record;";
+                        yield return "    return hs_optionalRecordOwnership.release();";
                     }
                     else
                     {
@@ -4541,7 +4562,7 @@ internal static partial class ShimEmitter
                             yield return "    hs_result.~HsTypedResult();";
                         }
 
-                        yield return "    return hs_record;";
+                        yield return "    return hs_optionalRecordOwnership.release();";
                     }
                 }
                 else if (function.ReturnKind == AbiKind.StringView)
@@ -4604,9 +4625,11 @@ internal static partial class ShimEmitter
                     yield return "    auto const* hs_spanBytes = static_cast<unsigned char const*>(hs_span.data);";
                     yield return "    for (std::size_t hs_i = 0; hs_i < hs_span.size; ++hs_i)";
                     yield return "    {";
-                    yield return $"        auto* const hs_copy = static_cast<void*>(hs_allocate(static_cast<std::size_t>({size}), {align}));";
+                    yield return $"        hs_owned_allocation hs_copyOwnership(static_cast<std::size_t>({size}), {align});";
+                    yield return "        auto* const hs_copy = hs_copyOwnership.pointer;";
                     yield return $"        std::memcpy(hs_copy, hs_spanBytes + hs_i * {size}, static_cast<std::size_t>({size}));";
                     yield return "        hs_spanItems.push_back(hs_copy);";
+                    yield return "        hs_copyOwnership.release();";
                     yield return "    }";
                     yield return "    return HosihikariArrayView{hs_spanItems.data(), hs_spanItems.size()};";
                 }
@@ -4662,9 +4685,11 @@ internal static partial class ShimEmitter
                             .ToString(CultureInfo.InvariantCulture);
                         yield return "    for (auto const& item : *hs_vectorResult)";
                         yield return "    {";
-                        yield return $"        auto* const hs_copy = static_cast<void*>(hs_allocate(static_cast<std::size_t>({size}), {align}));";
+                        yield return $"        hs_owned_allocation hs_copyOwnership(static_cast<std::size_t>({size}), {align});";
+                        yield return "        auto* const hs_copy = hs_copyOwnership.pointer;";
                         yield return $"        std::memcpy(hs_copy, item.data, static_cast<std::size_t>({size}));";
                         yield return "        hs_arrayResult.push_back(hs_copy);";
+                        yield return "        hs_copyOwnership.release();";
                         yield return "    }";
                     }
 
@@ -4701,7 +4726,7 @@ internal static partial class ShimEmitter
             else if (ownedRecordReturn)
             {
                 yield return $"    {call};";
-                yield return "    return hs_record;";
+                yield return "    return hs_recordOwnership.release();";
             }
             else if (function.ReturnKind == AbiKind.Opaque)
             {
