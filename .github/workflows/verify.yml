@@ -24,6 +24,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: HosihikariProjection/BindingAbi
+          ref: 0cefbb52067d31c8488269d2f1a701624c3a8729
           path: Binding.Abi
 
       - uses: actions/setup-dotnet@v4
@@ -119,12 +120,14 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: HosihikariProjection/BindingAbi
+          ref: 0cefbb52067d31c8488269d2f1a701624c3a8729
           path: Binding.Abi
 
       - name: Endstone bindings
         uses: actions/checkout@v4
         with:
           repository: HosihikariProjection/EndstoneBinding
+          ref: 53512018a19e895971e37543d37ed37b7511f186
           path: Binding.Endstone
           fetch-depth: 1
 
