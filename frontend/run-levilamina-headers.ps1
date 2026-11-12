@@ -154,19 +154,34 @@ if (-not [string]::IsNullOrWhiteSpace($AppendSource)) {
 
 $VsWhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
 $VsRoot = & $VsWhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+if (-not $VsRoot) {
+    # The component id is not registered for the preview channel.
+    $VsRoot = & $VsWhere -all -prerelease -products * -property installationPath |
+        Where-Object { Test-Path (Join-Path $_ "VC\Tools\MSVC") } |
+        Select-Object -First 1
+}
 if (-not $VsRoot) { throw "Visual Studio with the C++ toolchain was not found." }
 
 $Msvc = Get-ChildItem (Join-Path $VsRoot "VC\Tools\MSVC") | Sort-Object Name | Select-Object -Last 1
 $SdkRoot = "C:\Program Files (x86)\Windows Kits\10\Include"
 $Sdk = Get-ChildItem $SdkRoot | Sort-Object Name | Select-Object -Last 1
 
-$Includes = @("-I", $EnttRoot, "-I", $SourceRoot, "-I", (Join-Path $SourceRoot "mc"))
+$Includes = @("-I", $EnttRoot, "-I", $SourceRoot, "-I", (Join-Path $SourceRoot "mc"),
+    "-I", (Join-Path $LeviLaminaRoot "src-server"))
 foreach ($package in Get-ChildItem "$env:LOCALAPPDATA\.xmake\packages" -Recurse -Directory -Filter "include" -ErrorAction SilentlyContinue |
     Where-Object { $_.FullName -notmatch '\\e\\entt\\' } | Sort-Object FullName -Unique) {
     $Includes += @("-I", $package.FullName)
 }
 foreach ($include in $AdditionalIncludePath) {
     $Includes += @("-I", (Resolve-Path $include).Path)
+}
+# The carrier header includes a few packages by bare file name, so their own directory has
+# to be on the search path rather than only the package's include root.
+foreach ($package in Get-ChildItem "$env:LOCALAPPDATA\.xmake\packages" -Recurse -Directory -Filter "include" -ErrorAction SilentlyContinue) {
+    foreach ($nested in @("concurrentqueue", "stb", "magic_enum")) {
+        $candidate = Join-Path $package.FullName $nested
+        if (Test-Path $candidate) { $Includes += @("-I", $candidate) }
+    }
 }
 
 if ($UseCompileCommands) {

@@ -14,6 +14,12 @@ if (-not (Test-Path $LlvmRoot)) {
 $VsWhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
 $VsRoot = & $VsWhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
 if (-not $VsRoot) {
+    # The component id is not registered for the preview channel.
+    $VsRoot = & $VsWhere -all -prerelease -products * -property installationPath |
+        Where-Object { Test-Path (Join-Path $_ "VC\Tools\MSVC") } |
+        Select-Object -First 1
+}
+if (-not $VsRoot) {
     throw "Visual Studio with the C++ toolchain was not found."
 }
 
