@@ -488,7 +488,14 @@ internal static class InteropEmitter
                 "",
                 "    private static global::Hosihikari.Bindings.Abi.ShimLibrary? s_library;",
                 "",
-                "    public static string? GetLastError() => s_library?.GetLastError();",
+                "    public static string? GetLastError() => LastError = s_library?.GetLastError();",
+                "",
+                "    /// <summary>",
+                "    /// Why the most recent projection call returned null, when it did. The shim clears",
+                "    /// the slot on entry and fills it only on failure, so a null result can be",
+                "    /// distinguished from a stale message by reading it right after the call.",
+                "    /// </summary>",
+                "    public static string? LastError { get; private set; }",
                 "",
                 "    internal static Table* TablePtr",
                 "    {",
@@ -1236,10 +1243,11 @@ internal static class InteropEmitter
 
     private static void EmitHandleCheck(List<string> lines, string indent = "        ", string local = "handle")
     {
-        // The shim already recorded why it failed; a null handle means "no object", so the
-        // factory returns null rather than throwing an object with a dead handle.
+        // The shim already recorded why it failed; keep that reachable through LastError,
+        // then return null so the caller is not handed an object with a dead handle.
         lines.Add(indent + $"if ({local} == null)");
         lines.Add(indent + "{");
+        lines.Add(indent + "    NativeMethods.GetLastError();");
         lines.Add(indent + "    return null;");
         lines.Add(indent + "}");
         lines.Add("");
@@ -1454,13 +1462,25 @@ internal static class InteropEmitter
                     // around that null handle yields an object whose every later call fails,
                     // so map it to null instead and let the caller see the absence.
                     lines.Add(indent + $"var __hs_handle = {call};");
-                    var condition = method.ReturnOptional
-                        ? "__hs_hasValue && __hs_handle != null"
-                        : "__hs_handle != null";
                     var constructor = method.ReturnBorrowed
                         ? $"new {method.ReturnWrapperType}((nint)__hs_handle, false)"
                         : $"new {method.ReturnWrapperType}((nint)__hs_handle)";
-                    lines.Add(indent + $"return {condition} ? {constructor} : null;");
+                    lines.Add(indent + "if (__hs_handle == null)");
+                    lines.Add(indent + "{");
+                    lines.Add(indent + "    NativeMethods.GetLastError();");
+                    if (method.ReturnOptional)
+                    {
+                        // A present-but-empty optional is a success; only a null handle means
+                        // the call itself failed.
+                        lines.Add(indent + "    if (!__hs_hasValue) { return null; }");
+                    }
+                    else
+                    {
+                        lines.Add(indent + "    return null;");
+                    }
+
+                    lines.Add(indent + "}");
+                    lines.Add(indent + $"return {constructor};");
                 }
                 else if (method.ReturnOptional)
                 {

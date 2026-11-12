@@ -281,6 +281,7 @@ internal static partial class ShimEmitter
         source.Add("namespace {");
         source.Add("");
         source.Add("using hosihikari::abi::setLastError;");
+        source.Add("using hosihikari::abi::clearLastError;");
         source.Add("thread_local std::string g_stringResult;");
         source.Add("");
         source.Add("template <class T, class U>");
@@ -1223,6 +1224,9 @@ internal static partial class ShimEmitter
 
         yield return $"static {returnType} {function.CppName}({string.Join(", ", parameters)}) try";
         yield return "{";
+        // The error slot is thread local and sticky, so a call that succeeds must not let the
+        // caller read what the previous one left behind.
+        yield return "    clearLastError();";
 
         for (var index = 0; index < function.Parameters.Count; index++)
         {
@@ -2971,6 +2975,7 @@ internal static partial class ShimEmitter
         // Inline-body functions are emitted by the link-carrier builder, so the names it
         // relies on have to exist here too.
         source.Add("using hosihikari::abi::setLastError;");
+        source.Add("using hosihikari::abi::clearLastError;");
         source.Add("thread_local std::string g_stringResult;");
         source.Add("thread_local std::string g_stringOutResult;");
         source.Add("");
@@ -3543,6 +3548,9 @@ internal static partial class ShimEmitter
 
         yield return $"static {returnType} {function.CppName}({string.Join(", ", parameters)}) try";
         yield return "{";
+        // The error slot is thread local and sticky, so a call that succeeds must not let the
+        // caller read what the previous one left behind.
+        yield return "    clearLastError();";
 
         for (var index = 0; index < function.Parameters.Count; index++)
         {
@@ -4509,6 +4517,9 @@ internal static partial class ShimEmitter
                             yield return "    if (hs_optionalCopy == nullptr || hs_optionalDtor == nullptr)";
                             yield return "    {";
                             yield return "        setLastError(\"the optional payload copy or destructor symbol was not resolved\");";
+                            // The record was allocated before the symbols were looked up, so a
+                            // missing one has to give it back rather than only drop it.
+                            yield return $"        hs_deallocate(hs_record, static_cast<std::size_t>({align}));";
                             yield return "        return nullptr;";
                             yield return "    }";
                             yield return "    reinterpret_cast<void (*)(void*, void const*)>(const_cast<void*>(hs_optionalCopy))(hs_record, hs_result->data);";
