@@ -18,6 +18,9 @@ internal static partial class ShimEmitter
         string targetModule = "bedrock_server",
         bool resolveByName = false)
     {
+        HeaderTextCache.Clear();
+        HeaderSearchCache.Clear();
+        HeaderIndexCache.Clear();
         foreach (var configuration in manifest.Configurations.OrderBy(configuration => configuration.Id, StringComparer.Ordinal))
         {
             if (plan.Functions.Count == 0)
@@ -153,6 +156,7 @@ internal static partial class ShimEmitter
             header.Add($"    {CppFunctionPointer(function)};");
         }
 
+
         header.AddRange(
         [
             "};",
@@ -219,6 +223,10 @@ internal static partial class ShimEmitter
         {
             source.Add("#include \"ll/api/memory/Memory.h\"");
             source.Add("#include \"mc/deps/core/memory/IMemoryAllocator.h\"");
+            // Parameters declared as Bedrock::NonOwnerPointer arrive as a shared handle; the
+            // helper below rebuilds the pointer from the object's own control block.
+            source.Add("#include \"mc/deps/core/utility/EnableNonOwnerReferences.h\"");
+            source.Add("#include \"mc/deps/core/utility/NonOwnerPointer.h\"");
         }
 
         if (string.Equals(surface, "endstone", StringComparison.Ordinal))
@@ -230,7 +238,118 @@ internal static partial class ShimEmitter
         }
         else
         {
-            foreach (var include in BuildIncludes(functions, declarations))
+            // The generated bodies forward-declare what their storage uses, so a field's
+            // own header has to precede the header that stores it; alphabetical order alone
+            // leaves the destructor instantiated over an incomplete type.
+            var hsInc = System.Diagnostics.Stopwatch.StartNew();
+            var includes = BuildIncludes(functions, declarations).ToList();
+            includes = HoistCompletionHeaders(includes, manifest, surface)
+                .Concat(includes)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            // Fields whose type the include set does not already cover need their header
+            // added. One pass over the members is enough; running the full transitive
+            // FieldHeaders walk per declaration re-visits the same graph tens of thousands
+            // of times.
+            var grouped = records
+                .OfType<MemberRecord>()
+                .GroupBy(member => member.DeclarationId, StringComparer.Ordinal)
+                .ToDictionary(group => group.Key, group => (IReadOnlyList<MemberRecord>)group.ToList(), StringComparer.Ordinal);
+            var unknown = new HashSet<string>(StringComparer.Ordinal);
+            var byQualifiedName = declarations.Values
+                .GroupBy(value => value.QualifiedName, StringComparer.Ordinal)
+                .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
+            var covered = new HashSet<string>(
+                includes.Select(NormalizeInclude),
+                StringComparer.OrdinalIgnoreCase);
+            var missing = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            // Walk the field graph breadth-first but visit every type once for the whole
+            // surface: the same storage type recurs across hundreds of classes.
+            var fieldQueue = new Queue<(string Id, bool Acknowledge)>();
+            var seenTypes = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var declaration in declarations.Values)
+            {
+                fieldQueue.Enqueue((declaration.Id, false));
+            }
+
+            while (fieldQueue.Count > 0)
+            {
+                var (id, acknowledge) = fieldQueue.Dequeue();
+                if (!grouped.TryGetValue(id, out var declarationMembers))
+                {
+                    continue;
+                }
+
+                foreach (var member in declarationMembers)
+                {
+                    if (member.Kind != "field")
+                    {
+                        continue;
+                    }
+
+                    foreach (var spelling in AbiPlan.TypeMentions(member.Type?.Canonical))
+                    {
+                        if (!seenTypes.Add(spelling))
+                        {
+                            continue;
+                        }
+
+                        if (!byQualifiedName.TryGetValue(spelling, out var dependency))
+                        {
+                            var unqualified = spelling[(spelling.LastIndexOf(':') + 1)..];
+                            if (unqualified.Length > 0)
+                            {
+                                unknown.Add(unqualified);
+                            }
+
+                            continue;
+                        }
+
+                        if (grouped.ContainsKey(dependency.Id))
+                        {
+                            fieldQueue.Enqueue((dependency.Id, true));
+                        }
+
+                        var fieldHeader = dependency.Source?.File;
+                        if (string.IsNullOrWhiteSpace(fieldHeader))
+                        {
+                            // Storage types the IR declares without a source file (typedefs,
+                            // wrapper specializations) still have a header named after them.
+                            var unqualified = spelling[(spelling.LastIndexOf(':') + 1)..];
+                            if (unqualified.Length > 0)
+                            {
+                                unknown.Add(unqualified);
+                            }
+                        }
+                        else if (covered.Add(NormalizeInclude(fieldHeader)))
+                        {
+                            missing.Add(fieldHeader);
+                        }
+                    }
+                }
+            }
+
+            foreach (var name in unknown)
+            {
+                if (FindHeaderByName(manifest, surface, name) is { } missingHeader)
+                {
+                    missing.Add(missingHeader);
+                }
+            }
+
+                includes = includes.Concat(missing).ToList();
+            includes = OrderByFieldDependencies(
+                includes,
+                manifest,
+                surface,
+                declarations
+                    .Values
+                    .Where(declaration => !string.IsNullOrWhiteSpace(declaration.Source?.File))
+                    .GroupBy(declaration => NormalizeInclude(declaration.Source!.File), StringComparer.OrdinalIgnoreCase)
+                    .ToDictionary(group => group.Key, group => group.ToList(), StringComparer.OrdinalIgnoreCase),
+                grouped,
+                unknown);
+            foreach (var include in includes)
             {
                 source.Add($"#include \"{include}\"");
             }
@@ -277,6 +396,17 @@ internal static partial class ShimEmitter
             source.Add("void operator delete[](void* block, std::size_t, std::align_val_t alignment) noexcept { ::operator delete(block, alignment); }");
         }
 
+        source.Add("");
+        // Two carrier types are used as complete members but never defined by any shipped
+        // header: Puv::SlicedLoader (only forward-declared) and IClientBlockData (a client-only
+        // class Block stores in a unique_ptr). ll::TypedStorage and unique_ptr destroy their
+        // payload, which needs a complete type; the storage supplies size and alignment, so
+        // empty definitions are enough for the shim to compile.
+        source.Add("namespace Puv {");
+        source.Add("template <typename T0, typename T1, typename T2, typename T3, typename T4>");
+        source.Add("class SlicedLoader {};");
+        source.Add("}");
+        source.Add("class IClientBlockData {};");
         source.Add("");
         source.Add("namespace {");
         source.Add("");
@@ -370,6 +500,27 @@ internal static partial class ShimEmitter
         source.Add("std::weak_ptr<T> hs_weak_from_handle(HosihikariSharedHandle handle)");
         source.Add("{");
         source.Add("    return std::weak_ptr<T>(hs_shared_from_handle<T>(handle));");
+        source.Add("}");
+        source.Add("");
+        // A Bedrock::NonOwnerPointer parameter is a non-owning view, so it is rebuilt from
+        // the object's own control block rather than from the shared handle's.
+        source.Add("template <class T>");
+        source.Add("Bedrock::NonOwnerPointer<T> hs_non_owner_from_handle(HosihikariSharedHandle handle)");
+        source.Add("{");
+        source.Add("    auto shared = hs_shared_from_handle<T>(handle);");
+        source.Add("    auto* pointer = const_cast<T*>(shared.get());");
+        source.Add("    if (pointer == nullptr) { return Bedrock::NonOwnerPointer<T>{}; }");
+        // The carrier's converting constructor reaches the control block through
+        // EnableNonOwnerReferences. A merge-dropped base leaves the type without one, and an
+        // empty non-owner pointer is the only thing that can stand for it.
+        source.Add("    if constexpr (requires { static_cast<Bedrock::EnableNonOwnerReferences const&>(*pointer); })");
+        source.Add("    {");
+        source.Add("        return Bedrock::NonOwnerPointer<T>(*pointer);");
+        source.Add("    }");
+        source.Add("    else");
+        source.Add("    {");
+        source.Add("        return Bedrock::NonOwnerPointer<T>{};");
+        source.Add("    }");
         source.Add("}");
         source.Add("");
         source.Add("template <class T>");
@@ -473,14 +624,30 @@ internal static partial class ShimEmitter
         source.Add("}");
         source.Add("");
 
-        foreach (var function in functions)
-        {
-            foreach (var line in EmitFunction(function, llAllocator))
+        // Bodies are pure text from read-only state, so they are generated wide and then
+        // appended in declaration order. Writing straight into the shared list would make
+        // the output depend on completion order.
+        var bodies = new string[functions.Count];
+        Parallel.For(
+            0,
+            functions.Count,
+            new ParallelOptions { MaxDegreeOfParallelism = 1 },
+            index =>
             {
-                source.Add(line);
-            }
+                var builder = new System.Text.StringBuilder();
+                foreach (var line in EmitFunction(functions[index], llAllocator))
+                {
+                    builder.Append(line).Append('\n');
+                }
 
-            source.Add("");
+                builder.Append('\n');
+                bodies[index] = builder.ToString();
+            });
+
+        foreach (var body in bodies)
+        {
+            // The serial loop appended one blank line after each body; keep that separator.
+            source.Add(body[..^1]);
         }
 
         source.Add("const HosihikariBindingTableV1 kTable{");
@@ -543,6 +710,51 @@ internal static partial class ShimEmitter
             new UTF8Encoding(false));
     }
 
+    /// <summary>
+    /// Headers that only complete a type another header forward-declares and then uses in
+    /// a member signature. The field-dependency pass cannot see those uses and the type may
+    /// have no emitted member of its own, so they are named here and emitted first.
+    /// </summary>
+    private static IEnumerable<string> HoistCompletionHeaders(
+        IEnumerable<string> includes,
+        IrManifest manifest,
+        string surface)
+    {
+        foreach (var header in CompletionHeaders)
+        {
+            foreach (var pin in manifest.Sources.Where(pin => string.Equals(pin.Surface, surface, StringComparison.Ordinal)))
+            {
+                var full = Path.Combine(pin.Path, header.Replace('/', Path.DirectorySeparatorChar));
+                if (File.Exists(full))
+                {
+                    yield return header;
+                    break;
+                }
+
+                // The manifest root is the carrier root; the headers live under src, but
+                // the shim includes them relative to that root.
+                var nested = Path.Combine(pin.Path, "src", header.Replace('/', Path.DirectorySeparatorChar));
+                if (File.Exists(nested))
+                {
+                    yield return header;
+                    break;
+                }
+            }
+        }
+    }
+
+    private static readonly string[] CompletionHeaders =
+    [
+        // mc/world/item/components/CustomComponentsItemComponent.h forward-declares
+        // cereal::ComponentStorageSentinelType and instantiates entt::iterable_adaptor over
+        // it in a constructor parameter.
+        "mc/deps/cereal/ComponentStorageSentinelType.h",
+        // mc/deps/game_refs/GameRefs.h declares GameRefs<IFeature> without a body; the
+        // specialization lives here, and WeakRef<IFeature> is destroyed wherever a class
+        // that stores it is.
+        "mc/world/level/levelgen/feature/gamerefs_feature/GameRefsFeature.h",
+    ];
+
     private static IEnumerable<string> BuildIncludes(
         IReadOnlyList<AbiFunction> functions,
         IReadOnlyDictionary<string, DeclarationRecord> declarations)
@@ -551,6 +763,16 @@ internal static partial class ShimEmitter
             .GroupBy(declaration => declaration.QualifiedName, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
         var includes = new HashSet<string>(StringComparer.Ordinal);
+
+        // A parameter or return spelling can name a type whose only appearance is here
+        // (CustomComponentsItemComponent's entt adapter parameter names a sentinel the
+        // header itself only forward-declares), so those mentions are dependencies too.
+        // Grouped once up front: rescanning every function per declaration is quadratic.
+        var functionsByDeclaration = functions
+            .SelectMany(function => function.TargetDeclarationId is null
+                ? new[] { (Id: function.DeclarationId, function) }
+                : [(Id: function.DeclarationId, function), (Id: function.TargetDeclarationId, function)])
+            .ToLookup(pair => pair.Id, pair => pair.function, StringComparer.Ordinal);
 
         foreach (var id in functions
                      .Select(function => function.DeclarationId)
@@ -567,6 +789,19 @@ internal static partial class ShimEmitter
             if (!string.IsNullOrWhiteSpace(declaration.Source?.File))
             {
                 includes.Add(declaration.Source!.File);
+            }
+
+            foreach (var mentioned in functionsByDeclaration[id]
+                         .SelectMany(function => function.Parameters
+                             .Select(parameter => parameter.NativeType)
+                             .Append(function.NativeReturnType))
+                         .SelectMany(AbiPlan.TypeMentions))
+            {
+                if (declarationsByQualifiedName.TryGetValue(mentioned, out var mentionedDeclaration)
+                    && !string.IsNullOrWhiteSpace(mentionedDeclaration.Source?.File))
+                {
+                    includes.Add(mentionedDeclaration.Source!.File);
+                }
             }
 
             if (declaration.Template is null)
@@ -760,6 +995,13 @@ internal static partial class ShimEmitter
             parameters.Add("void*");
         }
 
+        if (function.Kind == AbiFunctionKind.EventId)
+        {
+            parameters.Add("const char**");
+            parameters.Add("std::size_t*");
+            parameters.Add("std::size_t*");
+        }
+
         foreach (var parameter in function.Parameters)
         {
             if (parameter.IsVector || parameter.IsMap || parameter.Kind == AbiKind.Placeholder)
@@ -863,6 +1105,9 @@ internal static partial class ShimEmitter
         else if (function.ReturnKind == AbiKind.StringView)
         {
             yield return $"    auto result = {call};";
+            // PathBuffer wraps the string without forwarding to it, so the call has to go
+            // through the accessor the class does declare.
+            var text = function.ReturnPathBuffer ? "result.get()" : "result";
             if (function.SpecialValue == SpecialValueKind.Path)
             {
                 if (function.ReturnOptional)
@@ -880,11 +1125,13 @@ internal static partial class ShimEmitter
             else if (function.ReturnOptional)
             {
                 yield return "    *hs_hasValue = result.has_value();";
-                yield return "    g_stringResult.assign(result ? result->data() : \"\", result ? result->size() : 0);";
+                yield return function.ReturnPathBuffer
+                    ? "    g_stringResult.assign(result ? result->get().data() : \"\", result ? result->get().size() : 0);"
+                    : "    g_stringResult.assign(result ? result->data() : \"\", result ? result->size() : 0);";
             }
             else
             {
-                yield return "    g_stringResult.assign(result.data(), result.size());";
+                yield return $"    g_stringResult.assign({text}.data(), {text}.size());";
             }
 
             if (function.SpecialValue != SpecialValueKind.Path)
@@ -1143,6 +1390,13 @@ internal static partial class ShimEmitter
             parameters.Add($"void* {SelfParameter}");
         }
 
+        if (function.Kind == AbiFunctionKind.EventId)
+        {
+            parameters.Add("const char** name_data");
+            parameters.Add("std::size_t* name_size");
+            parameters.Add("std::size_t* id_hash");
+        }
+
         for (var index = 0; index < function.Parameters.Count; index++)
         {
             var parameter = function.Parameters[index];
@@ -1263,7 +1517,10 @@ internal static partial class ShimEmitter
                 || parameter.IsConst
                 || parameter.IsRValueReference
                 || parameter.IsMap
+                // A projected opaque reference names a real object, so it binds directly.
+                // The kinds whose conversion produces a temporary need the local.
                 || (!parameter.IsVector
+                    && !parameter.IsOptional
                     && parameter.Kind != AbiKind.Shared
                     && parameter.Kind != AbiKind.StringView)
                 || (parameter.IsVector && parameter.VectorElementOwnership == ArrayElementOwnership.PairCopy))
@@ -1336,7 +1593,11 @@ internal static partial class ShimEmitter
                     var address = AbiPlan.IsPointerType(function.NativeReturnType)
                         ? target
                         : "&" + target;
-                    yield return $"    return const_cast<void*>(static_cast<void const*>({address}));";
+                    // A volatile field cannot be cast straight to `void const*`: the qualifier
+                    // has to be dropped explicitly.
+                    yield return function.NativeReturnType.Contains("volatile", StringComparison.Ordinal)
+                        ? $"    return const_cast<void*>(static_cast<void const volatile*>({address}));"
+                        : $"    return const_cast<void*>(static_cast<void const*>({address}));";
                 }
                 else if (function.IsBitset)
                 {
@@ -1366,10 +1627,21 @@ internal static partial class ShimEmitter
             }
 
             case AbiFunctionKind.Cast:
+                // The cast runs against a const view and the qualified type is what a
+                // downcast needs; the const is dropped once, at the return.
                 yield return function.CastKind == AbiCastKind.Downcast
-                    ? $"    return dynamic_cast<{function.TargetCppName}*>(static_cast<{function.ClassCppName}*>({SelfParameter}));"
-                    : $"    return static_cast<{function.TargetCppName}*>(static_cast<{function.ClassCppName}*>({SelfParameter}));";
+                    ? $"    return const_cast<{function.TargetCppName}*>(dynamic_cast<{function.TargetCppName} const*>(static_cast<{function.ClassCppName} const*>({SelfParameter})));"
+                    : $"    return const_cast<{function.TargetCppName}*>(static_cast<{function.TargetCppName} const*>(static_cast<{function.ClassCppName} const*>({SelfParameter})));";
                 break;
+
+            case AbiFunctionKind.EventId:
+            {
+                yield return $"    ll::event::EventIdView const hs_id = ll::event::getEventId<{function.ClassCppName}>;";
+                yield return "    *name_data = hs_id.name.data();";
+                yield return "    *name_size = hs_id.name.size();";
+                yield return "    *id_hash = hs_id.hash;";
+                break;
+            }
 
             case AbiFunctionKind.DirectorCreate:
                 foreach (var line in EmitDirectorCreate(function))
@@ -1391,6 +1663,7 @@ internal static partial class ShimEmitter
             }
 
             case AbiFunctionKind.Method:
+            case AbiFunctionKind.StringSetter:
             {
                 if (function.CallableOp == CallableOp.Invoke)
                 {
@@ -1441,7 +1714,13 @@ internal static partial class ShimEmitter
                         // wrapper keeps the same object and re-borrows it for the call.
                         ? $"std::move(*{SelfCast(function)}).{memberName}"
                         : $"{SelfCast(function)}->{memberName}";
-                var call = $"{target}({string.Join(", ", BuildNativeArguments(function))})";
+                var memberCall = function.AccessorIsCall ? target + "()" : target;
+                var call = function.AccessorIsCall
+                    ? function.Static
+                        // A static accessor returning a const reference has nothing to assign.
+                        ? $"{memberCall}.assign({string.Join(", ", BuildNativeArguments(function))})"
+                        : $"{memberCall} = std::basic_string<char>({string.Join(", ", BuildNativeArguments(function))})"
+                    : $"{memberCall}({string.Join(", ", BuildNativeArguments(function))})";
                 foreach (var line in EmitCallResult(function, call))
                 {
                     yield return line;
@@ -1537,7 +1816,7 @@ internal static partial class ShimEmitter
         var invokeReturnType = AbiPlan.CppType(function.DirectorReturnKind);
         var invokeType = $"{invokeReturnType} (*)(void*{string.Concat(callbackTypes.Select(type => ", " + type))})";
         var callbackDeclarations = function.DirectorCallbackParameters
-            .Select((parameter, index) => $"{parameter.NativeType} hs_arg{index}")
+            .Select((parameter, index) => $"{parameter.DeclaredType ?? parameter.NativeType} hs_arg{index}")
             .ToList();
         var callbackArguments = function.DirectorCallbackParameters
             .Select(DirectorCallbackArgument)
@@ -1590,6 +1869,32 @@ internal static partial class ShimEmitter
 
     private static string DirectorCallbackCppType(AbiParameter parameter) =>
         parameter.Kind == AbiKind.Opaque ? "void*" : AbiPlan.CppType(parameter.Kind);
+
+    /// <summary>
+    /// The declared spelling of a pointer parameter, with only the top-level reference taken
+    /// off. Used where the shim casts a raw slot to the parameter type: a leading
+    /// <c>const</c> on a pointer belongs to the pointee and must survive.
+    /// </summary>
+    private static string DeclaredPointerSpelling(AbiParameter parameter, string fallback)
+    {
+        var spelling = parameter.DeclaredType?.Trim();
+        if (string.IsNullOrEmpty(spelling))
+        {
+            return fallback;
+        }
+
+        while (spelling.EndsWith("&", StringComparison.Ordinal))
+        {
+            spelling = spelling[..^1].TrimEnd();
+        }
+
+        if (spelling.EndsWith("* const", StringComparison.Ordinal))
+        {
+            spelling = spelling[..^"* const".Length] + "*";
+        }
+
+        return spelling;
+    }
 
     private static string DirectorCallbackArgument(AbiParameter parameter, int index)
     {
@@ -1670,10 +1975,13 @@ internal static partial class ShimEmitter
     {
         if (kind == AbiKind.StringView)
         {
+            // The key and the value of an entry both take this branch inside one scope, so
+            // the temporary's name derives from the target it fills.
+            var stored = "hs_stored_" + (target.Contains("value", StringComparison.Ordinal) ? "Value" : "Key");
             yield return $"hs_mapStrings.emplace_back({expression}.data(), {expression}.size());";
-            yield return "auto const& hs_stored = hs_mapStrings.back();";
-            yield return $"{target} = reinterpret_cast<std::uint64_t>(hs_stored.data());";
-            yield return $"{sizeTarget} = static_cast<std::uint64_t>(hs_stored.size());";
+            yield return $"auto const& {stored} = hs_mapStrings.back();";
+            yield return $"{target} = reinterpret_cast<std::uint64_t>({stored}.data());";
+            yield return $"{sizeTarget} = static_cast<std::uint64_t>({stored}.size());";
             yield break;
         }
 
@@ -1840,9 +2148,10 @@ internal static partial class ShimEmitter
     {
         var className = function.ClassCppName;
         var field = function.NativeMemberName;
+        var call = function.AccessorIsCall ? field + "()" : field;
         return function.Static
-            ? $"{className}::{field}"
-            : $"{SelfCast(function)}->{field}";
+            ? $"{className}::{call}"
+            : $"{SelfCast(function)}->{call}";
     }
 
     private static IEnumerable<string> BuildNativeArguments(AbiFunction function)
@@ -1865,10 +2174,12 @@ internal static partial class ShimEmitter
             && !parameter.IsRValueReference
             && !parameter.IsMap
             && (parameter.IsVector
+                || parameter.IsOptional
                 || parameter.Kind == AbiKind.Shared
                 || parameter.Kind == AbiKind.StringView)
             && !(parameter.IsVector && parameter.VectorElementOwnership == ArrayElementOwnership.PairCopy))
         {
+            // The hoisted local keeps the converted temporary alive so the reference binds.
             return $"hs_arg{index}";
         }
 
@@ -2005,14 +2316,19 @@ internal static partial class ShimEmitter
                     return $"hs_game_ref_from_handle<{gameRefType}>({name})";
                 }
 
-                var helper = parameter.IsWeakPtr ? "hs_weak_from_handle" : "hs_shared_from_handle";
+                var helper = parameter.NativeType.Contains("NonOwnerPointer", StringComparison.Ordinal)
+                    ? "hs_non_owner_from_handle"
+                    : parameter.IsWeakPtr ? "hs_weak_from_handle" : "hs_shared_from_handle";
                 return $"{helper}<{pointee}>({name})";
             }
 
             case AbiKind.Opaque:
             {
                 var pointee = parameter.NativePointee ?? "void";
-                var constPrefix = parameter.IsConst ? "const " : "";
+                // `const T*` makes the pointee const; `T* const` only makes the pointer itself
+                // const, which the callee's parameter does not observe.
+                var declaredSpelling = (parameter.DeclaredType ?? parameter.NativeType).TrimStart();
+                var constPrefix = declaredSpelling.StartsWith("const ", StringComparison.Ordinal) ? "const " : "";
                 var core = AbiPlan.StripTopLevelQualifiers(parameter.NativeType);
                 var withoutLast = core.EndsWith("*", StringComparison.Ordinal)
                     ? AbiPlan.StripTopLevelQualifiers(core[..^1].TrimEnd())
@@ -2021,8 +2337,10 @@ internal static partial class ShimEmitter
                     && withoutLast.EndsWith("*", StringComparison.Ordinal))
                 {
                     // Pointer-to-pointer: the native pointee is flattened to its base type,
-                    // so cast to the declared type and keep the second indirection.
-                    return $"static_cast<{core}>({name})";
+                    // so cast to the declared type and keep the second indirection. The
+                    // declared spelling keeps a pointee's const, which StripTopLevelQualifiers
+                    // would drop along with the leading qualifier.
+                    return $"static_cast<{DeclaredPointerSpelling(parameter, core)}>({name})";
                 }
 
                 return parameter.IsReference
@@ -2280,7 +2598,7 @@ internal static partial class ShimEmitter
     /// <c>&lt;format&gt;</c> is last because its MSVC implementation needs the helpers the
     /// other headers bring in.
     /// </summary>
-    private static readonly Dictionary<(string Surface, string Name), string?> HeaderSearchCache = [];
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<(string Surface, string Name), string?> HeaderSearchCache = new();
 
     private static readonly string[] InlineHeaderPrelude =
     [
@@ -2336,6 +2654,7 @@ internal static partial class ShimEmitter
         }
 
         var dependencies = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+        var groupedDeclarations = GroupedDeclarations(declarationsByInclude);
         foreach (var (normalized, header) in byInclude)
         {
             var list = new List<string>();
@@ -2343,7 +2662,7 @@ internal static partial class ShimEmitter
             {
                 foreach (var declaration in group)
                 {
-                    foreach (var include in FieldHeaders(declaration, declarationsByQualifiedName: GroupedDeclarations(declarationsByInclude), membersByDeclaration, new HashSet<string>(StringComparer.Ordinal), unknownArguments))
+                    foreach (var include in FieldHeaders(declaration, declarationsByQualifiedName: groupedDeclarations, membersByDeclaration, new HashSet<string>(StringComparer.Ordinal), unknownArguments))
                     {
                         var dependency = NormalizeInclude(include);
                         if (dependency != normalized && byInclude.ContainsKey(dependency))
@@ -2441,6 +2760,33 @@ internal static partial class ShimEmitter
     /// <c>ll::TypedStorage</c>. The generated headers do not include such a type's own
     /// header, so the container's destructor sees an incomplete type.
     /// </summary>
+    /// <summary>
+    /// Header text by path. The dependency passes read every include once per ordering
+    /// edge otherwise, which dominates the emit on a surface this size.
+    /// </summary>
+    private static string? ReadHeaderText(string file)
+    {
+        if (HeaderTextCache.TryGetValue(file, out var cached))
+        {
+            return cached;
+        }
+
+        string? text;
+        try
+        {
+            text = File.ReadAllText(file);
+        }
+        catch (IOException)
+        {
+            text = null;
+        }
+
+        HeaderTextCache.TryAdd(file, text);
+        return text;
+    }
+
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, string?> HeaderTextCache = new(StringComparer.OrdinalIgnoreCase);
+
     private static IEnumerable<string> ForwardDeclaredStorageTypes(IrManifest manifest, string surface, string include)
     {
         var relative = NormalizeInclude(include);
@@ -2453,12 +2799,8 @@ internal static partial class ShimEmitter
             yield break;
         }
 
-        string text;
-        try
-        {
-            text = File.ReadAllText(file);
-        }
-        catch (IOException)
+        var text = ReadHeaderText(file);
+        if (text is null)
         {
             yield break;
         }
@@ -2508,12 +2850,8 @@ internal static partial class ShimEmitter
             yield break;
         }
 
-        string text;
-        try
-        {
-            text = File.ReadAllText(file);
-        }
-        catch (IOException)
+        var text = ReadHeaderText(file);
+        if (text is null)
         {
             yield break;
         }
@@ -2719,6 +3057,30 @@ internal static partial class ShimEmitter
             return cached;
         }
 
+        // Enumerating all three source trees per name is the difference between seconds and
+        // minutes on a full header set, so the trees are indexed once and reused.
+        var index = HeaderIndexFor(manifest, surface);
+        string? found = null;
+        var matches = index.TryGetValue(name, out var known)
+            ? known
+            : [];
+        if (matches.Count == 1)
+        {
+            found = matches[0];
+        }
+
+        HeaderSearchCache[(surface, name)] = found;
+        return found;
+    }
+
+    private static Dictionary<string, List<string>> HeaderIndexFor(IrManifest manifest, string surface)
+    {
+        if (HeaderIndexCache.TryGetValue(surface, out var cached))
+        {
+            return cached;
+        }
+
+        var index = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
         // The symbol IR pins only the shared source root; the server-only headers live in a
         // sibling tree, so it is searched as well.
         var roots = manifest.Sources
@@ -2729,9 +3091,7 @@ internal static partial class ShimEmitter
                 root,
                 Path.GetFullPath(Path.Combine(root.TrimEnd((char)47, (char)92), "..", "src-server")),
             })
-            .Select(root => root.Trim())
-            .ToList();
-        string? found = null;
+            .Select(root => root.Trim());
         foreach (var root in roots)
         {
             if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root))
@@ -2739,25 +3099,23 @@ internal static partial class ShimEmitter
                 continue;
             }
 
-            var matches = Directory
-                .EnumerateFiles(root, name + ".h", SearchOption.AllDirectories)
-                .Take(2)
-                .ToList();
-            if (matches.Count == 1)
+            foreach (var file in Directory.EnumerateFiles(root, "*.h", SearchOption.AllDirectories))
             {
-                found = matches[0];
-                break;
-            }
+                var key = Path.GetFileNameWithoutExtension(file);
+                if (!index.TryGetValue(key, out var list))
+                {
+                    index[key] = list = [];
+                }
 
-            if (matches.Count > 1)
-            {
-                break;
+                list.Add(file);
             }
         }
 
-        HeaderSearchCache[(surface, name)] = found;
-        return found;
+        HeaderIndexCache[surface] = index;
+        return index;
     }
+
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, Dictionary<string, List<string>>> HeaderIndexCache = new(StringComparer.Ordinal);
 
     private static void WriteSymbolSurface(
         string directory,
@@ -2969,6 +3327,17 @@ internal static partial class ShimEmitter
             }
         }
 
+        source.Add("");
+        // Two carrier types are used as complete members but never defined by any shipped
+        // header: Puv::SlicedLoader (only forward-declared) and IClientBlockData (a client-only
+        // class Block stores in a unique_ptr). ll::TypedStorage and unique_ptr destroy their
+        // payload, which needs a complete type; the storage supplies size and alignment, so
+        // empty definitions are enough for the shim to compile.
+        source.Add("namespace Puv {");
+        source.Add("template <typename T0, typename T1, typename T2, typename T3, typename T4>");
+        source.Add("class SlicedLoader {};");
+        source.Add("}");
+        source.Add("class IClientBlockData {};");
         source.Add("");
         source.Add("namespace {");
         source.Add("");
@@ -3254,14 +3623,25 @@ internal static partial class ShimEmitter
             }
         }
 
-        foreach (var function in functions)
-        {
-            foreach (var line in EmitSymbolFunction(function, configuration, members, layouts, layoutsByQualifiedName, stringDestructor is not null))
+        var bodies = new string[functions.Count];
+        Parallel.For(
+            0,
+            functions.Count,
+            new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount },
+            index =>
             {
-                source.Add(line);
-            }
+                var builder = new System.Text.StringBuilder();
+                foreach (var line in EmitSymbolFunction(functions[index], configuration, members, layouts, layoutsByQualifiedName, stringDestructor is not null))
+                {
+                    builder.Append(line).Append((char)10);
+                }
 
-            source.Add("");
+                builder.Append((char)10);
+                bodies[index] = builder.ToString();
+            });
+        foreach (var body in bodies)
+        {
+            source.Add(body[..^1]);
         }
 
         source.Add("const HosihikariBindingTableV1 kTable{");
@@ -4207,7 +4587,7 @@ internal static partial class ShimEmitter
             && !function.ReturnOptional
             && !function.MutableStringOut
             && !function.NativeReturnType.TrimEnd().EndsWith("&", StringComparison.Ordinal)
-            && AbiPlan.IsStringType(function.NativeReturnType);
+            && (AbiPlan.IsStringType(function.NativeReturnType) || function.ReturnPathBuffer);
         var memberSretReturn = memberStringReturn || largeRecordReturn;
 
         var callReturn = function.ReturnKind switch
@@ -4270,9 +4650,15 @@ internal static partial class ShimEmitter
             callReturn = optionalReturnType;
         }
 
+        // A wrapping type keeps its own spelling for the storage and the hidden return slot,
+        // so the callee sees the type it expects; only the read goes through the wrapped
+        // string. TryParsePathBuffer only admits a string payload.
+        var memberStringType = memberStringReturn && function.ReturnPathBuffer
+            ? "Core::PathBuffer<" + function.NativeReturnType + ">"
+            : function.NativeReturnType;
         if (memberStringReturn)
         {
-            yield return $"    using HsString = {function.NativeReturnType};";
+            yield return $"    using HsString = {memberStringType};";
             yield return "    alignas(HsString) unsigned char hs_stringStorage[sizeof(HsString)];";
         }
         else if (largeRecordReturn)
@@ -4303,7 +4689,7 @@ internal static partial class ShimEmitter
             || (arrayReturn && !borrowedVectorReturn)
             || manualTypedSret)
         {
-            callParameters.Insert(sretIndex, memberStringReturn ? function.NativeReturnType + "*" : "void*");
+            callParameters.Insert(sretIndex, memberStringReturn ? memberStringType + "*" : "void*");
         }
 
         yield return $"    using HsFn = {callReturn} (*)({string.Join(", ", callParameters)});";
@@ -4573,7 +4959,9 @@ internal static partial class ShimEmitter
                 }
                 else if (function.ReturnKind == AbiKind.StringView)
                 {
-                    yield return "    g_stringResult.assign(hs_result ? hs_result->data() : \"\", hs_result ? hs_result->size() : 0);";
+                    yield return function.ReturnPathBuffer
+                        ? "    g_stringResult.assign(hs_result ? hs_result->get().data() : \"\", hs_result ? hs_result->get().size() : 0);"
+                        : "    g_stringResult.assign(hs_result ? hs_result->data() : \"\", hs_result ? hs_result->size() : 0);";
                     yield return "    return HosihikariStringView{g_stringResult.data(), g_stringResult.size()};";
                 }
                 else
@@ -4585,11 +4973,17 @@ internal static partial class ShimEmitter
             else if (memberStringReturn)
             {
                 yield return $"    {call};";
-                yield return "    auto& hs_result = *reinterpret_cast<HsString*>(hs_stringStorage);";
+                // PathBuffer stores the string as its only field, so the destructor can run on
+                // the nested string itself; the read goes through get().
+                yield return function.ReturnPathBuffer
+                    ? "    auto& hs_result = reinterpret_cast<HsString*>(hs_stringStorage)->get();"
+                    : "    auto& hs_result = *reinterpret_cast<HsString*>(hs_stringStorage);";
                 yield return destroyStringViaGame
                     ? "    hs_string_scope hs_resultScope{&hs_result};"
                     : "    hs_typed_scope<HsString> hs_resultScope{hs_stringStorage};";
-                yield return "    g_stringResult.assign(hs_result.data(), hs_result.size());";
+                yield return function.ReturnPathBuffer
+                    ? "    g_stringResult.assign(hs_result.get().data(), hs_result.get().size());"
+                    : "    g_stringResult.assign(hs_result.data(), hs_result.size());";
                 yield return "    return HosihikariStringView{g_stringResult.data(), g_stringResult.size()};";
             }
             else if (function.ReturnKind == AbiKind.StringView)

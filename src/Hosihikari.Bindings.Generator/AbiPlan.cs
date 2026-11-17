@@ -35,6 +35,17 @@ internal enum AbiFunctionKind
     Get,
     Set,
     Method,
+    /// <summary>
+    /// A companion setter for a member that returns <c>std::string&amp;</c>; it is a
+    /// second function on the same member, so it is not part of the field accessor pair.
+    /// </summary>
+    StringSetter,
+    /// <summary>
+    /// A static accessor returning <c>ll::event::getEventId&lt;T&gt;</c> for an event type.
+    /// The value is a compile-time constant, so no listener has to spell the canonical
+    /// name by hand.
+    /// </summary>
+    EventId,
     Cast,
     DirectorCreate,
     FreeFunction,
@@ -78,9 +89,16 @@ internal sealed class AbiParameter
     public bool ByValueTriviallyDestructible { get; init; }
 
     public bool IsPointer => AbiPlan.IsPointerType(NativeType);
-    public bool IsReference { get; init; }
-    public bool IsRValueReference { get; init; }
-    public bool IsConst { get; init; }
+    public bool IsReference { get; set; }
+    public bool IsRValueReference { get; set; }
+    public bool IsConst { get; set; }
+
+    /// <summary>
+    /// The signature's own spelling, before the projection unwrapped a wrapper such as
+    /// <c>gsl::not_null&lt;T*&gt;</c>. A generated override has to match the base declaration
+    /// exactly, so it spells this rather than the unwrapped type.
+    /// </summary>
+    public string? DeclaredType { get; set; }
 
     /// <summary>
     /// True for a non-const std::string lvalue reference. The callee rewrites the text in
@@ -275,7 +293,7 @@ internal sealed class AbiFunction
     public string ClassCppName { get; init; } = "";
     public DeclarationName ClassName { get; init; }
     public string NativeMemberName { get; init; } = "";
-    public string CSharpMemberName { get; init; } = "";
+    public string CSharpMemberName { get; set; } = "";
     public AbiKind ReturnKind { get; init; }
     public string NativeReturnType { get; init; } = "";
     public string? ReturnWrapperType { get; init; }
@@ -327,6 +345,12 @@ internal sealed class AbiFunction
     /// <summary>Absolute bit offset for symbol-dispatched field accessors.</summary>
     public long? FieldBitOffset { get; init; }
 
+    /// <summary>
+    /// True when the accessor is a member function rather than a field, so the shim has
+    /// to spell the call (<c>self-&gt;name()</c>) instead of <c>self-&gt;name</c>.
+    /// </summary>
+    public bool AccessorIsCall { get; init; }
+
     /// <summary>Set for a bitfield; the accessor reads or writes this many bits.</summary>
     public int? FieldBitWidth { get; init; }
 
@@ -369,6 +393,13 @@ internal sealed class AbiFunction
     /// the only way to reach those members: the carrier never instantiates or exports them.
     /// </summary>
     public bool InlineBody { get; init; }
+
+    /// <summary>
+    /// The return is <c>Core::PathBuffer&lt;std::string&gt;</c>. Its layout and its return ABI
+    /// match <c>std::string</c>, but the class only forward-declares its members here, so the
+    /// shim has to name the caller-side type after both.
+    /// </summary>
+    public bool ReturnPathBuffer { get; init; }
 
     /// <summary>
     /// The member is const, so <c>hs_self</c> is cast to a const pointer. A const overload of
@@ -492,6 +523,24 @@ internal sealed class AbiPlan
         SetByMember = functions
             .Where(function => function.Kind == AbiFunctionKind.Set && function.MemberId is not null)
             .ToDictionary(function => function.MemberId!, StringComparer.Ordinal);
+        // Two overloads of the same accessor derive the same setter name; an ordinal keeps
+        // the C# surface compiling. The functions are rewritten in place because the emit
+        // reads them through FunctionsByDeclaration.
+        StringSetters = functions
+            .Where(function => function.Kind == AbiFunctionKind.StringSetter)
+            .ToList();
+        foreach (var group in StringSetters
+                     .GroupBy(function => function.DeclarationId, StringComparer.Ordinal))
+        {
+            var ordinal = 0;
+            foreach (var setter in group.OrderBy(function => function.MemberId, StringComparer.Ordinal))
+            {
+                if (ordinal++ > 0)
+                {
+                    setter.CSharpMemberName += "_" + ordinal.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                }
+            }
+        }
         MethodByMember = functions
             .Where(function => function.Kind == AbiFunctionKind.Method && function.MemberId is not null)
             .ToDictionary(function => function.MemberId!, StringComparer.Ordinal);
@@ -523,6 +572,9 @@ internal sealed class AbiPlan
     public IReadOnlyDictionary<string, AbiFunction> MethodByMember { get; }
     public IReadOnlyDictionary<string, AbiFunction> DestroyByDeclaration { get; }
     public IReadOnlyDictionary<string, List<AbiFunction>> FunctionsByDeclaration { get; }
+
+    /// <summary>Companion setters for members that return a mutable string reference.</summary>
+    public IReadOnlyList<AbiFunction> StringSetters { get; }
 
     public static AbiPlan Empty { get; } = new([], new Dictionary<string, DeclarationName>(StringComparer.Ordinal), false, false, false, false, new Dictionary<string, string>(StringComparer.Ordinal), new Dictionary<string, IReadOnlyList<MemberRecord>>(StringComparer.Ordinal), [], [], []);
 
@@ -561,6 +613,13 @@ internal sealed class AbiPlan
         var allDeclarationsByQualifiedName = records.OfType<DeclarationRecord>()
             .GroupBy(declaration => declaration.QualifiedName, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
+        // A forward declaration carries a record too, but names no complete type. Enums are
+        // complete as soon as they are declared, so only class kinds have to be defined.
+        var definedDeclarationNames = records.OfType<DeclarationRecord>()
+            .Where(declaration => declaration.Defined
+                || declaration.Kind is "enum" or "enum-class" or "enum-struct")
+            .Select(declaration => declaration.QualifiedName)
+            .ToHashSet(StringComparer.Ordinal);
         var abstractDeclarationIds = records.OfType<MemberRecord>()
             .Where(member => member.Pure)
             .Select(member => member.DeclarationId)
@@ -933,6 +992,16 @@ internal sealed class AbiPlan
                 (member.Signature?.Canonical.StartsWith(declaration.QualifiedName + "<", StringComparison.Ordinal) ?? false)
                 || member.Id.Contains(declaration.QualifiedName + "<", StringComparison.Ordinal));
 
+        /// <summary>
+        /// True when a field stores a type by value that the surface does not declare. Such a
+        /// member makes the class destructor ill-formed: the member's own destructor needs the
+        /// complete type, and the header that only forward-declares it never supplies one.
+        /// A template name, a pointer, and an array are exempt: their completeness is decided
+        /// by their arguments or by the callee.
+        /// </summary>
+        bool HasUndeclaredStoredField(string canonical) =>
+            MentionsUndeclaredStoredType(canonical, definedDeclarationNames);
+
         bool CanDeleteImplicitDestructor(
             DeclarationRecord declaration,
             List<MemberRecord> declarationMembers,
@@ -957,12 +1026,15 @@ internal sealed class AbiPlan
                 return explicitDestructor;
             }
 
-            // An implicit destructor is instantiated at the delete site. Member smart pointers to
-            // incomplete implementation types make that instantiation ill-formed.
+            // An implicit destructor is instantiated at the delete site. Member smart pointers
+            // to incomplete implementation types make that instantiation ill-formed, and so
+            // does any other stored member whose type the surface never declares: the header
+            // only forward-declares it, and nothing in the translation unit completes it.
             if (declarationMembers.Any(member =>
                     member.Kind == "field"
                     && member.Type is not null
-                    && member.Type.Canonical.StartsWith("std::unique_ptr<", StringComparison.Ordinal)))
+                    && (member.Type.Canonical.StartsWith("std::unique_ptr<", StringComparison.Ordinal)
+                        || HasUndeclaredStoredField(member.Type.Canonical))))
             {
                 return false;
             }
@@ -1073,6 +1145,17 @@ internal sealed class AbiPlan
                 continue;
             }
 
+            // An instantiation over void is the header's own holder for out-of-line member
+            // bodies; no object of it exists, and naming it in the shim only produces casts
+            // the class hierarchy rejects.
+            if (declaration.Template is not null
+                && declaration.Template.Arguments.Any(argument =>
+                    string.Equals(NormalizeTypeName(argument.Value), "void", StringComparison.Ordinal)))
+            {
+                uncastableDeclarationIds.Add(declaration.Id);
+                continue;
+            }
+
             // A class that stores a string_view/reference field keeps pointers into its
             // constructor arguments. The shim backs those arguments with holder-owned strings
             // so the native object remains valid after the call.
@@ -1162,6 +1245,16 @@ internal sealed class AbiPlan
                 else if (hasAbstractTemplateArgument && !ownsBorrowedString)
                 {
                     reason = "the class has an abstract template argument";
+                }
+                else if (linkCarrier
+                    && declarationMembers.Any(member =>
+                        member.Kind == "field"
+                        && member.Type is not null
+                        && MentionsUndeclaredStoredType(member.Type.Canonical, definedDeclarationNames)))
+                {
+                    // The constructor instantiates every stored member's constructor, and a
+                    // member the surface never declares has none.
+                    reason = "a stored member type is not declared by the surface";
                 }
 
                 if (reason is not null)
@@ -1426,6 +1519,10 @@ internal sealed class AbiPlan
                     // commands register, so these have no import to link against.
                     reason = "the carrier does not export the parser instantiation addressed by the inline body";
                 }
+                else if (linkCarrier && IsUncompilableInlineBody(method))
+                {
+                    reason = "the inline body does not compile for the projected argument types";
+                }
                 else if (method.MemberTemplate)
                 {
                     reason = "member function templates are not projected";
@@ -1476,6 +1573,11 @@ internal sealed class AbiPlan
                 }
 
                 functions.Add(function);
+
+                if (TryBuildStringReferenceSetter(declaration, method, function, declarationNames, out var setter))
+                {
+                    functions.Add(setter);
+                }
             }
         }
 
@@ -1513,6 +1615,31 @@ internal sealed class AbiPlan
 
         var castPairs = new List<(DeclarationRecord Derived, DeclarationRecord Base)>();
         var emittedCastPairs = new HashSet<(string Derived, string Base)>();
+
+        // A base reached over two different subobject paths makes the static_cast ambiguous;
+        // the shim has no way to pick one.
+        int CountBasePaths(string id, string target, int depth)
+        {
+            if (depth > 32 || !publicBaseInfosByDeclaration.TryGetValue(id, out var bases))
+            {
+                return 0;
+            }
+
+            var count = 0;
+            foreach (var baseInfo in bases)
+            {
+                count += string.Equals(baseInfo.DeclarationId, target, StringComparison.Ordinal)
+                    ? 1
+                    : CountBasePaths(baseInfo.DeclarationId, target, depth + 1);
+                if (count > 1)
+                {
+                    return 2;
+                }
+            }
+
+            return count;
+        }
+
         foreach (var declaration in declarations)
         {
             if (!castableDeclarationIds.Contains(declaration.Id)
@@ -1542,7 +1669,8 @@ internal sealed class AbiPlan
                     continue;
                 }
 
-                if (emittedCastPairs.Add((declaration.Id, baseId)))
+                if (emittedCastPairs.Add((declaration.Id, baseId))
+                    && CountBasePaths(declaration.Id, baseId, 0) < 2)
                 {
                     castPairs.Add((declaration, baseDeclaration));
                 }
@@ -1612,7 +1740,78 @@ internal sealed class AbiPlan
             });
         }
 
+        // Every final event type gets its id from getEventId<T>; the canonical-name
+        // spelling depends on the compiler's function signature macro, so it is safer to
+        // let the carrier's own constant produce it.
+        var eventDeclarationIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var declaration in declarations)
+        {
+            if (declaration.Surface != "levilamina"
+                || declaration.Template is not null
+                || declaration.Abstract
+                // ll::event::getEventId<T> is a static assertion away from rejecting a
+                // non-final type, and an event with subclasses cannot carry a stable id.
+                || !declaration.Attributes.Any(attribute =>
+                    string.Equals(attribute.Name, "final", StringComparison.Ordinal))
+                || !declarationNames.ContainsKey(declaration.Id))
+            {
+                continue;
+            }
+
+            var isEvent = false;
+            var pending = new Queue<string>([declaration.Id]);
+            var seen = new HashSet<string>(StringComparer.Ordinal) { declaration.Id };
+            while (pending.Count > 0)
+            {
+                var current = pending.Dequeue();
+                if (string.Equals(current, "levilamina:ll::event::Event", StringComparison.Ordinal))
+                {
+                    isEvent = true;
+                    break;
+                }
+
+                if (!publicBaseInfosByDeclaration.TryGetValue(current, out var bases))
+                {
+                    continue;
+                }
+
+                foreach (var baseInfo in bases)
+                {
+                    if (seen.Add(baseInfo.DeclarationId))
+                    {
+                        pending.Enqueue(baseInfo.DeclarationId);
+                    }
+                }
+            }
+
+            if (!isEvent)
+            {
+                continue;
+            }
+
+            var eventName = declarationNames[declaration.Id];
+            var eventIdId = declaration.Id + "::event-id";
+            functions.Add(new AbiFunction
+            {
+                CppName = "hs_event_id_" + CSharpNaming.ShortHash(eventIdId),
+                Kind = AbiFunctionKind.EventId,
+                Surface = declaration.Surface,
+                DeclarationId = declaration.Id,
+                MemberId = eventIdId,
+                ClassCppName = declaration.QualifiedName,
+                ClassName = eventName,
+                NativeMemberName = "event-id",
+                CSharpMemberName = "eventId",
+                ReturnKind = AbiKind.Opaque,
+                NativeReturnType = "ll::event::EventIdView",
+                Parameters = [],
+                Static = true,
+            });
+            eventDeclarationIds.Add(declaration.Id);
+        }
+
         // A director is generated for an abstract class with exactly one pure virtual method
+        // returning void, taking one reference/pointer, and a public virtual destructor.
         // returning void, taking one reference/pointer, and a public virtual destructor.
         // The constructor must use only scalar, enum, or shared parameters so the factory
         // can forward them without extra prelude.
@@ -1707,6 +1906,8 @@ internal sealed class AbiPlan
 
                 callbackParameters.Add(mapped);
             }
+
+            ApplySignatureQualifiers(callbackParameters, callSignature.Parameters);
 
             if (!callbackUsable)
             {
@@ -1913,6 +2114,14 @@ internal sealed class AbiPlan
                 }
 
                 var nativeName = parts[^1];
+                if (RequiresExplicitTemplateArguments(nativeRoot, function.Source, nativeName))
+                {
+                    // The record is a function-template specialization the header spells with
+                    // explicit arguments, and nothing in the call deduces them; the shim would
+                    // have to repeat template arguments the IR does not carry.
+                    continue;
+                }
+
                 var baseName = nativeName.StartsWith("operator", StringComparison.Ordinal)
                     ? OperatorMethodName(nativeName) ?? TypeNames.Sanitize(nativeName)
                     : TypeNames.Sanitize(nativeName);
@@ -2092,6 +2301,9 @@ internal sealed class AbiPlan
                         continue;
                     }
 
+                    ApplySignatureQualifiers(parameters, candidate.Function.Signature.Parameters);
+                    AssignUniqueParameterNames(parameters);
+
                     var nativeLeaf = TypeNames.SplitQualifiedName(candidate.Function.QualifiedName);
                     var operatorLeaf = nativeLeaf.Count > 0
                         && nativeLeaf[^1].StartsWith("operator", StringComparison.Ordinal)
@@ -2114,6 +2326,7 @@ internal sealed class AbiPlan
                         CSharpMemberName = csharpMemberName,
                         ReturnKind = returnKind,
                         NativeReturnType = nativeReturnType,
+                        ReturnPathBuffer = IsPathBufferType(candidate.Function.Signature.ReturnType),
                         ReturnWrapperType = returnWrapperType,
                         ReturnOwned = returnOwned,
                         ReturnUniquePtr = returnUniquePtr,
@@ -2225,6 +2438,7 @@ internal sealed class AbiPlan
         }
 
         var ordered = functions
+            .Where(function => !IsUnprojectable(function))
             .GroupBy(function => function.Surface, StringComparer.Ordinal)
             .OrderBy(group => group.Key, StringComparer.Ordinal)
             .SelectMany(group => group
@@ -2393,6 +2607,13 @@ internal sealed class AbiPlan
         }
 
         var normalized = NormalizeStandardTypeSpelling(NormalizeTypeName(canonical));
+        // A path container forwards nothing to the string it wraps (no data()/size()), so
+        // the string accessors do not apply to it.
+        if (normalized.StartsWith("Core::PathBuffer<", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
         return string.Equals(normalized, "std::basic_string<char>", StringComparison.Ordinal)
             || string.Equals(normalized, "std::string", StringComparison.Ordinal);
     }
@@ -2507,6 +2728,24 @@ internal sealed class AbiPlan
         && method.DeclarationId.Contains("ParamTraitsBase<", StringComparison.Ordinal)
         && UninstantiatedParserTypes.Any(type =>
             method.DeclarationId.Contains("<" + type + ">", StringComparison.Ordinal));
+
+    /// <summary>
+    /// Member bodies the carrier ships in a form that cannot be instantiated by the shim.
+    /// <c>BidirectionalUnorderedMap</c>'s accessors index a const map through the mutating
+    /// <c>operator[]</c>, and <c>VectorBase</c>'s const subscript casts the const <c>this</c>
+    /// to its derived type. Both are rejected by the standard library and the language.
+    /// </summary>
+    private static bool IsUncompilableInlineBody(MemberRecord method) =>
+        (method.DeclarationId.Contains("BidirectionalUnorderedMap<", StringComparison.Ordinal)
+            && method.Name is "operator[]" or "operator()")
+        // The vector bases' const subscript casts its const this to the derived type, and
+        // cross is constrained to plain arithmetic elements, which the projected
+        // instantiations (vector element types, integer bases) do not meet.
+        || (method.DeclarationId.StartsWith("levilamina:ll::math::", StringComparison.Ordinal)
+            && method.Name is "operator[]" or "cross")
+        || (method.DeclarationId.Contains("CommutativeGroup<", StringComparison.Ordinal)
+            // The compound assignment operators live on the derived arithmetic classes only.
+            && method.Name is "operator+=" or "operator-=" or "operator*=" or "operator/=");
 
     /// <summary>
     /// True when <c>ParamTraits&lt;T&gt;</c> replaces a <c>ParamTraitsBase&lt;T&gt;</c>
@@ -3088,6 +3327,218 @@ internal sealed class AbiPlan
         return File.Exists(fullPath);
     }
 
+    /// <summary>
+    /// Entries whose carrier declaration cannot be compiled by the shim even though the IR
+    /// records it. The names are the generated shim entries: a surface is regenerated from
+    /// one IR, whose ids the names hash, so an entry stays exact for that IR. Each one names
+    /// the defect the carrier headers carry.
+    /// </summary>
+    private static readonly Dictionary<string, string> UnprojectableShimEntries = new(StringComparer.Ordinal)
+    {
+        // Floor: destructor implicitly deleted because its anonymous union stores a
+        // TypedStorage of a non-trivially destructible record.
+        ["hs_destroy_8c18c52a"] = "the destructor is deleted by the anonymous union member",
+        // br::worldgen::StructureTemplateBlockPalette: destructor implicitly deleted through
+        // its stored data member.
+        ["hs_destroy_718d1d5d"] = "the destructor is deleted by a stored member",
+        // UniqueTagPtr::operator unique_ptr: the header spells the conversion target without
+        // its namespace, so the shim cannot name the return type.
+        ["hs_method_ecf3d370"] = "the conversion operator's target type is spelled unqualified",
+        // ItemDescriptor::fromTag: returns a record whose copy constructor is deleted.
+        ["hs_method_14250033"] = "the returned record is not copy constructible",
+        // LegacyStructureTemplate::/StructureTemplate::$randomPalette: the returned palette
+        // record has a deleted destructor, so the by-value return cannot be cleaned up.
+        ["hs_method_5e60fb6f"] = "the returned record has a deleted destructor",
+        ["hs_method_a1f32c49"] = "the returned record has a deleted destructor",
+        // GraphicsOverrideParameterPacketPayload, Social::Events::Event and
+        // StructureTemplatePool: the merged headers declare the constructor with parameter
+        // types that no longer match the recorded signature.
+        ["hs_method_fcad7359"] = "the carrier header declares a different constructor signature",
+        ["hs_create_3161f292"] = "the carrier header declares a different constructor signature",
+        ["hs_method_40588024"] = "the carrier header declares a different constructor signature",
+        ["hs_create_df3e8985"] = "the carrier header declares a different constructor signature",
+        ["hs_method_2e4051bf"] = "the carrier header declares a different constructor signature",
+        ["hs_create_291755cc"] = "the carrier header declares a different constructor signature",
+        // FlushableEnv: the director has to default-construct the base, which the header
+        // declares deleted.
+        ["hs_director_f609f153"] = "the base class has no default constructor",
+        // IScreenCapabilities: the pure method's return type is a typeid_t with no conversion
+        // to the integer the shim bridges through.
+        ["hs_director_b4b57a14"] = "the virtual method's return type cannot cross the ABI",
+        // EditorServerPersistenceService::_handleGroupItemChange: takes a StackRefResult<T> by
+        // non-const reference, which a shared handle cannot stand in for.
+        ["hs_method_270037c9"] = "the reference wrapper parameter cannot be mutated in place",
+        // Connector::$setConnectedResolvedExperienceInfo / FeatureTypeFactory::addSupportedSchema:
+        // the optional payload's type belongs to an excluded header, so its traits cannot be
+        // instantiated.
+        ["hs_method_7ff38818"] = "the optional payload type is not complete",
+        ["hs_method_187f989b"] = "the optional payload type is not complete",
+        // DebuggerDiagnosticsPublishToFile::publishStats: the vector element type is not
+        // complete where the container is built.
+        ["hs_method_d0030bbe"] = "the vector element type is not complete",
+        // PlayerDimensionTransferManager::$ctor: the unique_ptr payload type is not complete.
+        ["hs_method_9f67f279"] = "the unique_ptr payload type is not complete",
+        // WeakRef<EntityContext> construction through StackResultStorageEntity: the carrier's
+        // WeakStorage has no matching constructor.
+        ["hs_create_0a640134"] = "the weak storage has no matching constructor",
+        // Bedrock::UniqueOwnerPointer<TimeMarker>: the carrier's enable-non-owner base has no
+        // matching constructor.
+        ["hs_create_44791be4"] = "the carrier's owner-reference base has no matching constructor",
+        // IContentAccessibilityProvider: the director cannot satisfy the pure interface.
+        ["hs_director_6a20629c"] = "the director cannot implement the interface",
+        ["hs_director_435ccb53"] = "the director cannot implement the interface",
+        // MovePriorityQueue<DelayRequest>::pop: the element type is not copy assignable, which
+        // the heap algorithms require.
+        ["hs_method_58492d78"] = "the queue element type is not copy assignable",
+        ["hs_method_0b3013a5"] = "the queue element type is not copy assignable",
+        // An unordered_map return whose value type is not complete.
+        ["hs_method_89f36f8f"] = "the map value type is not complete",
+        ["hs_method_889cc3f2"] = "the map value type is not complete",
+        ["hs_method_c146fcba"] = "the map value type is not complete",
+        // Editor::Cursor::ServerCursorService::$listenForCursorPositionChanges: the callback's
+        // argument types belong to an excluded header.
+        ["hs_method_3bcf8063"] = "the callback argument types are not complete",
+        // Bedrock::UniqueOwnerPointer<WorldClock>: the carrier's owner-reference base has no
+        // matching constructor.
+        ["hs_create_ae0f47c4"] = "the carrier's owner-reference base has no matching constructor",
+        // Map view returns whose value type is a stored record the shim would have to copy.
+        ["hs_method_697418e9"] = "the map value type is not copy constructible",
+        ["hs_method_24cfc13f"] = "the map value type is not copy constructible",
+        ["hs_method_21fce9c8"] = "the map value type is not copy constructible",
+        // Classes that store a smart pointer to a type their headers only forward-declare;
+        // deleting the object instantiates the pointee's destructor.
+        //   ClientInstanceEventCoordinator, DBChunkStorage, DBStorage, ParticleProvider.
+        ["hs_destroy_b6cfe318"] = "a stored smart pointer's payload type is not complete",
+        ["hs_destroy_3a64ca13"] = "a stored smart pointer's payload type is not complete",
+        ["hs_destroy_e437f773"] = "a stored smart pointer's payload type is not complete",
+        ["hs_destroy_2d747e70"] = "a stored smart pointer's payload type is not complete",
+        // CreatorMetadataUtils::generatePropertiesDocumentation: copies a vector of records
+        // whose copy constructor the carrier's header declares deleted.
+        ["hs_function_19ede451"] = "the vector element type is not copy constructible",
+        ["hs_method_a2a26752"] = "the vector element type is not copy constructible",
+        // Bedrock::UniqueOwnerPointer<ParticleProvider>::reset: the payload's destructor needs
+        // a type its header only forward-declares.
+        ["hs_method_c5192137"] = "the owner pointer's payload type is not complete",
+        // A map getter whose value type the carrier declares non-copyable.
+        ["hs_method_74920440"] = "the map value type is not copy constructible",
+        ["hs_method_879c12e2"] = "the map value type is not copy constructible",
+        // PackManifest::setPackSettingsDef: a variant vector alternative is not copyable.
+        ["hs_method_6e3d5fa8"] = "a variant alternative is not copy constructible",
+    };
+
+    private static bool IsUnprojectable(AbiFunction function) =>
+        UnprojectableShimEntries.ContainsKey(function.CppName);
+
+    /// <summary>
+    /// True when a field stores a type by value that the surface does not declare. Such a
+    /// member makes both the class destructor and its constructor ill-formed: the member's own
+    /// lifetime functions need the complete type, and the header that only forward-declares it
+    /// never supplies one. A template name, a pointer, and an array are exempt: their
+    /// completeness is decided by their arguments or by the callee.
+    /// </summary>
+    private static bool MentionsUndeclaredStoredType(
+        string canonical,
+        IReadOnlySet<string> definedDeclarationNames)
+    {
+        foreach (var spelling in TypeMentions(canonical))
+        {
+            var leaf = spelling[(spelling.LastIndexOf(':') + 1)..];
+            if (leaf.Length == 0
+                // An array suffix and a function type are not the spelling of a stored
+                // record, and neither one asks for a complete named type.
+                || leaf.Contains('[', StringComparison.Ordinal)
+                || leaf.Contains('(', StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var index = canonical.IndexOf(leaf, StringComparison.Ordinal);
+            if (index < 0)
+            {
+                continue;
+            }
+
+            var after = canonical[(index + leaf.Length)..].TrimStart();
+            if (after.StartsWith("<", StringComparison.Ordinal)
+                || after.StartsWith("*", StringComparison.Ordinal)
+                || after.StartsWith("[", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            if (definedDeclarationNames.Contains(spelling))
+            {
+                continue;
+            }
+
+            return true;
+        }
+
+        return false;
+    }
+
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, string[]> SourceLineCache = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>
+    /// True when the header declares <paramref name="leafName"/> as a function-template
+    /// specialization: either the declaration repeats explicit template arguments or the
+    /// declaration keyword marks it a template. Such a declaration cannot be called by its
+    /// plain name, because nothing in the call supplies or deduces the arguments.
+    /// </summary>
+    private static bool RequiresExplicitTemplateArguments(string? nativeRoot, SourceLocation? source, string leafName)
+    {
+        if (string.IsNullOrWhiteSpace(nativeRoot) || source is null || string.IsNullOrWhiteSpace(source.File))
+        {
+            return false;
+        }
+
+        try
+        {
+            var normalized = source.File.Replace('\\', '/');
+            var path = Path.IsPathRooted(normalized)
+                ? normalized
+                : Path.GetFullPath(Path.Combine(nativeRoot, normalized.TrimStart('/')));
+            var lines = SourceLineCache.GetOrAdd(path, candidate => File.Exists(candidate)
+                ? File.ReadAllLines(candidate)
+                : []);
+
+            var index = source.Line - 1;
+            if (index < 0 || index >= lines.Length)
+            {
+                return false;
+            }
+
+            // An explicit instantiation declaration spells the arguments itself.
+            var declaration = lines[index];
+            if (declaration.Contains(leafName + "<", StringComparison.Ordinal)
+                || declaration.Contains(leafName + " <", StringComparison.Ordinal))
+            {
+                // A comparison such as `x < y` cannot match: the name precedes the angle.
+                return true;
+            }
+
+            for (var line = index - 1; line >= 0 && line >= index - 3; line--)
+            {
+                var text = lines[line].TrimStart();
+                if (text.Length == 0)
+                {
+                    continue;
+                }
+
+                return text.StartsWith("template", StringComparison.Ordinal);
+            }
+
+            return false;
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
     private static bool TryBuildCreate(
         DeclarationRecord declaration,
         MemberRecord constructor,
@@ -3170,6 +3621,7 @@ internal sealed class AbiPlan
             parameters.Add(abiParameter);
         }
 
+        ApplySignatureQualifiers(parameters, constructor.Signature.Parameters);
         AssignUniqueParameterNames(parameters);
 
         if (ownsBorrowedString)
@@ -3317,6 +3769,21 @@ internal sealed class AbiPlan
     {
         function = null!;
         reason = null;
+        // IntrusiveListOperations<Hook, Traits> calls the hook's own accessors; the carrier's
+        // list_standard_operations passes the node type for both, and a node that declares
+        // none of them makes every instantiated body ill-formed.
+        if (declaration.Template is not null
+            && declaration.QualifiedName.Contains("IntrusiveListOperations<", StringComparison.Ordinal)
+            && declaration.Template.Arguments.Count == 2
+            && string.Equals(
+                NormalizeTypeName(declaration.Template.Arguments[0].Value),
+                NormalizeTypeName(declaration.Template.Arguments[1].Value),
+                StringComparison.Ordinal))
+        {
+            reason = "the operations class is instantiated with itself as the hook traits";
+            return false;
+        }
+
         if (method.Signature is null)
         {
             reason = "the method signature is unavailable";
@@ -3509,6 +3976,7 @@ internal sealed class AbiPlan
             parameters.Add(abiParameter);
         }
 
+        ApplySignatureQualifiers(parameters, method.Signature.Parameters);
         AssignUniqueParameterNames(parameters);
 
         // A mutable std::string argument is rewritten by the callee. A void method can
@@ -3556,6 +4024,7 @@ internal sealed class AbiPlan
             CSharpMemberName = TypeNames.Sanitize(method.Name),
             ReturnKind = returnKind,
             NativeReturnType = nativeReturnType,
+            ReturnPathBuffer = IsPathBufferType(method.Signature.ReturnType),
             ReturnWrapperType = returnWrapperType,
             ReturnOwned = returnOwned,
             ReturnUniquePtr = returnUniquePtr,
@@ -3607,6 +4076,85 @@ internal sealed class AbiPlan
                 && method.Inline
                 && (method.Defined || IsPatternCallable(method))
                 && !HasAlgorithmRequiringCopy(method, declaration, membersByDeclaration, declarationsByQualifiedName),
+        };
+        return true;
+    }
+
+    /// <summary>
+    /// A member returning <c>std::string&amp;</c> exposes the string by value, so a caller
+    /// cannot write through it. A companion setter assigns through the same accessor
+    /// (<c>self-&gt;message() = value</c>), which is what a chat rewrite needs.
+    /// </summary>
+    private static bool TryBuildStringReferenceSetter(
+        DeclarationRecord declaration,
+        MemberRecord method,
+        AbiFunction getter,
+        IReadOnlyDictionary<string, DeclarationName> declarationNames,
+        out AbiFunction setter)
+    {
+        setter = null!;
+        if (getter.Kind != AbiFunctionKind.Method
+            || getter.ReturnKind != AbiKind.StringView
+            || getter.ReturnOptional
+            || getter.Parameters.Count != 0
+            || getter.InlineBody
+            // A static member yields the same string to every caller; there is nothing to
+            // assign through the accessor.
+            || getter.Static
+            || !declarationNames.ContainsKey(declaration.Id))
+        {
+            return false;
+        }
+
+        var returnType = method.Signature?.ReturnType;
+        if (returnType is null
+            || !returnType.TrimEnd().EndsWith("&", StringComparison.Ordinal)
+            || returnType.TrimEnd().EndsWith("&&", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var referenced = returnType.TrimEnd()[..^1].Trim();
+        // A const reference is read-only, so an assignment could not compile.
+        if (!IsStringType(referenced)
+            || IsConstType(referenced))
+        {
+            return false;
+        }
+
+        var name = TypeNames.Sanitize(method.Name);
+        if (name.StartsWith('@'))
+        {
+            name = name[1..];
+        }
+
+        setter = new AbiFunction
+        {
+            CppName = "hs_set_ref_" + CSharpNaming.ShortHash(method.Id),
+            Kind = AbiFunctionKind.StringSetter,
+            Surface = declaration.Surface,
+            DeclarationId = declaration.Id,
+            MemberId = method.Id,
+            ClassCppName = declaration.QualifiedName,
+            ClassName = declarationNames[declaration.Id],
+            NativeMemberName = method.Name,
+            // The `set` prefix collides with members that already carry it; `assign` reads
+            // as the assignment it performs and stays clear of them.
+            CSharpMemberName = "assign" + char.ToUpperInvariant(name[0]) + name[1..],
+            ReturnKind = AbiKind.Void,
+            NativeReturnType = "void",
+            Static = method.Static,
+            SelfConst = method.Signature?.Const ?? false,
+            AccessorIsCall = true,
+            Parameters =
+            [
+                new AbiParameter
+                {
+                    Name = "value",
+                    Kind = AbiKind.StringView,
+                    NativeType = "std::basic_string<char> const&",
+                },
+            ],
         };
         return true;
     }
@@ -3926,10 +4474,17 @@ internal sealed class AbiPlan
             return true;
         }
 
-        var isVector = TryParseVector(nativeType, out var sequenceElement);
+        var isVector = TryParseVector(nativeType, out var sequenceElement, out var sequenceSpelling);
         var isSet = !isVector && TryParseUnorderedSet(nativeType, out sequenceElement);
         if (isVector || isSet)
         {
+            if (isVector && string.Equals(sequenceElement, "bool", StringComparison.Ordinal))
+            {
+                // std::vector<bool> is bit-packed: it has no contiguous elements to point at.
+                reason = "std::vector<bool> is bit-packed and cannot be read as an array";
+                return false;
+            }
+
             if (IsStringViewType(sequenceElement) || IsStringType(sequenceElement))
             {
                 kind = AbiKind.ArrayView;
@@ -3953,7 +4508,9 @@ internal sealed class AbiPlan
             {
                 kind = AbiKind.ArrayView;
                 arrayElementKind = AbiKind.Opaque;
-                arrayElementType = sequenceElement;
+                // The shim rebuilds the vector from the caller's pointer slots; keep the
+                // pointee's const so the rebuilt vector converts to the parameter type.
+                arrayElementType = isVector ? sequenceSpelling : sequenceElement;
                 array = true;
                 return true;
             }
@@ -4253,8 +4810,10 @@ internal sealed class AbiPlan
 
         if (TryParsePathBuffer(nativeType, out var pathBufferType))
         {
-            // Core::PathBuffer<T> stores exactly one T value. For std::string the layout and the
-            // non-trivial return ABI match std::string, so the shim can read the string directly.
+            // Core::PathBuffer<T> stores exactly one T value with the same layout and the same
+            // non-trivial return ABI as T, so the managed side sees a string. The class leaves
+            // its members unavailable wherever it is only forward-declared, so the shim reads
+            // the storage through a std::string alias instead of calling data()/size().
             kind = AbiKind.StringView;
             nativeType = pathBufferType;
             return true;
@@ -4409,9 +4968,15 @@ internal sealed class AbiPlan
         return true;
     }
 
-    private static bool TryParseVector(string canonical, out string element)
+    /// <summary>
+    /// Recognizes <c>std::vector&lt;T&gt;</c>. <paramref name="element"/> drops the top-level
+    /// qualifiers so it can be used as a lookup key; <paramref name="elementSpelling"/> keeps
+    /// them, because a pointer element has to be spelled with its pointee's const to convert.
+    /// </summary>
+    private static bool TryParseVector(string canonical, out string element, out string elementSpelling)
     {
         element = "";
+        elementSpelling = "";
         var text = NormalizeTypeName(canonical);
         const string prefix = "std::vector<";
         if (!text.StartsWith(prefix, StringComparison.Ordinal)
@@ -4432,8 +4997,12 @@ internal sealed class AbiPlan
         }
 
         element = StripTopLevelQualifiers(arguments[0].Trim());
+        elementSpelling = arguments[0].Trim();
         return element.Length > 0;
     }
+
+    private static bool TryParseVector(string canonical, out string element) =>
+        TryParseVector(canonical, out element, out _);
 
     private static bool TryParseVariant(string canonical, out List<string> alternatives)
     {
@@ -5549,11 +6118,26 @@ internal sealed class AbiPlan
         getter = null!;
         setter = null;
         reason = null;
+        if (string.IsNullOrWhiteSpace(field.Name))
+        {
+            // An anonymous union or struct has no member name to spell; its own fields are
+            // not separately recorded, so nothing can be projected for it.
+            reason = "anonymous fields are not projected";
+            return false;
+        }
+
         var type = field.Type!;
         var text = type.Canonical.Trim();
         var kind = AbiKind.Void;
         var bitsetBits = 0;
-        if (IsStringViewType(text) || IsStringType(text))
+        var addressOnly = IsUnnameableType(text);
+        if (addressOnly)
+        {
+            // An unnamed enum or anonymous union has no spelling the shim could cast to, so
+            // the field is only exposed by address.
+            kind = AbiKind.Opaque;
+        }
+        else if (IsStringViewType(text) || IsStringType(text))
         {
             kind = AbiKind.StringView;
         }
@@ -5579,6 +6163,9 @@ internal sealed class AbiPlan
 
                 pointee = StripTopLevelQualifiers(text);
                 wrapperType = LookupWrapperType(text, declarationsByQualifiedName, declarationNames);
+                // The value type cannot be projected, so the getter exposes the storage
+                // address and a setter would have to guess the write spelling.
+                addressOnly = true;
             }
 
             kind = AbiKind.Opaque;
@@ -5601,11 +6188,12 @@ internal sealed class AbiPlan
             ReturnKind = kind,
             NativeReturnType = text,
             Static = field.Static,
+            FieldAddress = addressOnly,
             IsBitset = bitsetBits > 0,
             BitsetBits = bitsetBits,
         };
 
-        if (kind is AbiKind.StringView
+        if (addressOnly || kind is AbiKind.StringView
             || type.Const
             || IsConstType(text)
             || IsArrayType(text)
@@ -5751,8 +6339,18 @@ internal sealed class AbiPlan
         }
 
         var text = canonical.Trim();
+        if (IsReferenceToPointerType(text))
+        {
+            // The callee writes back through the reference, which a pointer-sized ABI slot
+            // cannot carry; the parameter is left to the stub.
+            reason = $"reference to pointer parameter type '{text}' is not supported";
+            return false;
+        }
+
         var variantType = NormalizeTypeName(text);
-        if (variants.TryGet(surface, variantType, out var variantInfo))
+        // A pointer to a variant is an out-slot, not the variant itself: the projection
+        // rebuilds a value, which cannot stand in for the pointer the callee writes through.
+        if (!IsPointerType(text) && variants.TryGet(surface, variantType, out var variantInfo))
         {
             parameter = new AbiParameter
             {
@@ -6010,7 +6608,9 @@ internal sealed class AbiPlan
             return false;
         }
 
-        if (TryParseVector(text, out var vectorElement))
+        // A pointer to a vector is an out-parameter the callee fills; it crosses the ABI as a
+        // plain pointer, not as a rebuilt container.
+        if (!IsPointerType(text) && TryParseVector(text, out var vectorElement, out var vectorSpelling))
         {
             if (IsStringViewType(vectorElement) || IsStringType(vectorElement))
             {
@@ -6047,7 +6647,8 @@ internal sealed class AbiPlan
 
             if (IsPointerType(vectorElement))
             {
-                // Pointer elements keep their pointer bits and surface as nint[].
+                // Pointer elements keep their pointer bits and surface as nint[]. The spelling
+                // keeps the pointee's const so the rebuilt vector converts to the parameter.
                 parameter = new AbiParameter
                 {
                     Name = name,
@@ -6057,7 +6658,7 @@ internal sealed class AbiPlan
                     IsConst = IsConstType(text),
                     IsVector = true,
                     VectorElementKind = AbiKind.Opaque,
-                    VectorElementType = vectorElement,
+                    VectorElementType = vectorSpelling,
                     VectorElementOwnership = ArrayElementOwnership.None,
                 };
                 return true;
@@ -6114,6 +6715,20 @@ internal sealed class AbiPlan
                     declarationNames,
                     out var vectorRecordWrapper))
             {
+                // The shim rebuilds the vector element by element, so an element the carrier
+                // declares non-copyable — or never declares at all — cannot be passed.
+                if (!declarationsByQualifiedName.TryGetValue(vectorElement, out var vectorElementDeclaration))
+                {
+                    reason = $"vector element type '{vectorElement}' is not declared by the surface";
+                    return false;
+                }
+
+                if (!vectorElementDeclaration.CopyConstructible)
+                {
+                    reason = $"vector element type '{vectorElement}' is not copy constructible";
+                    return false;
+                }
+
                 parameter = new AbiParameter
                 {
                     Name = name,
@@ -6174,7 +6789,8 @@ internal sealed class AbiPlan
             return true;
         }
 
-        if (TryParseOptional(text, out var optionalInner))
+        // A pointer to an optional is an out-slot; the projection builds a value.
+        if (!IsPointerType(text) && TryParseOptional(text, out var optionalInner))
         {
             if (IsStringViewType(optionalInner) || IsStringType(optionalInner))
             {
@@ -6184,6 +6800,8 @@ internal sealed class AbiPlan
                     Kind = AbiKind.StringView,
                     NativeType = optionalInner,
                     IsOptional = true,
+                    IsReference = IsReferenceType(text),
+                    IsConst = IsConstType(text),
                     OptionalInnerType = optionalInner,
                 };
                 return true;
@@ -6198,6 +6816,8 @@ internal sealed class AbiPlan
                     Kind = optionalKind,
                     NativeType = optionalInner,
                     IsOptional = true,
+                    IsReference = IsReferenceType(text),
+                    IsConst = IsConstType(text),
                     OptionalInnerType = optionalInner,
                 };
                 return true;
@@ -6211,6 +6831,8 @@ internal sealed class AbiPlan
                     Kind = AbiKind.I64,
                     NativeType = optionalInner,
                     IsOptional = true,
+                    IsReference = IsReferenceType(text),
+                    IsConst = IsConstType(text),
                     OptionalInnerType = optionalInner,
                     TimeConversion = optionalSystemClock ? TimeConversion.SystemTimePoint : TimeConversion.ClockTimePoint,
                     TimeClockType = optionalClock,
@@ -6226,6 +6848,8 @@ internal sealed class AbiPlan
                     Kind = AbiKind.I64,
                     NativeType = optionalInner,
                     IsOptional = true,
+                    IsReference = IsReferenceType(text),
+                    IsConst = IsConstType(text),
                     OptionalInnerType = optionalInner,
                     TimeConversion = TimeConversion.Duration,
                     TimeDurationType = optionalDuration,
@@ -6241,6 +6865,8 @@ internal sealed class AbiPlan
                     Kind = AbiKind.U16,
                     NativeType = optionalInner,
                     IsOptional = true,
+                    IsReference = IsReferenceType(text),
+                    IsConst = IsConstType(text),
                     OptionalInnerType = optionalInner,
                     SpecialValue = SpecialValueKind.TypeId,
                     SpecialValueType = optionalTypeId,
@@ -6256,6 +6882,8 @@ internal sealed class AbiPlan
                     Kind = AbiKind.I8,
                     NativeType = optionalInner,
                     IsOptional = true,
+                    IsReference = IsReferenceType(text),
+                    IsConst = IsConstType(text),
                     OptionalInnerType = optionalInner,
                     SpecialValue = SpecialValueKind.StrongOrdering,
                 };
@@ -6270,6 +6898,8 @@ internal sealed class AbiPlan
                     Kind = AbiKind.StringView,
                     NativeType = optionalInner,
                     IsOptional = true,
+                    IsReference = IsReferenceType(text),
+                    IsConst = IsConstType(text),
                     OptionalInnerType = optionalInner,
                     SpecialValue = SpecialValueKind.Path,
                 };
@@ -6286,6 +6916,8 @@ internal sealed class AbiPlan
                     NativeType = optionalVariantType,
                     NativePointee = optionalVariantType,
                     IsOptional = true,
+                    IsReference = IsReferenceType(text),
+                    IsConst = IsConstType(text),
                     OptionalInnerType = optionalVariantType,
                     WrapperType = optionalVariant.WrapperType,
                     VariantInfo = optionalVariant,
@@ -6315,6 +6947,8 @@ internal sealed class AbiPlan
                 NativeType = optionalInner,
                 NativePointee = optionalInner,
                 IsOptional = true,
+                IsReference = IsReferenceType(text),
+                IsConst = IsConstType(text),
                 OptionalInnerType = optionalInner,
                 IsOptionalRecord = true,
                 WrapperType = LookupWrapperType(optionalInner, declarationsByQualifiedName, declarationNames),
@@ -6901,8 +7535,39 @@ internal sealed class AbiPlan
     internal static bool IsReferenceType(string canonical) =>
         StripTopLevelQualifiers(canonical).EndsWith("&", StringComparison.Ordinal);
 
+    /// <summary>
+    /// True for <c>T*&amp;</c> and <c>T* const&amp;</c>: a reference whose target is a pointer.
+    /// The shim would have to hand the callee an addressable pointer to update in place.
+    /// </summary>
+    internal static bool IsReferenceToPointerType(string canonical)
+    {
+        var text = StripTopLevelQualifiers(canonical);
+        while (text.EndsWith("&", StringComparison.Ordinal))
+        {
+            text = StripTopLevelQualifiers(text[..^1].TrimEnd());
+        }
+
+        return !string.Equals(text, StripTopLevelQualifiers(canonical), StringComparison.Ordinal)
+            && text.EndsWith("*", StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// True when the type has no name the shim could write: an unnamed enum or an anonymous
+    /// union is spelled with its source location. Only its address is usable.
+    /// </summary>
+    private static bool IsUnnameableType(string canonical) =>
+        canonical.Contains("(unnamed", StringComparison.Ordinal)
+        || canonical.Contains("(anonymous", StringComparison.Ordinal);
+
     internal static bool IsPointerType(string canonical) =>
         StripTopLevelQualifiers(canonical).EndsWith("*", StringComparison.Ordinal);
+
+    /// <summary>
+    /// True for <c>Core::PathBuffer&lt;T&gt;</c>. Its own header declares the members, but the
+    /// type is only forward-declared where it is used, so callers cannot rely on them.
+    /// </summary>
+    internal static bool IsPathBufferType(string canonical) =>
+        NormalizeTypeName(canonical).TrimStart().StartsWith("Core::PathBuffer<", StringComparison.Ordinal);
 
     internal static bool IsRValueReference(string canonical) =>
         StripTopLevelQualifiers(canonical).EndsWith("&&", StringComparison.Ordinal);
@@ -6984,12 +7649,52 @@ internal sealed class AbiPlan
         return !IsConstType(text) && !IsConstType(referent);
     }
 
+    /// <summary>
+    /// True when the type itself is const-qualified. A <c>const</c> that belongs to a template
+    /// argument (<c>Upgrader&lt;A, B, const Custom&gt;</c>) does not qualify the parameter, and
+    /// treating it as one turns a mutable reference into a const one at the call site.
+    /// </summary>
     private static bool IsConstType(string canonical)
     {
         var text = canonical.Trim();
-        return text.StartsWith("const ", StringComparison.Ordinal)
-            || text.Contains(" const ", StringComparison.Ordinal)
-            || text.EndsWith(" const", StringComparison.Ordinal);
+        var depth = 0;
+        for (var index = 0; index < text.Length; index++)
+        {
+            var character = text[index];
+            if (character == '<')
+            {
+                depth++;
+                continue;
+            }
+
+            if (character == '>')
+            {
+                depth = Math.Max(0, depth - 1);
+                continue;
+            }
+
+            if (depth != 0
+                || character != 'c'
+                || index + 5 > text.Length
+                || !text.AsSpan(index, 5).SequenceEqual("const"))
+            {
+                continue;
+            }
+
+            var before = index == 0 ? ' ' : text[index - 1];
+            var after = index + 5 >= text.Length ? ' ' : text[index + 5];
+            if (!IsIdentifierChar(before) && !IsIdentifierChar(after))
+            {
+                return true;
+            }
+
+            index += 4;
+        }
+
+        return false;
+
+        static bool IsIdentifierChar(char character) =>
+            char.IsLetterOrDigit(character) || character == '_';
     }
 
     private static string ExtractPointee(string canonical)
@@ -7021,13 +7726,30 @@ internal sealed class AbiPlan
     /// </summary>
     private static void AssignUniqueParameterNames(List<AbiParameter> parameters)
     {
-        var used = new HashSet<string>(StringComparer.Ordinal);
+        // Locals the emitted bodies declare by name. A parameter of the same name would
+        // shadow nothing in C# (the names are independent) but would collide in the shim.
+        var used = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "result",
+            "hs_result",
+            "hs_value",
+            "hs_expected",
+            "hs_text",
+            "hs_id",
+        };
         for (var index = 0; index < parameters.Count; index++)
         {
             var parameter = parameters[index];
             var baseName = string.IsNullOrWhiteSpace(parameter.Name)
                 ? "arg" + index.ToString(System.Globalization.CultureInfo.InvariantCulture)
                 : parameter.Name;
+            // A parameter whose name matches its own type shadows it in the shim body, where
+            // the argument is cast to that type.
+            if (string.Equals(baseName, TypeLeafName(parameter.NativeType), StringComparison.Ordinal))
+            {
+                baseName += "Value";
+            }
+
             var name = baseName;
             var counter = 1;
             while (!used.Add(name))
@@ -7037,6 +7759,39 @@ internal sealed class AbiPlan
             }
 
             parameter.CppName = name;
+        }
+    }
+
+    private static string TypeLeafName(string nativeType)
+    {
+        var text = StripTopLevelQualifiers(nativeType);
+        while (text.EndsWith("*", StringComparison.Ordinal) || text.EndsWith("&", StringComparison.Ordinal))
+        {
+            text = StripTopLevelQualifiers(text[..^1].TrimEnd());
+        }
+
+        return text[(text.LastIndexOf(':') + 1)..];
+    }
+
+    /// <summary>
+    /// Copies the qualifiers the signature spelled but the projection does not carry: whether
+    /// the parameter is an rvalue reference (a generated vector argument has to move), and the
+    /// declared spelling a generated override has to repeat.
+    /// </summary>
+    private static void ApplySignatureQualifiers(
+        List<AbiParameter> parameters,
+        IReadOnlyList<ParameterInfo> signatureParameters)
+    {
+        for (var index = 0; index < parameters.Count && index < signatureParameters.Count; index++)
+        {
+            var declared = signatureParameters[index].Type?.Trim();
+            if (string.IsNullOrWhiteSpace(declared))
+            {
+                continue;
+            }
+
+            parameters[index].DeclaredType = declared;
+            parameters[index].IsRValueReference = IsRValueReference(declared);
         }
     }
 
@@ -7195,7 +7950,7 @@ internal sealed class AbiPlan
             return false;
         }
 
-        var bitfield = field.BitWidth > 0;
+        var bitfield = field.BitWidth is not null;
 
         if (field.Static)
         {

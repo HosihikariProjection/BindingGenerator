@@ -66,7 +66,12 @@ internal static class InteropEmitter
         EmitVariantWrappers(outputDirectory, plan);
         EmitCallableWrappers(outputDirectory, plan);
 
-        foreach (var declaration in declarations)
+        // Each declaration writes its own file from read-only plan lookups, so the loop is
+        // safe to run wide; the output path per declaration is independent.
+        Parallel.ForEach(
+            declarations,
+            new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount },
+            declaration =>
         {
             var name = declarationNames[declaration.Id];
             var hasDestroy = plan.DestroyByDeclaration.TryGetValue(declaration.Id, out var destroy);
@@ -161,7 +166,9 @@ internal static class InteropEmitter
             {
                 foreach (var helper in declarationFunctions
                              .Where(function => function.Kind is AbiFunctionKind.Cast
-                                 or AbiFunctionKind.DirectorCreate)
+                                 or AbiFunctionKind.DirectorCreate
+                                 or AbiFunctionKind.StringSetter
+                                 or AbiFunctionKind.EventId)
                              .OrderBy(function => function.CSharpMemberName, StringComparer.Ordinal))
                 {
                     lines.Add("");
@@ -181,7 +188,7 @@ internal static class InteropEmitter
             var path = Path.Combine(outputDirectory, "interop", declaration.Surface, fileName);
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             File.WriteAllText(path, string.Join("\n", lines) + "\n", new UTF8Encoding(false));
-        }
+        });
 
         EmitFreeFunctionClasses(outputDirectory, plan);
     }
@@ -790,6 +797,13 @@ internal static class InteropEmitter
             types.Add("void*");
         }
 
+        if (function.Kind == AbiFunctionKind.EventId)
+        {
+            types.Add("byte**");
+            types.Add("nuint*");
+            types.Add("nuint*");
+        }
+
         foreach (var parameter in function.Parameters)
         {
             if (parameter.IsVector || parameter.IsMap || parameter.Kind == AbiKind.Placeholder)
@@ -1270,13 +1284,22 @@ internal static class InteropEmitter
             callArguments.Add("&__hs_hasValue");
         }
 
+        if (method.Kind == AbiFunctionKind.EventId)
+        {
+            callArguments.Add("&__hs_idName");
+            callArguments.Add("&__hs_idSize");
+            callArguments.Add("&__hs_idHash");
+        }
+
         if (method.MutableStringOutRef)
         {
             callArguments.Add("&__hs_strOut0");
         }
 
         var call = $"NativeMethods.{TableFieldAccess(method)}({string.Join(", ", callArguments)})";
-        var returnType = method.ReturnKind switch
+        var returnType = method.Kind == AbiFunctionKind.EventId
+            ? "(string Name, nuint Hash)"
+            : method.ReturnKind switch
         {
             AbiKind.Void => "void",
             AbiKind.StringView => method.ReturnOptional ? "string?" : "string",
@@ -1301,6 +1324,13 @@ internal static class InteropEmitter
         if (method.NeedsPresenceFlag)
         {
             lines.Add("        var __hs_hasValue = false;");
+        }
+
+        if (method.Kind == AbiFunctionKind.EventId)
+        {
+            lines.Add("        byte* __hs_idName = null;");
+            lines.Add("        nuint __hs_idSize = 0;");
+            lines.Add("        nuint __hs_idHash = 0;");
         }
 
         var mutableStringIndex = method.MutableStringOutRef
@@ -1356,6 +1386,13 @@ internal static class InteropEmitter
             lines.Add(indent + $"var __hs_expectedResult = {call};");
             lines.Add(indent + "if (!__hs_hasValue) { throw new global::System.InvalidOperationException(NativeMethods.GetLastError() ?? \"Binding API call returned an error.\"); }");
             call = "__hs_expectedResult";
+        }
+
+        if (method.Kind == AbiFunctionKind.EventId)
+        {
+            lines.Add(indent + call + ";");
+            lines.Add(indent + "return (global::System.Text.Encoding.UTF8.GetString(__hs_idName, checked((int)__hs_idSize)), __hs_idHash);");
+            return;
         }
 
         switch (method.ReturnKind)

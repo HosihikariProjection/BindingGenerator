@@ -65,9 +65,10 @@ $CompilerArgs += @(
     "-MD"
 )
 
-if ($ErrorLimit -gt 0) {
-    $CompilerArgs += "-ferror-limit=$ErrorLimit"
-}
+# 0 disables the limit, which is what a first pass over a new carrier needs: clang's
+# own default stops at 20, so the build would otherwise report the inventory in
+# batches and hide everything behind the first twenty.
+$CompilerArgs += "-ferror-limit=$ErrorLimit"
 
 if ($CompileOnly) {
     $CompilerArgs += @("/c", "/Fo:$OutputDll")

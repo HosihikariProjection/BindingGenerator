@@ -1,7 +1,10 @@
 param(
     [string]$LlvmRoot = "$env:LOCALAPPDATA\Temp\hosihikari-llvm\clang+llvm-23.1.0-x86_64-pc-windows-msvc",
     [string]$LeviLaminaRoot = "",
-    [string]$Output = "artifacts/llapi-full-ir"
+    [string]$Output = "artifacts/llapi-full-ir",
+    [string[]]$ExtraFilter = @(),
+    [string[]]$PrependHeader = @(),
+    [string[]]$ExcludeFilter = @()
 )
 if ([string]::IsNullOrWhiteSpace($LeviLaminaRoot)) {
     $LeviLaminaRoot = Join-Path $PSScriptRoot "..\..\Third\LeviLamina"
@@ -21,4 +24,7 @@ $Output = if ([System.IO.Path]::IsPathRooted($Output)) { $Output } else { Join-P
     -LlvmRoot $LlvmRoot `
     -LeviLaminaRoot $LeviLaminaRoot `
     -Module "ll/api" `
-    -Output $Output
+    -Output $Output `
+    -ExtraFilter $ExtraFilter `
+    -PrependHeader $PrependHeader `
+    -ExcludeFilter $ExcludeFilter
