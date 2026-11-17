@@ -1543,7 +1543,8 @@ internal sealed class AbiPlan
 
                 functions.Add(function);
 
-                if (TryBuildStringReferenceSetter(declaration, method, function, declarationNames, out var setter))
+                if (TryBuildStringReferenceSetter(
+                        declaration, method, function, declarationNames, declarationMembers, out var setter))
                 {
                     functions.Add(setter);
                 }
@@ -4018,6 +4019,7 @@ internal sealed class AbiPlan
         MemberRecord method,
         AbiFunction getter,
         IReadOnlyDictionary<string, DeclarationName> declarationNames,
+        IReadOnlyList<MemberRecord> declarationMembers,
         out AbiFunction setter)
     {
         setter = null!;
@@ -4056,6 +4058,17 @@ internal sealed class AbiPlan
             name = name[1..];
         }
 
+        // The setter reads as the property-style companion of the getter, so `set` is the
+        // name it wants. A class that already declares a member with that name keeps its
+        // own member and gets `assign` instead.
+        var setName = "set" + char.ToUpperInvariant(name[0]) + name[1..];
+        if (declarationMembers.Any(member =>
+                !string.Equals(member.Id, method.Id, StringComparison.Ordinal)
+                && string.Equals(member.Name, setName, StringComparison.Ordinal)))
+        {
+            setName = "assign" + char.ToUpperInvariant(name[0]) + name[1..];
+        }
+
         setter = new AbiFunction
         {
             CppName = "hs_set_ref_" + CSharpNaming.ShortHash(method.Id),
@@ -4066,9 +4079,7 @@ internal sealed class AbiPlan
             ClassCppName = declaration.QualifiedName,
             ClassName = declarationNames[declaration.Id],
             NativeMemberName = method.Name,
-            // The `set` prefix collides with members that already carry it; `assign` reads
-            // as the assignment it performs and stays clear of them.
-            CSharpMemberName = "assign" + char.ToUpperInvariant(name[0]) + name[1..],
+            CSharpMemberName = setName,
             ReturnKind = AbiKind.Void,
             NativeReturnType = "void",
             Static = method.Static,
