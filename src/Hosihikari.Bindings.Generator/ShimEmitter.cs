@@ -8,6 +8,30 @@ internal static partial class ShimEmitter
 {
     private const string SelfParameter = "hs_self";
 
+    /// <summary>
+    /// Two carrier types are used as complete members but never defined by any header the
+    /// LLAPI surface parses: <c>Puv::SlicedLoader</c> (only forward-declared) and
+    /// <c>IClientBlockData</c> (a client-only class Block stores in a unique_ptr).
+    /// <c>ll::TypedStorage</c> and <c>unique_ptr</c> destroy their payload, which needs a
+    /// complete type; the storage supplies size and alignment, so empty definitions are
+    /// enough. A symbol-dispatch surface parses the client tree, where the real definitions
+    /// exist, and these would be redefinitions.
+    /// </summary>
+    private static void AddIncompleteCarrierTypes(List<string> source, string surface)
+    {
+        if (!string.Equals(surface, "levilamina", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        source.Add("");
+        source.Add("namespace Puv {");
+        source.Add("template <typename T0, typename T1, typename T2, typename T3, typename T4>");
+        source.Add("class SlicedLoader {};");
+        source.Add("}");
+        source.Add("class IClientBlockData {};");
+    }
+
     public static void Emit(
         IrManifest manifest,
         IReadOnlyList<IrRecord> records,
@@ -396,17 +420,7 @@ internal static partial class ShimEmitter
             source.Add("void operator delete[](void* block, std::size_t, std::align_val_t alignment) noexcept { ::operator delete(block, alignment); }");
         }
 
-        source.Add("");
-        // Two carrier types are used as complete members but never defined by any shipped
-        // header: Puv::SlicedLoader (only forward-declared) and IClientBlockData (a client-only
-        // class Block stores in a unique_ptr). ll::TypedStorage and unique_ptr destroy their
-        // payload, which needs a complete type; the storage supplies size and alignment, so
-        // empty definitions are enough for the shim to compile.
-        source.Add("namespace Puv {");
-        source.Add("template <typename T0, typename T1, typename T2, typename T3, typename T4>");
-        source.Add("class SlicedLoader {};");
-        source.Add("}");
-        source.Add("class IClientBlockData {};");
+        AddIncompleteCarrierTypes(source, surface);
         source.Add("");
         source.Add("namespace {");
         source.Add("");
@@ -3327,17 +3341,7 @@ internal static partial class ShimEmitter
             }
         }
 
-        source.Add("");
-        // Two carrier types are used as complete members but never defined by any shipped
-        // header: Puv::SlicedLoader (only forward-declared) and IClientBlockData (a client-only
-        // class Block stores in a unique_ptr). ll::TypedStorage and unique_ptr destroy their
-        // payload, which needs a complete type; the storage supplies size and alignment, so
-        // empty definitions are enough for the shim to compile.
-        source.Add("namespace Puv {");
-        source.Add("template <typename T0, typename T1, typename T2, typename T3, typename T4>");
-        source.Add("class SlicedLoader {};");
-        source.Add("}");
-        source.Add("class IClientBlockData {};");
+        AddIncompleteCarrierTypes(source, surface);
         source.Add("");
         source.Add("namespace {");
         source.Add("");
