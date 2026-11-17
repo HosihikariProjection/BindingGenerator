@@ -613,13 +613,6 @@ internal sealed class AbiPlan
         var allDeclarationsByQualifiedName = records.OfType<DeclarationRecord>()
             .GroupBy(declaration => declaration.QualifiedName, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
-        // A forward declaration carries a record too, but names no complete type. Enums are
-        // complete as soon as they are declared, so only class kinds have to be defined.
-        var definedDeclarationNames = records.OfType<DeclarationRecord>()
-            .Where(declaration => declaration.Defined
-                || declaration.Kind is "enum" or "enum-class" or "enum-struct")
-            .Select(declaration => declaration.QualifiedName)
-            .ToHashSet(StringComparer.Ordinal);
         var abstractDeclarationIds = records.OfType<MemberRecord>()
             .Where(member => member.Pure)
             .Select(member => member.DeclarationId)
@@ -992,16 +985,6 @@ internal sealed class AbiPlan
                 (member.Signature?.Canonical.StartsWith(declaration.QualifiedName + "<", StringComparison.Ordinal) ?? false)
                 || member.Id.Contains(declaration.QualifiedName + "<", StringComparison.Ordinal));
 
-        /// <summary>
-        /// True when a field stores a type by value that the surface does not declare. Such a
-        /// member makes the class destructor ill-formed: the member's own destructor needs the
-        /// complete type, and the header that only forward-declares it never supplies one.
-        /// A template name, a pointer, and an array are exempt: their completeness is decided
-        /// by their arguments or by the callee.
-        /// </summary>
-        bool HasUndeclaredStoredField(string canonical) =>
-            MentionsUndeclaredStoredType(canonical, definedDeclarationNames);
-
         bool CanDeleteImplicitDestructor(
             DeclarationRecord declaration,
             List<MemberRecord> declarationMembers,
@@ -1027,14 +1010,11 @@ internal sealed class AbiPlan
             }
 
             // An implicit destructor is instantiated at the delete site. Member smart pointers
-            // to incomplete implementation types make that instantiation ill-formed, and so
-            // does any other stored member whose type the surface never declares: the header
-            // only forward-declares it, and nothing in the translation unit completes it.
+            // to incomplete implementation types make that instantiation ill-formed.
             if (declarationMembers.Any(member =>
                     member.Kind == "field"
                     && member.Type is not null
-                    && (member.Type.Canonical.StartsWith("std::unique_ptr<", StringComparison.Ordinal)
-                        || HasUndeclaredStoredField(member.Type.Canonical))))
+                    && member.Type.Canonical.StartsWith("std::unique_ptr<", StringComparison.Ordinal)))
             {
                 return false;
             }
@@ -1246,17 +1226,6 @@ internal sealed class AbiPlan
                 {
                     reason = "the class has an abstract template argument";
                 }
-                else if (linkCarrier
-                    && declarationMembers.Any(member =>
-                        member.Kind == "field"
-                        && member.Type is not null
-                        && MentionsUndeclaredStoredType(member.Type.Canonical, definedDeclarationNames)))
-                {
-                    // The constructor instantiates every stored member's constructor, and a
-                    // member the surface never declares has none.
-                    reason = "a stored member type is not declared by the surface";
-                }
-
                 if (reason is not null)
                 {
                     skipReasons[constructor.Id] = reason;
@@ -3436,47 +3405,6 @@ internal sealed class AbiPlan
     /// never supplies one. A template name, a pointer, and an array are exempt: their
     /// completeness is decided by their arguments or by the callee.
     /// </summary>
-    private static bool MentionsUndeclaredStoredType(
-        string canonical,
-        IReadOnlySet<string> definedDeclarationNames)
-    {
-        foreach (var spelling in TypeMentions(canonical))
-        {
-            var leaf = spelling[(spelling.LastIndexOf(':') + 1)..];
-            if (leaf.Length == 0
-                // An array suffix and a function type are not the spelling of a stored
-                // record, and neither one asks for a complete named type.
-                || leaf.Contains('[', StringComparison.Ordinal)
-                || leaf.Contains('(', StringComparison.Ordinal))
-            {
-                continue;
-            }
-
-            var index = canonical.IndexOf(leaf, StringComparison.Ordinal);
-            if (index < 0)
-            {
-                continue;
-            }
-
-            var after = canonical[(index + leaf.Length)..].TrimStart();
-            if (after.StartsWith("<", StringComparison.Ordinal)
-                || after.StartsWith("*", StringComparison.Ordinal)
-                || after.StartsWith("[", StringComparison.Ordinal))
-            {
-                continue;
-            }
-
-            if (definedDeclarationNames.Contains(spelling))
-            {
-                continue;
-            }
-
-            return true;
-        }
-
-        return false;
-    }
-
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, string[]> SourceLineCache = new(StringComparer.OrdinalIgnoreCase);
     /// <summary>
     /// True when the header declares <paramref name="leafName"/> as a function-template
