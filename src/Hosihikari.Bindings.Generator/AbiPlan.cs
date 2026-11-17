@@ -7889,7 +7889,9 @@ internal sealed class AbiPlan
             return false;
         }
 
-        var bitfield = field.BitWidth is not null;
+        // The frontend writes bitWidth for every field, zero when it is not a bitfield, and a
+        // zero-width bitfield is unnamed padding. Only a positive width is a readable field.
+        var bitfield = field.BitWidth > 0;
 
         if (field.Static)
         {
