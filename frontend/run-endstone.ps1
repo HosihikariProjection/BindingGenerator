@@ -14,28 +14,9 @@ $EndstoneRoot = (Resolve-Path $EndstoneRoot).Path
 $Output = if ([System.IO.Path]::IsPathRooted($Output)) { $Output } else { Join-Path $GeneratorRoot $Output }
 $IncludeRoot = Join-Path $EndstoneRoot "include"
 
-$VersionFile = Join-Path $IncludeRoot "CMakeLists.txt"
-$Version = "0.12.0"
-if (Test-Path $VersionFile) {
-    $Match = Select-String -Path $VersionFile -Pattern 'project\s*\(\s*endstone\s+VERSION\s+([0-9]+\.[0-9]+\.[0-9]+)' | Select-Object -First 1
-    if ($Match) { $Version = $Match.Matches[0].Groups[1].Value }
-}
-
-$GeneratedRoot = Join-Path $GeneratorRoot "artifacts\endstone-generated\include"
-$GeneratedHeader = Join-Path $GeneratedRoot "endstone\version.h"
-New-Item -ItemType Directory -Force -Path (Split-Path $GeneratedHeader -Parent) | Out-Null
-$Parts = $Version.Split('.')
-$VersionHeader = @"
-#pragma once
-#define ENDSTONE_VERSION_MAJOR $($Parts[0])
-#define ENDSTONE_VERSION_MINOR $($Parts[1])
-#define ENDSTONE_VERSION_PATCH $($Parts[2])
-#define ENDSTONE_API_VERSION "$($Parts[0]).$($Parts[1])"
-#ifndef ENDSTONE_VERSION
-#define ENDSTONE_VERSION "$Version"
-#endif
-"@
-[System.IO.File]::WriteAllText($GeneratedHeader, $VersionHeader, (New-Object System.Text.UTF8Encoding($false)))
+# The header itself is written by write-endstone-version-header.ps1, which a build job that
+# starts from a committed surface can call on its own.
+& (Join-Path $PSScriptRoot "write-endstone-version-header.ps1") -EndstoneRoot $EndstoneRoot -GeneratorRoot $GeneratorRoot | Out-Null
 
 $ExpectedLite = Get-ChildItem "$env:LOCALAPPDATA\.xmake\packages\e\expected-lite" -Recurse -Filter expected.hpp -ErrorAction SilentlyContinue |
     Select-Object -First 1

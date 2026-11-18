@@ -76,6 +76,9 @@ internal static partial class ShimEmitter
                     surface,
                     manifestHash,
                     functions,
+                    plan.IncludesBySurface.TryGetValue(surface, out var includeFunctions)
+                        ? includeFunctions
+                        : functions,
                     declarations,
                     records,
                     plan.LinkCarrier,
@@ -143,6 +146,7 @@ internal static partial class ShimEmitter
         string surface,
         string manifestHash,
         IReadOnlyList<AbiFunction> functions,
+        IReadOnlyList<AbiFunction> includeFunctions,
         IReadOnlyDictionary<string, DeclarationRecord> declarations,
         IReadOnlyList<IrRecord> records,
         bool linkCarrier,
@@ -265,8 +269,7 @@ internal static partial class ShimEmitter
             // The generated bodies forward-declare what their storage uses, so a field's
             // own header has to precede the header that stores it; alphabetical order alone
             // leaves the destructor instantiated over an incomplete type.
-            var hsInc = System.Diagnostics.Stopwatch.StartNew();
-            var includes = BuildIncludes(functions, declarations).ToList();
+            var includes = BuildIncludes(includeFunctions, declarations).ToList();
             includes = HoistCompletionHeaders(includes, manifest, surface)
                 .Concat(includes)
                 .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -429,14 +432,14 @@ internal static partial class ShimEmitter
         source.Add("thread_local std::string g_stringResult;");
         source.Add("");
         source.Add("template <class T, class U>");
-        source.Add("std::vector<T> hs_make_vector(U const* data, std::size_t count)");
+        source.Add("[[maybe_unused]] std::vector<T> hs_make_vector(U const* data, std::size_t count)");
         source.Add("{");
         source.Add("    std::vector<T> result;");
         source.Add("    result.reserve(count);");
         source.Add("    for (std::size_t i = 0; i < count; ++i) { result.push_back(static_cast<T>(data[i])); }");
         source.Add("    return result;");
         source.Add("}");
-        source.Add("inline std::vector<std::string> hs_make_string_vector(HosihikariStringView const* data, std::size_t count)");
+        source.Add("[[maybe_unused]] inline std::vector<std::string> hs_make_string_vector(HosihikariStringView const* data, std::size_t count)");
         source.Add("{");
         source.Add("    std::vector<std::string> result;");
         source.Add("    result.reserve(count);");
@@ -448,7 +451,7 @@ internal static partial class ShimEmitter
         source.Add("    void operator()(void*) const noexcept {}");
         source.Add("};");
         source.Add("template <class T>");
-        source.Add("void const* hs_type_tag()");
+        source.Add("[[maybe_unused]] void const* hs_type_tag()");
         source.Add("{");
         source.Add("    static const int tag = 0;");
         source.Add("    return &tag;");
@@ -474,13 +477,13 @@ internal static partial class ShimEmitter
         source.Add("};");
         source.Add("");
         source.Add("template <class T>");
-        source.Add("void hs_release_shared_holder(void* holder)");
+        source.Add("[[maybe_unused]] void hs_release_shared_holder(void* holder)");
         source.Add("{");
         source.Add("    delete static_cast<hs_shared_holder<T>*>(holder);");
         source.Add("}");
         source.Add("");
         source.Add("template <class T>");
-        source.Add("HosihikariSharedHandle hs_make_shared_handle(std::shared_ptr<T> value)");
+        source.Add("[[maybe_unused]] HosihikariSharedHandle hs_make_shared_handle(std::shared_ptr<T> value)");
         source.Add("{");
         source.Add("    if (!value) { return HosihikariSharedHandle{nullptr, nullptr, nullptr}; }");
         source.Add("    auto* holder = new hs_shared_holder<T>(std::move(value));");
@@ -488,7 +491,7 @@ internal static partial class ShimEmitter
         source.Add("}");
         source.Add("");
         source.Add("template <class T>");
-        source.Add("HosihikariSharedHandle hs_make_non_owner_handle(std::shared_ptr<T> value)");
+        source.Add("[[maybe_unused]] HosihikariSharedHandle hs_make_non_owner_handle(std::shared_ptr<T> value)");
         source.Add("{");
         source.Add("    if (!value) { return HosihikariSharedHandle{nullptr, nullptr, nullptr}; }");
         source.Add("    void* target = *reinterpret_cast<void**>(value.get());");
@@ -497,7 +500,7 @@ internal static partial class ShimEmitter
         source.Add("}");
         source.Add("");
         source.Add("template <class T>");
-        source.Add("std::shared_ptr<T> hs_shared_from_handle(HosihikariSharedHandle handle)");
+        source.Add("[[maybe_unused]] std::shared_ptr<T> hs_shared_from_handle(HosihikariSharedHandle handle)");
         source.Add("{");
         source.Add("    if (handle.holder == nullptr) { return {}; }");
         source.Add("    auto* holder = static_cast<hs_shared_holder_base*>(handle.holder);");
@@ -511,7 +514,7 @@ internal static partial class ShimEmitter
         source.Add("}");
         source.Add("");
         source.Add("template <class T>");
-        source.Add("std::weak_ptr<T> hs_weak_from_handle(HosihikariSharedHandle handle)");
+        source.Add("[[maybe_unused]] std::weak_ptr<T> hs_weak_from_handle(HosihikariSharedHandle handle)");
         source.Add("{");
         source.Add("    return std::weak_ptr<T>(hs_shared_from_handle<T>(handle));");
         source.Add("}");
@@ -519,7 +522,7 @@ internal static partial class ShimEmitter
         // A Bedrock::NonOwnerPointer parameter is a non-owning view, so it is rebuilt from
         // the object's own control block rather than from the shared handle's.
         source.Add("template <class T>");
-        source.Add("Bedrock::NonOwnerPointer<T> hs_non_owner_from_handle(HosihikariSharedHandle handle)");
+        source.Add("[[maybe_unused]] Bedrock::NonOwnerPointer<T> hs_non_owner_from_handle(HosihikariSharedHandle handle)");
         source.Add("{");
         source.Add("    auto shared = hs_shared_from_handle<T>(handle);");
         source.Add("    auto* pointer = const_cast<T*>(shared.get());");
@@ -553,14 +556,14 @@ internal static partial class ShimEmitter
         source.Add("inline std::mutex hs_borrowedMutex;");
         source.Add("inline std::unordered_map<void*, hs_borrowed_entry> hs_borrowedRegistry;");
         source.Add("");
-        source.Add("inline void hs_register_borrowed(void* target, void* holder, void (*release)(void*))");
+        source.Add("[[maybe_unused]] inline void hs_register_borrowed(void* target, void* holder, void (*release)(void*))");
         source.Add("{");
         source.Add("    std::lock_guard<std::mutex> lock(hs_borrowedMutex);");
         source.Add("    hs_borrowedRegistry[target] = hs_borrowed_entry{holder, release};");
         source.Add("}");
         source.Add("");
         source.Add("template <class T>");
-        source.Add("void hs_destroy_borrowed_or_delete(void* target)");
+        source.Add("[[maybe_unused]] void hs_destroy_borrowed_or_delete(void* target)");
         source.Add("{");
         source.Add("    void* holder = nullptr;");
         source.Add("    void (*release)(void*) = nullptr;");
@@ -580,7 +583,7 @@ internal static partial class ShimEmitter
         source.Add("}");
         source.Add("");
         source.Add("template <class T>");
-        source.Add("std::vector<T> hs_make_record_vector(void const* const* data, std::size_t count)");
+        source.Add("[[maybe_unused]] std::vector<T> hs_make_record_vector(void const* const* data, std::size_t count)");
         source.Add("{");
         source.Add("    std::vector<T> result;");
         source.Add("    result.reserve(count);");
@@ -588,7 +591,7 @@ internal static partial class ShimEmitter
         source.Add("    return result;");
         source.Add("}");
         source.Add("template <class T>");
-        source.Add("std::vector<std::optional<T>> hs_make_optional_record_vector(void const* const* data, std::size_t count)");
+        source.Add("[[maybe_unused]] std::vector<std::optional<T>> hs_make_optional_record_vector(void const* const* data, std::size_t count)");
         source.Add("{");
         source.Add("    std::vector<std::optional<T>> result;");
         source.Add("    result.reserve(count);");
@@ -596,7 +599,7 @@ internal static partial class ShimEmitter
         source.Add("    return result;");
         source.Add("}");
         source.Add("template <class V>");
-        source.Add("std::vector<V> hs_make_variant_vector(void const* const* data, std::size_t count)");
+        source.Add("[[maybe_unused]] std::vector<V> hs_make_variant_vector(void const* const* data, std::size_t count)");
         source.Add("{");
         source.Add("    std::vector<V> result;");
         source.Add("    result.reserve(count);");
@@ -604,7 +607,7 @@ internal static partial class ShimEmitter
         source.Add("    return result;");
         source.Add("}");
         source.Add("");
-        source.Add("inline std::vector<std::basic_string_view<char>> hs_make_string_view_vector(HosihikariStringView const* data, std::size_t count)");
+        source.Add("[[maybe_unused]] inline std::vector<std::basic_string_view<char>> hs_make_string_view_vector(HosihikariStringView const* data, std::size_t count)");
         source.Add("{");
         source.Add("    std::vector<std::basic_string_view<char>> result;");
         source.Add("    result.reserve(count);");
@@ -617,13 +620,13 @@ internal static partial class ShimEmitter
         // keep a copy of that record rather than a control block. The shim only ever calls
         // `.get()`-less forms below; the pointee address is the record's own object.
         source.Add("template <class T>");
-        source.Add("void hs_release_game_ref_handle(void* holder)");
+        source.Add("[[maybe_unused]] void hs_release_game_ref_handle(void* holder)");
         source.Add("{");
         source.Add("    delete static_cast<T*>(holder);");
         source.Add("}");
         source.Add("");
         source.Add("template <class T>");
-        source.Add("HosihikariSharedHandle hs_make_game_ref_handle(T const& value)");
+        source.Add("[[maybe_unused]] HosihikariSharedHandle hs_make_game_ref_handle(T const& value)");
         source.Add("{");
         source.Add("    if (!static_cast<bool>(value)) { return HosihikariSharedHandle{nullptr, nullptr, nullptr}; }");
         source.Add("    auto* holder = new T(value);");
@@ -631,7 +634,7 @@ internal static partial class ShimEmitter
         source.Add("}");
         source.Add("");
         source.Add("template <class T>");
-        source.Add("T const& hs_game_ref_from_handle(HosihikariSharedHandle handle)");
+        source.Add("[[maybe_unused]] T const& hs_game_ref_from_handle(HosihikariSharedHandle handle)");
         source.Add("{");
         source.Add("    if (handle.holder == nullptr) { throw std::invalid_argument(\"empty game reference handle\"); }");
         source.Add("    return *static_cast<T const*>(handle.holder);");
@@ -1650,10 +1653,17 @@ internal static partial class ShimEmitter
 
             case AbiFunctionKind.EventId:
             {
-                yield return $"    ll::event::EventIdView const hs_id = ll::event::getEventId<{function.ClassCppName}>;";
+                // The id travels through the three out parameters, but the entry still
+                // returns a pointer: the table type is shared with the casters. The managed
+                // side ignores it, and without the statement the successful path would fall
+                // off a non-void function.
+                yield return function.EventIdUsesTypeName
+                    ? $"    ll::event::EventIdView const hs_id{{ll::reflection::type_unprefix_name_v<{function.ClassCppName}>}};"
+                    : $"    ll::event::EventIdView const hs_id = ll::event::getEventId<{function.ClassCppName}>;";
                 yield return "    *name_data = hs_id.name.data();";
                 yield return "    *name_size = hs_id.name.size();";
                 yield return "    *id_hash = hs_id.hash;";
+                yield return "    return nullptr;";
                 break;
             }
 
@@ -3482,21 +3492,21 @@ internal static partial class ShimEmitter
 
         source.Add("");
         source.Add("template <class T, class U>");
-        source.Add("std::vector<T> hs_make_vector(U const* data, std::size_t count)");
+        source.Add("[[maybe_unused]] std::vector<T> hs_make_vector(U const* data, std::size_t count)");
         source.Add("{");
         source.Add("    std::vector<T> result;");
         source.Add("    result.reserve(count);");
         source.Add("    for (std::size_t i = 0; i < count; ++i) { result.push_back(static_cast<T>(data[i])); }");
         source.Add("    return result;");
         source.Add("}");
-        source.Add("inline std::vector<std::basic_string<char>> hs_make_string_vector(HosihikariStringView const* data, std::size_t count)");
+        source.Add("[[maybe_unused]] inline std::vector<std::basic_string<char>> hs_make_string_vector(HosihikariStringView const* data, std::size_t count)");
         source.Add("{");
         source.Add("    std::vector<std::basic_string<char>> result;");
         source.Add("    result.reserve(count);");
         source.Add("    for (std::size_t i = 0; i < count; ++i) { result.emplace_back(data[i].data, data[i].size); }");
         source.Add("    return result;");
         source.Add("}");
-        source.Add("inline std::vector<std::basic_string_view<char>> hs_make_string_view_vector(HosihikariStringView const* data, std::size_t count)");
+        source.Add("[[maybe_unused]] inline std::vector<std::basic_string_view<char>> hs_make_string_view_vector(HosihikariStringView const* data, std::size_t count)");
         source.Add("{");
         source.Add("    std::vector<std::basic_string_view<char>> result;");
         source.Add("    result.reserve(count);");
@@ -3509,7 +3519,7 @@ internal static partial class ShimEmitter
         source.Add("    alignas(Align) unsigned char data[Size];");
         source.Add("};");
         source.Add("template <std::size_t Size, std::size_t Align>");
-        source.Add("std::vector<hs_blob<Size, Align>> hs_make_blob_vector(void* const* data, std::size_t count)");
+        source.Add("[[maybe_unused]] std::vector<hs_blob<Size, Align>> hs_make_blob_vector(void* const* data, std::size_t count)");
         source.Add("{");
         source.Add("    std::vector<hs_blob<Size, Align>> result;");
         source.Add("    result.reserve(count);");
@@ -3526,7 +3536,7 @@ internal static partial class ShimEmitter
         source.Add("    void operator()(void*) const noexcept {}");
         source.Add("};");
         source.Add("template <class T>");
-        source.Add("void const* hs_type_tag()");
+        source.Add("[[maybe_unused]] void const* hs_type_tag()");
         source.Add("{");
         source.Add("    static const int tag = 0;");
         source.Add("    return &tag;");
@@ -3552,13 +3562,13 @@ internal static partial class ShimEmitter
         source.Add("};");
         source.Add("");
         source.Add("template <class T>");
-        source.Add("void hs_release_shared_holder(void* holder)");
+        source.Add("[[maybe_unused]] void hs_release_shared_holder(void* holder)");
         source.Add("{");
         source.Add("    delete static_cast<hs_shared_holder<T>*>(holder);");
         source.Add("}");
         source.Add("");
         source.Add("template <class T>");
-        source.Add("HosihikariSharedHandle hs_make_shared_handle(std::shared_ptr<T> value)");
+        source.Add("[[maybe_unused]] HosihikariSharedHandle hs_make_shared_handle(std::shared_ptr<T> value)");
         source.Add("{");
         source.Add("    if (!value) { return HosihikariSharedHandle{nullptr, nullptr, nullptr}; }");
         source.Add("    auto* holder = new hs_shared_holder<T>(std::move(value));");
@@ -3566,7 +3576,7 @@ internal static partial class ShimEmitter
         source.Add("}");
         source.Add("");
         source.Add("template <class T>");
-        source.Add("HosihikariSharedHandle hs_make_non_owner_handle(std::shared_ptr<T> value)");
+        source.Add("[[maybe_unused]] HosihikariSharedHandle hs_make_non_owner_handle(std::shared_ptr<T> value)");
         source.Add("{");
         source.Add("    if (!value) { return HosihikariSharedHandle{nullptr, nullptr, nullptr}; }");
         source.Add("    void* target = *reinterpret_cast<void**>(value.get());");
@@ -3575,7 +3585,7 @@ internal static partial class ShimEmitter
         source.Add("}");
         source.Add("");
         source.Add("template <class T>");
-        source.Add("std::shared_ptr<T> hs_shared_from_handle(HosihikariSharedHandle handle)");
+        source.Add("[[maybe_unused]] std::shared_ptr<T> hs_shared_from_handle(HosihikariSharedHandle handle)");
         source.Add("{");
         source.Add("    if (handle.holder == nullptr) { return {}; }");
         source.Add("    auto* holder = static_cast<hs_shared_holder_base*>(handle.holder);");
@@ -3590,20 +3600,20 @@ internal static partial class ShimEmitter
         source.Add("}");
         source.Add("");
         source.Add("template <class T>");
-        source.Add("std::weak_ptr<T> hs_weak_from_handle(HosihikariSharedHandle handle)");
+        source.Add("[[maybe_unused]] std::weak_ptr<T> hs_weak_from_handle(HosihikariSharedHandle handle)");
         source.Add("{");
         source.Add("    return std::weak_ptr<T>(hs_shared_from_handle<T>(handle));");
         source.Add("}");
         source.Add("");
 
         source.Add("template <class T>");
-        source.Add("void hs_release_game_ref_handle(void* holder)");
+        source.Add("[[maybe_unused]] void hs_release_game_ref_handle(void* holder)");
         source.Add("{");
         source.Add("    delete static_cast<T*>(holder);");
         source.Add("}");
         source.Add("");
         source.Add("template <class T>");
-        source.Add("HosihikariSharedHandle hs_make_game_ref_handle(T const& value)");
+        source.Add("[[maybe_unused]] HosihikariSharedHandle hs_make_game_ref_handle(T const& value)");
         source.Add("{");
         source.Add("    if (!static_cast<bool>(value)) { return HosihikariSharedHandle{nullptr, nullptr, nullptr}; }");
         source.Add("    auto* holder = new T(value);");
@@ -3611,7 +3621,7 @@ internal static partial class ShimEmitter
         source.Add("}");
         source.Add("");
         source.Add("template <class T>");
-        source.Add("T const& hs_game_ref_from_handle(HosihikariSharedHandle handle)");
+        source.Add("[[maybe_unused]] T const& hs_game_ref_from_handle(HosihikariSharedHandle handle)");
         source.Add("{");
         source.Add("    if (handle.holder == nullptr) { throw std::invalid_argument(\"empty game reference handle\"); }");
         source.Add("    return *static_cast<T const*>(handle.holder);");

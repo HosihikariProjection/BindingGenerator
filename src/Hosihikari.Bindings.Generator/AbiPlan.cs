@@ -412,6 +412,12 @@ internal sealed class AbiFunction
     /// an rvalue even though the wrapper keeps calling the same object.
     /// </summary>
     public bool RvalueQualified { get; init; }
+
+    /// <summary>
+    /// An event id taken from the type name rather than <c>getEventId&lt;T&gt;</c>, which
+    /// static-asserts that the type is final. Only an abstract event base lands here.
+    /// </summary>
+    public bool EventIdUsesTypeName { get; init; }
     public VariantAbiInfo? VariantInfo { get; init; }
     public VariantOp VariantOp { get; init; }
     public VariantAlternative? VariantAlternative { get; init; }
@@ -492,6 +498,7 @@ internal sealed class AbiPlan
 
     private AbiPlan(
         IReadOnlyList<AbiFunction> functions,
+        IReadOnlyDictionary<string, IReadOnlyList<AbiFunction>> includesBySurface,
         IReadOnlyDictionary<string, DeclarationName> declarationNames,
         bool linkCarrier,
         bool llAllocator,
@@ -504,6 +511,7 @@ internal sealed class AbiPlan
         IReadOnlyList<AbiFunctionStub> functionStubs)
     {
         Functions = functions;
+        IncludesBySurface = includesBySurface;
         FunctionStubs = functionStubs;
         SyntheticMembers = syntheticMembers;
         DeclarationNames = declarationNames;
@@ -553,6 +561,14 @@ internal sealed class AbiPlan
     }
 
     public IReadOnlyList<AbiFunction> Functions { get; }
+
+    /// <summary>
+    /// The functions a surface's include set is derived from: everything the plan built,
+    /// including the entries filtered out of <see cref="Functions"/>. An exclusion must not
+    /// remove the header it named, because carrier headers complete types only through their
+    /// own inclusion order.
+    /// </summary>
+    public IReadOnlyDictionary<string, IReadOnlyList<AbiFunction>> IncludesBySurface { get; }
     public IReadOnlyList<AbiFunctionStub> FunctionStubs { get; }
     public IReadOnlyDictionary<string, DeclarationName> DeclarationNames { get; }
     public bool LinkCarrier { get; }
@@ -576,7 +592,7 @@ internal sealed class AbiPlan
     /// <summary>Companion setters for members that return a mutable string reference.</summary>
     public IReadOnlyList<AbiFunction> StringSetters { get; }
 
-    public static AbiPlan Empty { get; } = new([], new Dictionary<string, DeclarationName>(StringComparer.Ordinal), false, false, false, false, new Dictionary<string, string>(StringComparer.Ordinal), new Dictionary<string, IReadOnlyList<MemberRecord>>(StringComparer.Ordinal), [], [], []);
+    public static AbiPlan Empty { get; } = new([], new Dictionary<string, IReadOnlyList<AbiFunction>>(StringComparer.Ordinal), new Dictionary<string, DeclarationName>(StringComparer.Ordinal), false, false, false, false, new Dictionary<string, string>(StringComparer.Ordinal), new Dictionary<string, IReadOnlyList<MemberRecord>>(StringComparer.Ordinal), [], [], []);
 
     public IEnumerable<AbiFunction> FunctionsForSurface(string surface) =>
         Functions.Where(function => string.Equals(function.Surface, surface, StringComparison.Ordinal));
@@ -611,8 +627,7 @@ internal sealed class AbiPlan
             .GroupBy(declaration => declaration.QualifiedName, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
         var allDeclarationsByQualifiedName = records.OfType<DeclarationRecord>()
-            .GroupBy(declaration => declaration.QualifiedName, StringComparer.Ordinal)
-            .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
+            .GroupBy(declaration => declaration.QualifiedName, StringComparer.Ordinal)            .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
         var abstractDeclarationIds = records.OfType<MemberRecord>()
             .Where(member => member.Pure)
             .Select(member => member.DeclarationId)
@@ -1718,15 +1733,17 @@ internal sealed class AbiPlan
         {
             if (declaration.Surface != "levilamina"
                 || declaration.Template is not null
-                || declaration.Abstract
-                // ll::event::getEventId<T> is a static assertion away from rejecting a
-                // non-final type, and an event with subclasses cannot carry a stable id.
-                || !declaration.Attributes.Any(attribute =>
-                    string.Equals(attribute.Name, "final", StringComparison.Ordinal))
                 || !declarationNames.ContainsKey(declaration.Id))
             {
                 continue;
             }
+
+            // A final type goes through getEventId<T>, which is what the carrier itself
+            // uses. getEventId<T> static-asserts finality, so an abstract base (an interceptor
+            // takes its id through the base) falls back to the same type-name constant the
+            // macro would produce, without instantiating the template.
+            var isFinal = declaration.Attributes.Any(attribute =>
+                string.Equals(attribute.Name, "final", StringComparison.Ordinal));
 
             var isEvent = false;
             var pending = new Queue<string>([declaration.Id]);
@@ -1776,6 +1793,8 @@ internal sealed class AbiPlan
                 NativeReturnType = "ll::event::EventIdView",
                 Parameters = [],
                 Static = true,
+                // getEventId<T> only compiles for a final type.
+                EventIdUsesTypeName = !isFinal,
             });
             eventDeclarationIds.Add(declaration.Id);
         }
@@ -2418,6 +2437,15 @@ internal sealed class AbiPlan
                 .ThenBy(function => function.CppName, StringComparer.Ordinal))
             .ToList();
 
+        // The include set is taken from the unfiltered list. A carrier header often completes
+        // a type only implicitly, by being included before the next header uses it; dropping
+        // an entry must not drop its header, or unrelated members fail with an incomplete
+        // type on the next compile - which is exactly what happened when an entry exclusion
+        // first removed its own include.
+        var includeSources = functions
+            .GroupBy(function => function.Surface, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => (IReadOnlyList<AbiFunction>)group.ToList(), StringComparer.Ordinal);
+
         var indexBySurface = new Dictionary<string, int>(StringComparer.Ordinal);
         foreach (var function in ordered)
         {
@@ -2428,6 +2456,7 @@ internal sealed class AbiPlan
 
         return new AbiPlan(
             ordered,
+            includeSources,
             declarationNames,
             linkCarrier,
             llAllocator,
@@ -3386,6 +3415,46 @@ internal sealed class AbiPlan
         // whose copy constructor the carrier's header declares deleted.
         ["hs_function_19ede451"] = "the vector element type is not copy constructible",
         ["hs_method_a2a26752"] = "the vector element type is not copy constructible",
+        // DeserializationChanges, SoundEvent, RootedDirtBlock and SoulTorchBlock: the header
+        // only forward-declares HeightDifference / SoundItem / RopeWave, and no shipped header
+        // defines them, so a stored vector or unique_ptr cannot be destroyed or copied.
+        ["hs_destroy_0acb428d"] = "the stored vector's element type is only forward-declared",
+        ["hs_method_40facad0"] = "the stored vector's element type is only forward-declared",
+        ["hs_destroy_981d74dc"] = "the stored vector's element type is only forward-declared",
+        ["hs_create_dc1e4f71"] = "the stored vector's element type is only forward-declared",
+        ["hs_destroy_6fe7d487"] = "the stored pointer's payload type is only forward-declared",
+        ["hs_method_87eebb39"] = "the stored pointer's payload type is only forward-declared",
+        // RopeSystem and RootedDirtBlock store a RopeWave the header only forward-declares.
+        ["hs_destroy_0be746cb"] = "the stored vector's element type is only forward-declared",
+        ["hs_method_a31fb5c4"] = "the stored vector's element type is only forward-declared",
+        // SubtractiveLightInfo: the unnamed union member is stored in a TypedStorage, so the
+        // implicit destructor is deleted.
+        ["hs_destroy_0d320c3c"] = "the destructor is deleted by the anonymous union member",
+        // LevelChunkEventManagerProxy::$setupRedstoneCircuit: the header's LevelChunkFinalDeleter
+        // is an empty struct, so unique_ptr<LevelChunk, LevelChunkFinalDeleter> has no deleter.
+        ["hs_method_e0d7016b"] = "the unique_ptr deleter has no call operator",
+        ["hs_method_64208135"] = "the unique_ptr deleter has no call operator",
+        // br::worldgen::StructureProcessor::bootstrap: deletes a record the header only
+        // forward-declares.
+        ["hs_method_d10e63cb"] = "can't delete an incomplete type",
+        // CommutativeGroup over a record element: the constrained overloads only accept a
+        // plain arithmetic element, and the record instantiation converts nothing.
+        ["hs_method_098b2869"] = "the constrained arithmetic overload does not accept a record element",
+        ["hs_method_116e6c8b"] = "the constrained arithmetic overload does not accept a record element",
+        ["hs_method_3cbd3b20"] = "the constrained arithmetic overload does not accept a record element",
+        ["hs_method_b6cf728c"] = "the constrained arithmetic overload does not accept a record element",
+        ["hs_method_2b0711b0"] = "the constrained arithmetic overload does not accept a record element",
+        ["hs_method_86346342"] = "the constrained arithmetic overload does not accept a record element",
+        ["hs_method_36e5525b"] = "the constrained arithmetic overload does not accept a record element",
+        ["hs_method_869bba2d"] = "the constrained arithmetic overload does not accept a record element",
+        // The TypedStorage copy constructor copies its payload, and the record the map stores
+        // has no usable copy constructor.
+        ["hs_destroy_2d080348"] = "the stored map's value type is not copy constructible",
+        ["hs_method_025267ac"] = "the vector element type is not copy constructible",
+        ["hs_method_1b0f2dac"] = "the vector element type is not copy constructible",
+        ["hs_method_341b5ec5"] = "the stored map's value type is not copy constructible",
+        ["hs_method_b2884b22"] = "the stored map's value type is not copy constructible",
+        ["hs_method_b98ba2b2"] = "the stored map's value type is not copy constructible",
         // Bedrock::UniqueOwnerPointer<ParticleProvider>::reset: the payload's destructor needs
         // a type its header only forward-declares.
         ["hs_method_c5192137"] = "the owner pointer's payload type is not complete",
@@ -3394,10 +3463,88 @@ internal sealed class AbiPlan
         ["hs_method_879c12e2"] = "the map value type is not copy constructible",
         // PackManifest::setPackSettingsDef: a variant vector alternative is not copyable.
         ["hs_method_6e3d5fa8"] = "a variant alternative is not copy constructible",
+        // The same defects as above, reached through sibling members of the same classes.
+        ["hs_method_12743457"] = "the unique_ptr deleter has no call operator",
+        ["hs_method_e9a89e49"] = "can't delete an incomplete type",
+        ["hs_method_61e49ed7"] = "can't delete an incomplete type",
+        ["hs_method_19bb8108"] = "the stored vector's element type is not copy constructible",
+        ["hs_create_9ae164a5"] = "the vector element type is not copy constructible",
+        ["hs_method_6493db4c"] = "the stored map's value type is not copy constructible",
+        ["hs_method_5122b786"] = "the stored map's value type is not copy constructible",
+        ["hs_method_2c980e0c"] = "the stored map's value type is not copy constructible",
+        ["hs_method_317b453a"] = "the unique_ptr deleter has no call operator",
+        ["hs_method_dfe78bc6"] = "can't delete an incomplete type",
+        ["hs_method_953d6b8c"] = "the stored map's value type is not copy constructible",
+        ["hs_method_9947a58a"] = "the stored vector's element type is not copy constructible",
+        ["hs_method_45f97df1"] = "the stored map's value type is not copy constructible",
+        ["hs_method_40eb2c23"] = "the stored map's value type is not copy constructible",
+        ["hs_method_b09a4140"] = "the stored map's value type is not copy constructible",
+        ["hs_method_1d4dc3af"] = "the unique_ptr deleter has no call operator",
+        ["hs_method_e795a398"] = "can't delete an incomplete type",
+        ["hs_create_4cfb3a31"] = "the stored vector's element type is not copy constructible",
+        ["hs_method_5e3a3b82"] = "the stored vector's element type is only forward-declared",
+        ["hs_method_028c0292"] = "the stored map's value type is not copy constructible",
+        ["hs_method_58c00146"] = "the stored map's value type is not copy constructible",
+        ["hs_method_2dd85a70"] = "the stored map's value type is not copy constructible",
+        ["hs_function_b2af57d6"] = "the unique_ptr deleter has no call operator",
+        ["hs_method_4e42c5e9"] = "can't delete an incomplete type",
+        ["hs_method_4722eb2a"] = "the stored vector's element type is not copy constructible",
+        ["hs_method_a8e5db86"] = "the stored vector's element type is not copy constructible",
+        ["hs_create_2461c327"] = "the stored vector's element type is only forward-declared",
+        ["hs_method_33426373"] = "the stored map's value type is not copy constructible",
+        ["hs_method_38ccb587"] = "the unique_ptr deleter has no call operator",
+        ["hs_method_2afb8214"] = "the stored vector's element type is not copy constructible",
+        ["hs_method_92fe1d3c"] = "the stored map's value type is not copy constructible",
+    };
+
+    /// <summary>
+    /// Classes whose every projected member fails for one and the same reason. Adding them
+    /// whole beats re-deriving a hash per sibling member on each compile round: these four
+    /// store something the carrier never completes (an empty deleter struct, a forward
+    /// declaration, a deleted copy constructor), so member after member fails the same way.
+    /// </summary>
+    private static readonly Dictionary<string, string> UnprojectableClasses = new(StringComparer.Ordinal)
+    {
+        ["LevelChunkEventManagerProxy"] = "the unique_ptr deleter has no call operator",
+        ["br::worldgen::StructureProcessor"] = "can't delete an incomplete type",
+        ["BlockDescriptor"] = "the stored vector's element type is not copy constructible",
+        ["JigsawStructureParser"] = "the stored vector's element type is only forward-declared",
+        // Each map instantiation is its own class, and every accessor of it copies the map.
+        ["ll::TypedStorageImpl<8ULL, 64ULL, std::unordered_map<std::basic_string<char>, ActorDefinitionEvent>>"] =
+            "the stored map's value type is not copy constructible",
+        ["ll::TypedStorageImpl<8ULL, 64ULL, std::unordered_map<std::basic_string<char>, DynamicPropertyDefinition>>"] =
+            "the stored map's value type is not copy constructible",
+        ["ll::TypedStorageImpl<8ULL, 64ULL, std::unordered_map<std::basic_string<char>, SharedTypes::v1_26_20::BlockDefinition::DeprecatedDefinitionEvent>>"] =
+            "the stored map's value type is not copy constructible",
+        // The same four defects again, on the neighbouring class of each.
+        ["LevelChunkEventManager"] = "the unique_ptr deleter has no call operator",
+        ["br::worldgen::StructurePools"] = "can't delete an incomplete type",
+        ["BlockDescriptorSerializer::BlockDescriptorProxy"] = "the stored vector's element type is not copy constructible",
+        ["Editor::API::EditorServerBindingsModuleFactory"] = "the stored vector's element type is only forward-declared",
+        ["ll::TypedStorageImpl<8ULL, 64ULL, std::unordered_map<std::basic_string<char>, ScriptPackConfiguration>>"] =
+            "the stored map's value type is not copy constructible",
+        ["ll::TypedStorageImpl<8ULL, 64ULL, std::unordered_map<SharedTypes::v1_21_20::FilterCollectionGroup, SharedTypes::v1_21_20::FilterGroupData>>"] =
+            "the stored map's value type is not copy constructible",
+        ["LevelChunkConstants"] = "the unique_ptr deleter has no call operator",
+        ["ll::TypedStorageImpl<8ULL, 64ULL, std::unordered_map<std::basic_string<char>, ScriptModuleMinecraft::CustomCommandRegistry::PendingRegistrations>>"] =
+            "the stored map's value type is not copy constructible",
+        // Confirmed by the compiler on the round that removed the above.
+        ["br::worldgen::StructureHeightProvider"] = "can't delete an incomplete type",
+        ["dcsctp::TraditionalReassemblyStreams"] = "the stored vector's element type is only forward-declared",
+        ["BlockComponentFactory"] = "the stored vector's element type is not copy constructible",
+        ["LevelChunkBuilderData"] = "the unique_ptr deleter has no call operator",
+        ["br::worldgen::StructureCache"] = "can't delete an incomplete type",
+        ["Bedrock::UniqueOwnerPointer<PlayerTickManager>"] = "the payload type is not complete",
+        ["dcsctp::InterleavedReassemblyStreams"] = "the stored vector's element type is only forward-declared",
+        ["ll::TypedStorageImpl<8ULL, 64ULL, std::unordered_map<std::basic_string<char>, PackSettingValueAndDefault>>"] =
+            "the stored map's value type is not copy constructible",
+        ["BlockDefinitionGroup"] = "the stored vector's element type is not copy constructible",
+        ["DebuggerStatCollector"] = "the stored vector's element type is not copy constructible",
     };
 
     private static bool IsUnprojectable(AbiFunction function) =>
-        UnprojectableShimEntries.ContainsKey(function.CppName);
+        UnprojectableShimEntries.ContainsKey(function.CppName)
+        || UnprojectableClasses.ContainsKey(function.ClassCppName);
 
     /// <summary>
     /// True when a field stores a type by value that the surface does not declare. Such a
