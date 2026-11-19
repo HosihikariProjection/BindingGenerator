@@ -519,27 +519,31 @@ internal static partial class ShimEmitter
         source.Add("    return std::weak_ptr<T>(hs_shared_from_handle<T>(handle));");
         source.Add("}");
         source.Add("");
-        // A Bedrock::NonOwnerPointer parameter is a non-owning view, so it is rebuilt from
-        // the object's own control block rather than from the shared handle's.
-        source.Add("template <class T>");
-        source.Add("[[maybe_unused]] Bedrock::NonOwnerPointer<T> hs_non_owner_from_handle(HosihikariSharedHandle handle)");
-        source.Add("{");
-        source.Add("    auto shared = hs_shared_from_handle<T>(handle);");
-        source.Add("    auto* pointer = const_cast<T*>(shared.get());");
-        source.Add("    if (pointer == nullptr) { return Bedrock::NonOwnerPointer<T>{}; }");
-        // The carrier's converting constructor reaches the control block through
-        // EnableNonOwnerReferences. A merge-dropped base leaves the type without one, and an
-        // empty non-owner pointer is the only thing that can stand for it.
-        source.Add("    if constexpr (requires { static_cast<Bedrock::EnableNonOwnerReferences const&>(*pointer); })");
-        source.Add("    {");
-        source.Add("        return Bedrock::NonOwnerPointer<T>(*pointer);");
-        source.Add("    }");
-        source.Add("    else");
-        source.Add("    {");
-        source.Add("        return Bedrock::NonOwnerPointer<T>{};");
-        source.Add("    }");
-        source.Add("}");
-        source.Add("");
+        if (!string.Equals(surface, "endstone", StringComparison.Ordinal))
+        {
+            // A Bedrock::NonOwnerPointer parameter is a non-owning view, so it is rebuilt from
+            // the object's own control block rather than from the shared handle's. The
+            // Endstone surface never names the type: its headers carry no Bedrock namespace.
+            source.Add("template <class T>");
+            source.Add("[[maybe_unused]] Bedrock::NonOwnerPointer<T> hs_non_owner_from_handle(HosihikariSharedHandle handle)");
+            source.Add("{");
+            source.Add("    auto shared = hs_shared_from_handle<T>(handle);");
+            source.Add("    auto* pointer = const_cast<T*>(shared.get());");
+            source.Add("    if (pointer == nullptr) { return Bedrock::NonOwnerPointer<T>{}; }");
+            // The carrier's converting constructor reaches the control block through
+            // EnableNonOwnerReferences. A merge-dropped base leaves the type without one, and
+            // an empty non-owner pointer is the only thing that can stand for it.
+            source.Add("    if constexpr (requires { static_cast<Bedrock::EnableNonOwnerReferences const&>(*pointer); })");
+            source.Add("    {");
+            source.Add("        return Bedrock::NonOwnerPointer<T>(*pointer);");
+            source.Add("    }");
+            source.Add("    else");
+            source.Add("    {");
+            source.Add("        return Bedrock::NonOwnerPointer<T>{};");
+            source.Add("    }");
+            source.Add("}");
+            source.Add("");
+        }
         source.Add("template <class T>");
         source.Add("struct hs_borrowed_holder");
         source.Add("{");
