@@ -1,5 +1,5 @@
-using Hosihikari.Bindings.Generator;
-using Hosihikari.Bindings.Ir;
+using Hosihikari.Binding.Generator;
+using Hosihikari.Binding.Ir;
 
 if (args.Length == 0 || args[0] is "-h" or "--help" or "help")
 {
@@ -10,7 +10,7 @@ if (args.Length == 0 || args[0] is "-h" or "--help" or "help")
 switch (args[0])
 {
     case "version":
-        Console.WriteLine($"Hosihikari.Bindings.Generator 0.3.0 (IR {IrSchema.Version})");
+        Console.WriteLine($"Hosihikari.Binding.Generator 0.3.0 (IR {IrSchema.Version})");
         return 0;
 
     case "validate-ir":
@@ -421,7 +421,7 @@ static void PrintHelp()
 {
     Console.WriteLine(
         """
-        Hosihikari.Bindings.Generator
+        Hosihikari.Binding.Generator
 
         Commands:
           version

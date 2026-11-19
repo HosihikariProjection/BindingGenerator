@@ -1,7 +1,7 @@
 using System.Text;
-using Hosihikari.Bindings.Ir;
+using Hosihikari.Binding.Ir;
 
-namespace Hosihikari.Bindings.Generator;
+namespace Hosihikari.Binding.Generator;
 
 internal static class CoverageEmitter
 {

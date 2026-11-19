@@ -46,7 +46,7 @@ if (-not (Test-Path (Join-Path $HostNative "hostfxr.h"))) { throw "hostfxr heade
 
 Push-Location $RepoRoot
 try {
-    dotnet run --project (Join-Path $RepoRoot "src\Hosihikari.Bindings.Generator\Hosihikari.Bindings.Generator.csproj") -c Release -- `
+    dotnet run --project (Join-Path $RepoRoot "src\Hosihikari.Binding.Generator\Hosihikari.Binding.Generator.csproj") -c Release -- `
         emit $IrManifest $IrDirectory $Output `
         --abi-header $AbiHeader `
         --symbol-dispatch --target-module bedrock_server_mod.exe

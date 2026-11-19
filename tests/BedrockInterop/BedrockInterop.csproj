@@ -4,13 +4,13 @@
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
-    <AssemblyName>Hosihikari.Bindings.Bedrock.Interop</AssemblyName>
+    <AssemblyName>Hosihikari.Binding.Bedrock.Interop</AssemblyName>
     <InteropDirectory Condition="'$(InteropDirectory)' == ''">$(MSBuildThisFileDirectory)..\..\artifacts\t26\sym-emitted2\interop\bedrock</InteropDirectory>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="$(InteropDirectory)/**/*.cs" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="../../../Binding.Abi/src/Hosihikari.Bindings.Abi/Hosihikari.Bindings.Abi.csproj" />
+    <ProjectReference Include="../../../Binding.Abi/src/Hosihikari.Binding.Abi/Hosihikari.Binding.Abi.csproj" />
   </ItemGroup>
 </Project>

@@ -24,7 +24,7 @@ The script builds `hosihikari-symbol-ir-frontend` and writes a single prototype 
 
 ```powershell
 ./frontend/run-symbols.ps1 -Pdb <pdb> -Exe <pe> -Elf <debug> -IrOutput artifacts/symbol-ir/ir -NoPrototype
-dotnet run --project ../src/Hosihikari.Bindings.Generator/Hosihikari.Bindings.Generator.csproj -c Release -- validate-ir artifacts/symbol-ir/ir/ir-manifest.json artifacts/symbol-ir/ir
+dotnet run --project ../src/Hosihikari.Binding.Generator/Hosihikari.Binding.Generator.csproj -c Release -- validate-ir artifacts/symbol-ir/ir/ir-manifest.json artifacts/symbol-ir/ir
 ```
 
 ## What the symbols provide
@@ -108,7 +108,7 @@ For the 1.21.3 slice, `Actor` gets size 1096, base `ActorStatusProvider`, and it
 
 ```powershell
 ./frontend/run-symbols.ps1 -Pdb <pdb> -Exe <exe> -Elf <debug> -IrOutput artifacts/symbol-ir/ir -NoPrototype
-dotnet run --project ../src/Hosihikari.Bindings.Generator/Hosihikari.Bindings.Generator.csproj -c Release -- `
+dotnet run --project ../src/Hosihikari.Binding.Generator/Hosihikari.Binding.Generator.csproj -c Release -- `
   emit artifacts/symbol-ir/ir/ir-manifest.json artifacts/symbol-ir/ir artifacts/symbol-dispatch `
   --abi-header ../../Binding.Abi/native/hosihikari_abi.h `
   --symbol-dispatch --target-module bedrock_server

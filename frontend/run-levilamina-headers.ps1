@@ -277,4 +277,4 @@ if ($LASTEXITCODE -ne 0) {
     throw "IR frontend exited with $LASTEXITCODE"
 }
 
-dotnet run --project (Join-Path $RepoRoot "src\Hosihikari.Bindings.Generator\Hosihikari.Bindings.Generator.csproj") -c Release -- validate-ir "$Output/ir-manifest.json" "$Output"
+dotnet run --project (Join-Path $RepoRoot "src\Hosihikari.Binding.Generator\Hosihikari.Binding.Generator.csproj") -c Release -- validate-ir "$Output/ir-manifest.json" "$Output"

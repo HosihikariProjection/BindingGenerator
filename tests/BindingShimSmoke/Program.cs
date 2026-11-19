@@ -1,8 +1,8 @@
 using System.Text;
-using Hosihikari.Bindings.LeviLamina.Interop;
-using Hosihikari.Bindings.LeviLamina.Interop.ll.@event;
-using Hosihikari.Bindings.LeviLamina.Interop.ll.hash_utils;
-using LlVersion = Hosihikari.Bindings.LeviLamina.Interop.ll.data.Version;
+using Hosihikari.Binding.LeviLamina.Interop;
+using Hosihikari.Binding.LeviLamina.Interop.ll.@event;
+using Hosihikari.Binding.LeviLamina.Interop.ll.hash_utils;
+using LlVersion = Hosihikari.Binding.LeviLamina.Interop.ll.data.Version;
 
 if (args.Length != 1)
 {

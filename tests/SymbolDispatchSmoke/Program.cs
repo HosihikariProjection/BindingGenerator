@@ -1,5 +1,5 @@
 using System.Runtime.InteropServices;
-using Hosihikari.Bindings.Bedrock.Interop;
+using Hosihikari.Binding.Bedrock.Interop;
 
 if (args.Length != 2)
 {
@@ -126,7 +126,7 @@ void CheckReferenceWrapper(string name, int value, int expected)
         return;
     }
 
-    using var handle = (global::Hosihikari.Bindings.Abi.SharedHandle?)method.Invoke(block, [value]);
+    using var handle = (global::Hosihikari.Binding.Abi.SharedHandle?)method.Invoke(block, [value]);
     if (handle is null || handle.Target == 0 || block.sharedValue(handle) != expected)
     {
         throw new InvalidOperationException($"The {name} result is incorrect.");

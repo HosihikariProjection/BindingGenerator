@@ -1,6 +1,6 @@
-using Hosihikari.Bindings.Ir;
+using Hosihikari.Binding.Ir;
 
-namespace Hosihikari.Bindings.Generator;
+namespace Hosihikari.Binding.Generator;
 
 internal readonly record struct DeclarationName(string NamespaceName, string NamespacePath, string ClassName);
 
@@ -89,7 +89,7 @@ internal static class CSharpNaming
             segments.Add(segment);
         }
 
-        var baseName = $"Hosihikari.Bindings.{TypeNames.SurfaceNamespace(declaration.Surface)}.Interop";
+        var baseName = $"Hosihikari.Binding.{TypeNames.SurfaceNamespace(declaration.Surface)}.Interop";
         var namespaceName = segments.Count == 0 ? baseName : baseName + "." + string.Join(".", segments);
         return (namespaceName, string.Join(".", segments));
     }

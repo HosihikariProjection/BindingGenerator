@@ -1,8 +1,8 @@
 using System.Globalization;
 using System.Numerics;
-using Hosihikari.Bindings.Ir;
+using Hosihikari.Binding.Ir;
 
-namespace Hosihikari.Bindings.Generator;
+namespace Hosihikari.Binding.Generator;
 
 // A static constexpr field carries its value; the projection is a C# constant and needs
 // no carrier symbol. Only plain integer spellings qualify: enum-typed constants keep the

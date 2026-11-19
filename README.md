@@ -1,4 +1,4 @@
-# Hosihikari.Bindings.Generator
+# Hosihikari.Binding.Generator
 
 [English](README.md) | [简体中文](README.zh_hans.md)
 
@@ -15,7 +15,7 @@ The generator turns the versioned IR into the C ABI **binding shim** and the nat
 
 | Path | Purpose |
 |---|---|
-| `src/Hosihikari.Bindings.Generator` | .NET CLI: version, IR validation, coverage validation |
+| `src/Hosihikari.Binding.Generator` | .NET CLI: version, IR validation, coverage validation |
 | `frontend/` | libTooling CMake target (LLVM 23.1) |
 | `tests/fixtures/` | Minimal IR fixtures used by the CLI contract and real-shim jobs |
 | `tests/BindingShimSmoke` | End-to-end Windows smoke for the LLAPI slice |
@@ -24,9 +24,9 @@ The generator turns the versioned IR into the C ABI **binding shim** and the nat
 ## Commands
 
 ```shell
-dotnet run --project src/Hosihikari.Bindings.Generator/Hosihikari.Bindings.Generator.csproj -c Release -- version
-dotnet run --project src/Hosihikari.Bindings.Generator/Hosihikari.Bindings.Generator.csproj -c Release -- validate-ir tests/fixtures/basic/ir-manifest.json tests/fixtures/basic
-dotnet run --project src/Hosihikari.Bindings.Generator/Hosihikari.Bindings.Generator.csproj -c Release -- emit tests/fixtures/basic/ir-manifest.json tests/fixtures/basic artifacts/emitted --abi-header ../Binding.Abi/native/hosihikari_abi.h
+dotnet run --project src/Hosihikari.Binding.Generator/Hosihikari.Binding.Generator.csproj -c Release -- version
+dotnet run --project src/Hosihikari.Binding.Generator/Hosihikari.Binding.Generator.csproj -c Release -- validate-ir tests/fixtures/basic/ir-manifest.json tests/fixtures/basic
+dotnet run --project src/Hosihikari.Binding.Generator/Hosihikari.Binding.Generator.csproj -c Release -- emit tests/fixtures/basic/ir-manifest.json tests/fixtures/basic artifacts/emitted --abi-header ../Binding.Abi/native/hosihikari_abi.h
 ```
 
 `validate-ir` reads the manifest and every `*.jsonl` under the shard directory, then runs the IR validator. `validate-coverage` does the same for `coverage/summary.json` + `coverage/manifest.jsonl`.
@@ -34,12 +34,12 @@ dotnet run --project src/Hosihikari.Bindings.Generator/Hosihikari.Bindings.Gener
 `emit` writes `interop/` (C#), `shim/` (C++ binding shim), and `coverage/` (manifest + summary). Pass `--native-root <path>` to emit the real binding shim for the IR's source files:
 
 ```shell
-dotnet run --project src/Hosihikari.Bindings.Generator/Hosihikari.Bindings.Generator.csproj -c Release -- emit \
+dotnet run --project src/Hosihikari.Binding.Generator/Hosihikari.Binding.Generator.csproj -c Release -- emit \
   artifacts/llapi-full-ir/ir-manifest.json artifacts/llapi-full-ir artifacts/llapi-real-shim \
   --native-root C:/path/to/LeviLamina --abi-header ../Binding.Abi/native/hosihikari_abi.h
 ```
 
-`--abi-header` points at `HosihikariProjection/BindingAbi`'s `native/hosihikari_abi.h`; the emitter copies it into every shim directory so the shim build stays self-contained. Generated C# references `Hosihikari.Bindings.Abi` for `StringView`, `ArrayView`, `SharedHandle`, and the version-checking `ShimLibrary` loader.
+`--abi-header` points at `HosihikariProjection/BindingAbi`'s `native/hosihikari_abi.h`; the emitter copies it into every shim directory so the shim build stays self-contained. Generated C# references `Hosihikari.Binding.Abi` for `StringView`, `ArrayView`, `SharedHandle`, and the version-checking `ShimLibrary` loader.
 
 Without `--native-root`, `emit` writes the contract stubs used by the fixture CI, unless `--symbol-dispatch` is set.
 
@@ -48,7 +48,7 @@ Without `--native-root`, `emit` writes the contract stubs used by the fixture CI
 `--symbol-dispatch` emits the same C# Interop and binding table from symbol-level IR without game headers:
 
 ```shell
-dotnet run --project src/Hosihikari.Bindings.Generator/Hosihikari.Bindings.Generator.csproj -c Release -- emit \
+dotnet run --project src/Hosihikari.Binding.Generator/Hosihikari.Binding.Generator.csproj -c Release -- emit \
   artifacts/symbol-ir-1.21.3/merged-levi-final/ir-manifest.json artifacts/symbol-ir-1.21.3/merged-levi-final \
   artifacts/symbol-dispatch --abi-header ../Binding.Abi/native/hosihikari_abi.h \
   --symbol-dispatch --target-module bedrock_server

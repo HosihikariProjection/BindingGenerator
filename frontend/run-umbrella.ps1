@@ -183,4 +183,4 @@ finally {
     Pop-Location
 }
 
-dotnet run --project (Join-Path $GeneratorRoot "src\Hosihikari.Bindings.Generator\Hosihikari.Bindings.Generator.csproj") -c Release -- validate-ir "$Output/ir-manifest.json" "$Output"
+dotnet run --project (Join-Path $GeneratorRoot "src\Hosihikari.Binding.Generator\Hosihikari.Binding.Generator.csproj") -c Release -- validate-ir "$Output/ir-manifest.json" "$Output"

@@ -1,5 +1,5 @@
 using System.Runtime.InteropServices;
-using Hosihikari.Bindings.Bedrock.Interop;
+using Hosihikari.Binding.Bedrock.Interop;
 
 namespace Hosihikari.SymbolSmoke;
 

@@ -40,12 +40,12 @@ if ($LinkCarrier) {
     $EmitArgs += "--ll-allocator"
 }
 
-$GeneratorProject = Join-Path $GeneratorRoot "src\Hosihikari.Bindings.Generator\Hosihikari.Bindings.Generator.csproj"
+$GeneratorProject = Join-Path $GeneratorRoot "src\Hosihikari.Binding.Generator\Hosihikari.Binding.Generator.csproj"
 dotnet run --project $GeneratorProject -c Release -- emit $Manifest $IrDirectory $Output @EmitArgs
 
 $NativeDirectory = Join-Path $Output "native"
 New-Item -ItemType Directory -Force -Path $NativeDirectory | Out-Null
-$Dll = Join-Path $NativeDirectory "Hosihikari.Bindings.LeviLamina.Shim.dll"
+$Dll = Join-Path $NativeDirectory "Hosihikari.Binding.LeviLamina.Shim.dll"
 
 $ShimSource = Get-ChildItem (Join-Path $Output "shim") -Recurse -Filter binding_table.cpp |
     Where-Object { $_.FullName -match 'levilamina' } |

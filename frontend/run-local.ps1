@@ -50,7 +50,7 @@ try {
         throw "frontend exited with $LASTEXITCODE"
     }
 
-    dotnet run --project src/Hosihikari.Bindings.Generator/Hosihikari.Bindings.Generator.csproj -c Release -- validate-ir "$Output/ir-manifest.json" "$Output"
+    dotnet run --project src/Hosihikari.Binding.Generator/Hosihikari.Binding.Generator.csproj -c Release -- validate-ir "$Output/ir-manifest.json" "$Output"
 }
 finally {
     Pop-Location

@@ -1,5 +1,5 @@
-using Hosihikari.Bindings.LeviLamina.Interop;
-using Hosihikari.Bindings.LeviLamina.Interop.demo;
+using Hosihikari.Binding.LeviLamina.Interop;
+using Hosihikari.Binding.LeviLamina.Interop.demo;
 
 if (args.Length != 1)
 {

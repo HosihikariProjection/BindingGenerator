@@ -33,19 +33,19 @@ jobs:
 
       - name: Version
         working-directory: Binding.Generator
-        run: dotnet run --project src/Hosihikari.Bindings.Generator/Hosihikari.Bindings.Generator.csproj -c Release -- version
+        run: dotnet run --project src/Hosihikari.Binding.Generator/Hosihikari.Binding.Generator.csproj -c Release -- version
 
       - name: Validate fixture IR
         working-directory: Binding.Generator
-        run: dotnet run --project src/Hosihikari.Bindings.Generator/Hosihikari.Bindings.Generator.csproj -c Release -- validate-ir tests/fixtures/basic/ir-manifest.json tests/fixtures/basic
+        run: dotnet run --project src/Hosihikari.Binding.Generator/Hosihikari.Binding.Generator.csproj -c Release -- validate-ir tests/fixtures/basic/ir-manifest.json tests/fixtures/basic
 
       - name: Emit fixture
         working-directory: Binding.Generator
-        run: dotnet run --project src/Hosihikari.Bindings.Generator/Hosihikari.Bindings.Generator.csproj -c Release -- emit tests/fixtures/basic/ir-manifest.json tests/fixtures/basic artifacts/emitted --abi-header ../Binding.Abi/native/hosihikari_abi.h
+        run: dotnet run --project src/Hosihikari.Binding.Generator/Hosihikari.Binding.Generator.csproj -c Release -- emit tests/fixtures/basic/ir-manifest.json tests/fixtures/basic artifacts/emitted --abi-header ../Binding.Abi/native/hosihikari_abi.h
 
       - name: Validate emitted coverage
         working-directory: Binding.Generator
-        run: dotnet run --project src/Hosihikari.Bindings.Generator/Hosihikari.Bindings.Generator.csproj -c Release -- validate-coverage artifacts/emitted/coverage/summary.json artifacts/emitted/coverage/manifest.jsonl
+        run: dotnet run --project src/Hosihikari.Binding.Generator/Hosihikari.Binding.Generator.csproj -c Release -- validate-coverage artifacts/emitted/coverage/summary.json artifacts/emitted/coverage/manifest.jsonl
 
       - name: Compile shim stub
         working-directory: Binding.Generator
@@ -53,11 +53,11 @@ jobs:
 
       - name: Validate real-shim fixture IR
         working-directory: Binding.Generator
-        run: dotnet run --project src/Hosihikari.Bindings.Generator/Hosihikari.Bindings.Generator.csproj -c Release -- validate-ir tests/fixtures/real-shim/ir-manifest.json tests/fixtures/real-shim
+        run: dotnet run --project src/Hosihikari.Binding.Generator/Hosihikari.Binding.Generator.csproj -c Release -- validate-ir tests/fixtures/real-shim/ir-manifest.json tests/fixtures/real-shim
 
       - name: Emit real-shim fixture
         working-directory: Binding.Generator
-        run: dotnet run --project src/Hosihikari.Bindings.Generator/Hosihikari.Bindings.Generator.csproj -c Release -- emit tests/fixtures/real-shim/ir-manifest.json tests/fixtures/real-shim artifacts/emitted-real --abi-header ../Binding.Abi/native/hosihikari_abi.h --native-root tests/fixtures/real-shim/native
+        run: dotnet run --project src/Hosihikari.Binding.Generator/Hosihikari.Binding.Generator.csproj -c Release -- emit tests/fixtures/real-shim/ir-manifest.json tests/fixtures/real-shim artifacts/emitted-real --abi-header ../Binding.Abi/native/hosihikari_abi.h --native-root tests/fixtures/real-shim/native
 
       - name: Compile real BindingShim
         working-directory: Binding.Generator
@@ -69,7 +69,7 @@ jobs:
 
       - name: Emit link-carrier fixture
         working-directory: Binding.Generator
-        run: dotnet run --project src/Hosihikari.Bindings.Generator/Hosihikari.Bindings.Generator.csproj -c Release -- emit tests/fixtures/real-shim/ir-manifest.json tests/fixtures/real-shim artifacts/emitted-linked --abi-header ../Binding.Abi/native/hosihikari_abi.h --native-root tests/fixtures/real-shim/native --link-carrier
+        run: dotnet run --project src/Hosihikari.Binding.Generator/Hosihikari.Binding.Generator.csproj -c Release -- emit tests/fixtures/real-shim/ir-manifest.json tests/fixtures/real-shim artifacts/emitted-linked --abi-header ../Binding.Abi/native/hosihikari_abi.h --native-root tests/fixtures/real-shim/native --link-carrier
 
       - name: Link carrier BindingShim
         working-directory: Binding.Generator
@@ -84,11 +84,11 @@ jobs:
 
       - name: Validate symbol-dispatch fixture IR
         working-directory: Binding.Generator
-        run: dotnet run --project src/Hosihikari.Bindings.Generator/Hosihikari.Bindings.Generator.csproj -c Release -- validate-ir tests/fixtures/symbol-dispatch/ir-manifest.json tests/fixtures/symbol-dispatch
+        run: dotnet run --project src/Hosihikari.Binding.Generator/Hosihikari.Binding.Generator.csproj -c Release -- validate-ir tests/fixtures/symbol-dispatch/ir-manifest.json tests/fixtures/symbol-dispatch
 
       - name: Emit symbol-dispatch fixture
         working-directory: Binding.Generator
-        run: dotnet run --project src/Hosihikari.Bindings.Generator/Hosihikari.Bindings.Generator.csproj -c Release -- emit tests/fixtures/symbol-dispatch/ir-manifest.json tests/fixtures/symbol-dispatch artifacts/symbol-dispatch-fixture --abi-header ../Binding.Abi/native/hosihikari_abi.h --symbol-dispatch --target-module libsymbol-fixture.so
+        run: dotnet run --project src/Hosihikari.Binding.Generator/Hosihikari.Binding.Generator.csproj -c Release -- emit tests/fixtures/symbol-dispatch/ir-manifest.json tests/fixtures/symbol-dispatch artifacts/symbol-dispatch-fixture --abi-header ../Binding.Abi/native/hosihikari_abi.h --symbol-dispatch --target-module libsymbol-fixture.so
 
       - name: Build symbol-dispatch fixture
         working-directory: Binding.Generator
@@ -202,7 +202,7 @@ jobs:
       - name: Emit from Linux IR
         working-directory: Binding.Generator
         run: |
-          dotnet run --project src/Hosihikari.Bindings.Generator/Hosihikari.Bindings.Generator.csproj -c Release -- \
+          dotnet run --project src/Hosihikari.Binding.Generator/Hosihikari.Binding.Generator.csproj -c Release -- \
             emit artifacts/endstone-linux-ir/ir-manifest.json \
             artifacts/endstone-linux-ir \
             artifacts/emitted-linux \
@@ -212,7 +212,7 @@ jobs:
 
       - name: Compare generated Interop
         working-directory: Binding.Generator
-        run: diff -ru ../Binding.Endstone/src/Hosihikari.Bindings.Endstone.Interop/Generated artifacts/emitted-linux/interop/endstone
+        run: diff -ru ../Binding.Endstone/src/Hosihikari.Binding.Endstone.Interop/Generated artifacts/emitted-linux/interop/endstone
 
       - name: Compile Linux BindingShim
         working-directory: Binding.Generator

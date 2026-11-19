@@ -1,4 +1,4 @@
-# Hosihikari.Bindings.Generator
+# Hosihikari.Binding.Generator
 
 [English](README.md) | [简体中文](README.zh_hans.md)
 
@@ -15,7 +15,7 @@
 
 | 路径 | 用途 |
 |---|---|
-| `src/Hosihikari.Bindings.Generator` | .NET CLI：version、IR 校验、覆盖校验 |
+| `src/Hosihikari.Binding.Generator` | .NET CLI：version、IR 校验、覆盖校验 |
 | `frontend/` | libTooling CMake 目标（LLVM 23.1） |
 | `tests/fixtures/` | CLI 契约与真实 shim 作业使用的 IR fixture |
 | `tests/BindingShimSmoke` | LLAPI 切片的 Windows 端到端 smoke test |
@@ -24,9 +24,9 @@
 ## 命令
 
 ```shell
-dotnet run --project src/Hosihikari.Bindings.Generator/Hosihikari.Bindings.Generator.csproj -c Release -- version
-dotnet run --project src/Hosihikari.Bindings.Generator/Hosihikari.Bindings.Generator.csproj -c Release -- validate-ir tests/fixtures/basic/ir-manifest.json tests/fixtures/basic
-dotnet run --project src/Hosihikari.Bindings.Generator/Hosihikari.Bindings.Generator.csproj -c Release -- emit tests/fixtures/basic/ir-manifest.json tests/fixtures/basic artifacts/emitted --abi-header ../Binding.Abi/native/hosihikari_abi.h
+dotnet run --project src/Hosihikari.Binding.Generator/Hosihikari.Binding.Generator.csproj -c Release -- version
+dotnet run --project src/Hosihikari.Binding.Generator/Hosihikari.Binding.Generator.csproj -c Release -- validate-ir tests/fixtures/basic/ir-manifest.json tests/fixtures/basic
+dotnet run --project src/Hosihikari.Binding.Generator/Hosihikari.Binding.Generator.csproj -c Release -- emit tests/fixtures/basic/ir-manifest.json tests/fixtures/basic artifacts/emitted --abi-header ../Binding.Abi/native/hosihikari_abi.h
 ```
 
 `validate-ir` 读取 manifest 与分片目录下所有 `*.jsonl`，然后运行 IR 校验器。`validate-coverage` 对 `coverage/summary.json` + `coverage/manifest.jsonl` 做同样的事。
@@ -34,12 +34,12 @@ dotnet run --project src/Hosihikari.Bindings.Generator/Hosihikari.Bindings.Gener
 `emit` 写出 `interop/`（C#）、`shim/`（C++ 绑定垫片）与 `coverage/`（manifest + summary）。传入 `--native-root <path>` 会为 IR 的源文件发射真实绑定垫片：
 
 ```shell
-dotnet run --project src/Hosihikari.Bindings.Generator/Hosihikari.Bindings.Generator.csproj -c Release -- emit `
+dotnet run --project src/Hosihikari.Binding.Generator/Hosihikari.Binding.Generator.csproj -c Release -- emit `
   artifacts/llapi-full-ir/ir-manifest.json artifacts/llapi-full-ir artifacts/llapi-real-shim `
   --native-root C:/path/to/LeviLamina --abi-header ../Binding.Abi/native/hosihikari_abi.h --link-carrier --ll-allocator
 ```
 
-`--abi-header` 指向 `HosihikariProjection/BindingAbi` 的 `native/hosihikari_abi.h`；发射器把它复制到每个 shim 目录，使 shim 构建保持自包含。生成的 C# 引用 `Hosihikari.Bindings.Abi` 提供的 `StringView`、`ArrayView`、`SharedHandle` 与负责版本校验的 `ShimLibrary` 加载器。
+`--abi-header` 指向 `HosihikariProjection/BindingAbi` 的 `native/hosihikari_abi.h`；发射器把它复制到每个 shim 目录，使 shim 构建保持自包含。生成的 C# 引用 `Hosihikari.Binding.Abi` 提供的 `StringView`、`ArrayView`、`SharedHandle` 与负责版本校验的 `ShimLibrary` 加载器。
 
 不传 `--native-root` 时写出 fixture CI 使用的契约 stub。
 

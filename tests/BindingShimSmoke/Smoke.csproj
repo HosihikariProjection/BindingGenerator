@@ -11,6 +11,6 @@
     <Compile Include="$(InteropDirectory)/**/*.cs" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="../../../Binding.Abi/src/Hosihikari.Bindings.Abi/Hosihikari.Bindings.Abi.csproj" />
+    <ProjectReference Include="../../../Binding.Abi/src/Hosihikari.Binding.Abi/Hosihikari.Binding.Abi.csproj" />
   </ItemGroup>
 </Project>

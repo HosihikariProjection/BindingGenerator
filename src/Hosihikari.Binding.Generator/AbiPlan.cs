@@ -1,6 +1,6 @@
-using Hosihikari.Bindings.Ir;
+using Hosihikari.Binding.Ir;
 
-namespace Hosihikari.Bindings.Generator;
+namespace Hosihikari.Binding.Generator;
 
 internal enum AbiKind
 {
@@ -197,7 +197,7 @@ internal sealed class VariantAbiInfo
     public string Surface { get; init; } = "";
     public string ClassName { get; init; } = "";
     public string WrapperType => "global::" + NamespaceName + "." + ClassName;
-    public string NamespaceName => $"Hosihikari.Bindings.{TypeNames.SurfaceNamespace(Surface)}.Interop";
+    public string NamespaceName => $"Hosihikari.Binding.{TypeNames.SurfaceNamespace(Surface)}.Interop";
     public List<VariantAlternative> Alternatives { get; init; } = [];
     public List<AbiFunction> CreateFunctions { get; } = [];
     public List<AbiFunction> GetFunctions { get; } = [];
@@ -441,7 +441,7 @@ internal sealed class CallableAbiInfo
     public string NativeType { get; init; } = "";
     public string Surface { get; init; } = "";
     public string ClassName { get; init; } = "";
-    public string NamespaceName => $"Hosihikari.Bindings.{TypeNames.SurfaceNamespace(Surface)}.Interop";
+    public string NamespaceName => $"Hosihikari.Binding.{TypeNames.SurfaceNamespace(Surface)}.Interop";
     public string WrapperType => "global::" + NamespaceName + "." + ClassName;
     public AbiCallback Signature { get; init; } = new();
     public AbiFunction? InvokeFunction { get; set; }
@@ -2149,7 +2149,7 @@ internal sealed class AbiPlan
                     stubReason = "the signature uses a type the binding cannot name";
                 }
 
-                var surfaceNamespace = "Hosihikari.Bindings." + TypeNames.SurfaceNamespace(function.Surface) + ".Interop";
+                var surfaceNamespace = "Hosihikari.Binding." + TypeNames.SurfaceNamespace(function.Surface) + ".Interop";
                 var namespaceName = parts.Count > 1
                     ? surfaceNamespace + "." + string.Join(".", parts.Take(parts.Count - 1).Select(TypeNames.Sanitize))
                     : surfaceNamespace;
@@ -2530,11 +2530,11 @@ internal sealed class AbiPlan
         // the low byte of the return register, so read it as a byte and compare.
         AbiKind.Bool => "byte",
         AbiKind.Opaque => "void*",
-        AbiKind.StringView => "global::Hosihikari.Bindings.Abi.StringView",
-        AbiKind.ArrayView => "global::Hosihikari.Bindings.Abi.ArrayView",
+        AbiKind.StringView => "global::Hosihikari.Binding.Abi.StringView",
+        AbiKind.ArrayView => "global::Hosihikari.Binding.Abi.ArrayView",
         AbiKind.Vector => "nint",
-        AbiKind.Shared => "global::Hosihikari.Bindings.Abi.SharedHandleData",
-        AbiKind.MapView => "global::Hosihikari.Bindings.Abi.ArrayView",
+        AbiKind.Shared => "global::Hosihikari.Binding.Abi.SharedHandleData",
+        AbiKind.MapView => "global::Hosihikari.Binding.Abi.ArrayView",
         _ => CSharpType(kind),
     };
 
@@ -2547,7 +2547,7 @@ internal sealed class AbiPlan
                 AbiKind.Opaque => parameter.WrapperType is not null && parameter.IsPointer
                     ? parameter.WrapperType + "?"
                     : parameter.WrapperType ?? "nint",
-                AbiKind.Shared => "global::Hosihikari.Bindings.Abi.SharedHandle?",
+                AbiKind.Shared => "global::Hosihikari.Binding.Abi.SharedHandle?",
                 _ => CSharpType(parameter.Kind),
             };
 

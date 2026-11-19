@@ -17,6 +17,7 @@ $IncludeRoot = Join-Path $EndstoneRoot "include"
 # The header itself is written by write-endstone-version-header.ps1, which a build job that
 # starts from a committed surface can call on its own.
 & (Join-Path $PSScriptRoot "write-endstone-version-header.ps1") -EndstoneRoot $EndstoneRoot -GeneratorRoot $GeneratorRoot | Out-Null
+$GeneratedRoot = Join-Path $GeneratorRoot "artifacts\endstone-generated\include"
 
 $ExpectedLite = Get-ChildItem "$env:LOCALAPPDATA\.xmake\packages\e\expected-lite" -Recurse -Filter expected.hpp -ErrorAction SilentlyContinue |
     Select-Object -First 1
@@ -76,4 +77,4 @@ finally {
     Pop-Location
 }
 
-dotnet run --project (Join-Path $GeneratorRoot "src\Hosihikari.Bindings.Generator\Hosihikari.Bindings.Generator.csproj") -c Release -- validate-ir "$Output/ir-manifest.json" "$Output"
+dotnet run --project (Join-Path $GeneratorRoot "src\Hosihikari.Binding.Generator\Hosihikari.Binding.Generator.csproj") -c Release -- validate-ir "$Output/ir-manifest.json" "$Output"

@@ -5,8 +5,8 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <RootNamespace>Hosihikari.Bindings.Generator</RootNamespace>
-    <AssemblyName>Hosihikari.Bindings.Generator</AssemblyName>
+    <RootNamespace>Hosihikari.Binding.Generator</RootNamespace>
+    <AssemblyName>Hosihikari.Binding.Generator</AssemblyName>
   </PropertyGroup>
 
   <PropertyGroup>
@@ -20,7 +20,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../../../Binding.Ir/src/Hosihikari.Bindings.Ir/Hosihikari.Bindings.Ir.csproj" />
+    <ProjectReference Include="../../../Binding.Ir/src/Hosihikari.Binding.Ir/Hosihikari.Binding.Ir.csproj" />
   </ItemGroup>
 
 </Project>
