@@ -46,30 +46,28 @@ if ([string]::IsNullOrWhiteSpace($FmtLib)) {
 
 if ([string]::IsNullOrWhiteSpace($BedrockRuntimeData)) {
     $DataCandidates = Get-ChildItem "$env:LOCALAPPDATA\.xmake\packages\b\bedrockdata" -Recurse -Filter bedrock_runtime_data -ErrorAction SilentlyContinue
-    # The carrier pins one bedrockdata revision; the highest build number is not
-    # necessarily the one it targets (26.60 pins server.5 while server.12 is 26.51).
-    $Pinned = $null
+    # The carrier pins one bedrockdata revision and it is the authority: the highest build
+    # number is not necessarily the one it targets (26.60 pins server.5 while server.12 is
+    # 26.51). Match the whole version string, since the build number alone collides across
+    # lines, and fail rather than guess when the pin cannot be read.
     $CarrierLua = Join-Path $LeviLaminaRoot "xmake.lua"
-    if (Test-Path $CarrierLua) {
-        $Match = Select-String -Path $CarrierLua -Pattern 'bedrockdata\s+(v[0-9.]+-server\.\d+)' | Select-Object -First 1
-        if ($Match) {
-            $PinnedVersion = $Match.Matches[0].Groups[1].Value
-            $Pinned = $DataCandidates | Where-Object { $_.FullName -match [regex]::Escape("\$PinnedVersion\") } | Select-Object -First 1
-        }
+    if (-not (Test-Path $CarrierLua)) {
+        throw "$CarrierLua was not found, so the pinned bedrockdata revision is unknown; pass -BedrockRuntimeData explicitly."
+    }
+    $Match = Select-String -Path $CarrierLua -Pattern 'bedrockdata\s+(v[0-9.]+-server\.\d+)' | Select-Object -First 1
+    if (-not $Match) {
+        throw "$CarrierLua does not pin bedrockdata; pass -BedrockRuntimeData explicitly."
+    }
+    $PinnedVersion = $Match.Matches[0].Groups[1].Value
+    # The trailing separator keeps "server.1" from matching inside "server.16".
+    $PinnedPattern = [regex]::Escape($PinnedVersion) + [regex]::Escape([string][IO.Path]::DirectorySeparatorChar)
+    $Pinned = $DataCandidates |
+        Where-Object { $_.FullName -match $PinnedPattern } |
+        Select-Object -First 1
+    if (-not $Pinned) {
+        throw "bedrockdata $PinnedVersion is pinned by the carrier but not installed; pass -BedrockRuntimeData explicitly."
     }
     $Data = $Pinned
-    if (-not $Data) {
-        $Data = $DataCandidates |
-            Where-Object { $_.FullName -match '-server\.(\d+)' } |
-            Sort-Object { [int]($_.FullName -replace '.*-server\.(\d+).*', '$1') } -Descending |
-            Select-Object -First 1
-    }
-    if (-not $Data) {
-        $Data = $DataCandidates | Select-Object -First 1
-    }
-    if (-not $Data) {
-        throw "bedrock_runtime_data was not found; pass -BedrockRuntimeData explicitly."
-    }
 
     $BedrockRuntimeData = $Data.FullName
 } else {
