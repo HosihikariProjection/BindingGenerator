@@ -33,10 +33,21 @@ if ([string]::IsNullOrWhiteSpace($CarrierImportLibrary)) {
 $CarrierImportLibrary = (Resolve-Path $CarrierImportLibrary).Path
 
 if ([string]::IsNullOrWhiteSpace($FmtLib)) {
-    $Fmt = Get-ChildItem "$env:LOCALAPPDATA\.xmake\packages\f\fmt" -Recurse -Filter fmt.lib -ErrorAction SilentlyContinue |
+    # The carrier pins the fmt version; match that pin instead of taking whichever package
+    # the directory walk reaches first.
+    $CarrierLuaForFmt = Join-Path $LeviLaminaRoot "xmake.lua"
+    if (-not (Test-Path $CarrierLuaForFmt)) {
+        throw "$CarrierLuaForFmt was not found, so the pinned fmt version is unknown; pass -FmtLib explicitly."
+    }
+    $FmtPinMatch = Select-String -Path $CarrierLuaForFmt -Pattern 'add_requires\("fmt\s+([0-9.]+)"\)' | Select-Object -First 1
+    if (-not $FmtPinMatch) {
+        throw "$CarrierLuaForFmt does not pin fmt; pass -FmtLib explicitly."
+    }
+    $FmtVersion = $FmtPinMatch.Matches[0].Groups[1].Value
+    $Fmt = Get-ChildItem "$env:LOCALAPPDATA\.xmake\packages\f\fmt\$FmtVersion" -Recurse -Filter fmt.lib -ErrorAction SilentlyContinue |
         Select-Object -First 1
     if (-not $Fmt) {
-        throw "fmt.lib was not found; pass -FmtLib explicitly."
+        throw "fmt $FmtVersion is pinned by the carrier but fmt.lib is not installed; pass -FmtLib explicitly."
     }
 
     $FmtLib = $Fmt.FullName
@@ -63,6 +74,8 @@ if ([string]::IsNullOrWhiteSpace($BedrockRuntimeData)) {
     $PinnedPattern = [regex]::Escape($PinnedVersion) + [regex]::Escape([string][IO.Path]::DirectorySeparatorChar)
     $Pinned = $DataCandidates |
         Where-Object { $_.FullName -match $PinnedPattern } |
+        # The pin names one architecture too; if several ever match, this takes the first
+        # rather than ranking them.
         Select-Object -First 1
     if (-not $Pinned) {
         throw "bedrockdata $PinnedVersion is pinned by the carrier but not installed; pass -BedrockRuntimeData explicitly."
