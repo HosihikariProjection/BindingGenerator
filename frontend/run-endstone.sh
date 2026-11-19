@@ -184,6 +184,6 @@ popd >/dev/null
 trap - EXIT
 
 if [ "$validate" -eq 1 ]; then
-    dotnet run --project "$repo_root/src/Hosihikari.Bindings.Generator/Hosihikari.Bindings.Generator.csproj" \
+    dotnet run --project "$repo_root/src/Hosihikari.Binding.Generator/Hosihikari.Binding.Generator.csproj" \
         -c Release -- validate-ir "$output/ir-manifest.json" "$output"
 fi
