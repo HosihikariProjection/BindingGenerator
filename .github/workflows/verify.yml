@@ -127,7 +127,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: HosihikariProjection/EndstoneBinding
-          ref: 53512018a19e895971e37543d37ed37b7511f186
+          ref: 057b51506b035da5ff95a866884bf2c12f293035
           path: Binding.Endstone
           fetch-depth: 1
 
