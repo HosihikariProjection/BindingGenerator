@@ -135,7 +135,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: EndstoneMC/endstone
-          ref: v0.11.14
+          ref: v0.11.16
           path: endstone
           fetch-depth: 1
 
