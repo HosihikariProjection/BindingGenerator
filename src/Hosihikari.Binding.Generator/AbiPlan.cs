@@ -362,6 +362,13 @@ internal sealed class AbiFunction
     public int BitsetBits { get; init; }
 
     public bool CreateViaBorrowedHolder { get; init; }
+    public bool TemplateCopyConstruction { get; set; }
+
+    /// <summary>
+    /// The payload a template copy construction copies. TypedStorageImpl's own copy constructor
+    /// is declared whatever the payload is, so the shim has to test the payload, not the class.
+    /// </summary>
+    public string? TemplateCopyPayload { get; set; }
     public bool DestroyViaBorrowedHolder { get; init; }
 
     /// <summary>
@@ -1215,14 +1222,14 @@ internal sealed class AbiPlan
                     && declaration.Template is not null
                     && constructor.Inline
                     && !constructor.Defined
-                    && (!constructor.PatternDefined
-                        || IsCopyOrMoveConstructor(constructor)))
+                    && (!constructor.PatternDefined || IsMoveConstructor(constructor)))
                 {
-                    // The pattern body is enough for ordinary constructors, but a copy or
-                    // move constructor still copies the payload inline and needs symbols
-                    // the carrier does not export.
+                    // The pattern body is enough for ordinary constructors and for a copy
+                    // constructor, which only calls the payload's copy constructor. A move
+                    // construction goes through std::move into the payload and needs its
+                    // move constructor, which is often absent.
                     reason = constructor.PatternDefined
-                        ? "template copy and move constructors are not projected"
+                        ? "template move constructors are not projected"
                         : "the template constructor has no visible definition";
                 }
                 else if (!virtualDispatch && constructor.Pure)
@@ -1271,6 +1278,18 @@ internal sealed class AbiPlan
                     continue;
                 }
 
+                // A pattern-defined copy construction copies the payload in place, so it only
+                // compiles where the payload is itself copyable. The IR does not record
+                // copyability, so the shim guards the call at compile time instead.
+                create.TemplateCopyConstruction = linkCarrier
+                    && declaration.Template is not null
+                    && !constructor.Defined
+                    && constructor.PatternDefined
+                    && !IsMoveConstructor(constructor);
+                if (create.TemplateCopyConstruction)
+                {
+                    create.TemplateCopyPayload = LastTemplateArgument(create.ClassCppName);
+                }
                 functions.Add(create);
                 created = true;
             }
@@ -7942,6 +7961,61 @@ internal sealed class AbiPlan
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// True only for the move constructor: the same shape as a copy constructor, but an
+    /// rvalue-reference parameter. Its pattern body forwards with std::move, so it needs the
+    /// pointee's move constructor rather than its copy constructor.
+    /// </summary>
+    private static bool IsMoveConstructor(MemberRecord member) =>
+        IsCopyOrMoveConstructor(member)
+        && member.Signature!.Parameters[0].Type.TrimEnd().EndsWith("&&", StringComparison.Ordinal);
+
+    /// <summary>
+    /// The final template argument of a specialization, or null when the name does not end in
+    /// an argument list. Nested arguments are tracked by their angle brackets.
+    /// </summary>
+    private static string? LastTemplateArgument(string spelling)
+    {
+        if (!spelling.EndsWith('>'))
+        {
+            return null;
+        }
+
+        var depth = 0;
+        for (var index = spelling.Length - 1; index >= 0; index--)
+        {
+            if (spelling[index] == '>')
+            {
+                depth++;
+                continue;
+            }
+
+            if (spelling[index] == '<')
+            {
+                depth--;
+                continue;
+            }
+
+            var separates = spelling[index] == ','
+                || (spelling[index] == ' ' && index > 0 && spelling[index - 1] == ',');
+            if (!separates || depth != 1)
+            {
+                continue;
+            }
+
+            var argument = spelling[(index + 1)..^1].Trim();
+            // A spelling can carry the tail of a signature after the argument list.
+            var close = argument.LastIndexOf('>');
+            if (close >= 0 && close < argument.Length - 1)
+            {
+                argument = argument[..(close + 1)].Trim();
+            }
+            return argument.Length > 0 ? argument : null;
+        }
+
+        return null;
     }
 
     private static bool IsCopyOrMoveConstructor(MemberRecord member)

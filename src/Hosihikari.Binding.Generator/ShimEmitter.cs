@@ -350,7 +350,7 @@ internal static partial class ShimEmitter
                         }
                         else if (covered.Add(NormalizeInclude(fieldHeader)))
                         {
-                            missing.Add(fieldHeader);
+                            missing.Add(NormalizeInclude(fieldHeader));
                         }
                     }
                 }
@@ -360,7 +360,7 @@ internal static partial class ShimEmitter
             {
                 if (FindHeaderByName(manifest, surface, name) is { } missingHeader)
                 {
-                    missing.Add(missingHeader);
+                    missing.Add(NormalizeInclude(missingHeader));
                 }
             }
 
@@ -1582,6 +1582,34 @@ internal static partial class ShimEmitter
                     break;
                 }
 
+                if (function.TemplateCopyConstruction)
+                {
+                    // Reaching this shim already means the projection exists; where the payload
+                    // cannot be copied the call would not compile, so answer null at run time.
+                    var probeType = string.IsNullOrWhiteSpace(function.TemplateCopyPayload)
+                        ? function.ClassCppName
+                        : function.TemplateCopyPayload;
+                    // A payload that is not copy constructible (std::atomic, std::mutex, an
+                    // intrusive hook) fails inside the storage's own copy constructor. A
+                    // standard container only reports itself copy-constructible: vector's copy
+                    // constructor is declared whatever the element is and only fails once it is
+                    // instantiated, which no requires-expression reaches, so unique_ptr — the
+                    // element that actually rules it out — is tested by name.
+                    var copyable = !probeType.Contains("unique_ptr", StringComparison.Ordinal);
+                    yield return copyable
+                        ? $"    if constexpr (!::std::is_copy_constructible_v<{probeType}>)"
+                        : "    if constexpr (true)";
+                    yield return "    {";
+                    yield return $"        setLastError(\"the payload of this template is not copy constructible\");";
+                    yield return "        return nullptr;";
+                    yield return "    }";
+                    yield return "    else";
+                    yield return "    {";
+                    yield return $"        return new {function.ClassCppName}({string.Join(", ", BuildNativeArguments(function))});";
+                    yield return "    }";
+                    break;
+                }
+
                 yield return $"    return new {function.ClassCppName}({string.Join(", ", BuildNativeArguments(function))});";
                 break;
 
@@ -2767,7 +2795,9 @@ internal static partial class ShimEmitter
             }
 
             state[node] = 2;
-            ordered.Add(byInclude[node]);
+            // Emit the normalized form: the IR can hand back absolute paths, which would pin
+            // the include to the tree the IR was generated from and float free of -I.
+            ordered.Add(node);
         }
 
         return ordered;
