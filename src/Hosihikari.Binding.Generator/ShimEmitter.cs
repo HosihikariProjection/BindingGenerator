@@ -519,11 +519,17 @@ internal static partial class ShimEmitter
         source.Add("    return std::weak_ptr<T>(hs_shared_from_handle<T>(handle));");
         source.Add("}");
         source.Add("");
-        if (!string.Equals(surface, "endstone", StringComparison.Ordinal))
+        // Emit the non-owner helper only when a projected function actually takes one. The
+        // Endstone surface has no Bedrock namespace at all, and a carrier-free fixture (the
+        // real-shim test) has no Bedrock headers either, so naming the type unconditionally
+        // fails to compile there even though nothing would call it.
+        var needsNonOwnerHelper = functions
+            .SelectMany(f => f.Parameters)
+            .Any(p => p.NativeType.Contains("NonOwnerPointer", StringComparison.Ordinal));
+        if (needsNonOwnerHelper)
         {
             // A Bedrock::NonOwnerPointer parameter is a non-owning view, so it is rebuilt from
-            // the object's own control block rather than from the shared handle's. The
-            // Endstone surface never names the type: its headers carry no Bedrock namespace.
+            // the object's own control block rather than from the shared handle's.
             source.Add("template <class T>");
             source.Add("[[maybe_unused]] Bedrock::NonOwnerPointer<T> hs_non_owner_from_handle(HosihikariSharedHandle handle)");
             source.Add("{");
