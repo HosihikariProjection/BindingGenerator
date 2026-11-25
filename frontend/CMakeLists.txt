@@ -31,11 +31,21 @@ if(WIN32)
   endif()
 
   if(NOT TARGET ZLIB::ZLIB)
-    if(HOSIHIKARI_ZLIB_ROOT AND EXISTS "${HOSIHIKARI_ZLIB_ROOT}/lib/zlibstatic.lib")
+    if(HOSIHIKARI_ZLIB_ROOT)
+      # Package stores spell the static library either way; take whichever is present.
+      set(_hosihikari_zlib "")
+      foreach(_candidate "zlibstatic.lib" "zlib.lib")
+        if(EXISTS "${HOSIHIKARI_ZLIB_ROOT}/lib/${_candidate}")
+          set(_hosihikari_zlib "${HOSIHIKARI_ZLIB_ROOT}/lib/${_candidate}")
+          break()
+        endif()
+      endforeach()
+    endif()
+    if(_hosihikari_zlib)
       add_library(ZLIB::ZLIB STATIC IMPORTED)
       set_target_properties(
         ZLIB::ZLIB
-        PROPERTIES IMPORTED_LOCATION "${HOSIHIKARI_ZLIB_ROOT}/lib/zlibstatic.lib"
+        PROPERTIES IMPORTED_LOCATION "${_hosihikari_zlib}"
       )
       target_include_directories(ZLIB::ZLIB INTERFACE "${HOSIHIKARI_ZLIB_ROOT}/include")
     else()
