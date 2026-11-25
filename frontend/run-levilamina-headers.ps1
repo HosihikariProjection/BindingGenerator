@@ -1,6 +1,6 @@
 param(
     [string]$LeviLaminaRoot = "",
-    [string]$EnttRoot = "C:\Users\root\AppData\Local\Temp\entt-41aab92\src",
+    [string]$EnttRoot = "",
     [string]$Output = "artifacts/levi-1.21.3-header-ir",
     [string]$LlvmRoot = "$env:LOCALAPPDATA\Temp\hosihikari-llvm\clang+llvm-23.1.0-x86_64-pc-windows-msvc",
     [string[]]$AdditionalIncludePath = @(),
@@ -21,6 +21,26 @@ $ErrorActionPreference = "Stop"
 
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $LeviLaminaRoot = (Resolve-Path $LeviLaminaRoot).Path
+if ([string]::IsNullOrWhiteSpace($EnttRoot)) {
+    # The carrier builds against the xmake entt package; a hard-coded unpack directory goes
+    # stale as soon as the package store is cleaned. Take the installed package that carries
+    # the headers, highest version first.
+    $EnttCandidates = @(Get-ChildItem "$env:LOCALAPPDATA\.xmake\packages\e\entt" -Directory -ErrorAction SilentlyContinue |
+        ForEach-Object {
+            $Include = Get-ChildItem $_.FullName -Recurse -Directory -Filter "include" -ErrorAction SilentlyContinue |
+                Where-Object { Test-Path (Join-Path $_.FullName "entt\entt.hpp") } |
+                Select-Object -First 1
+            if ($Include) {
+                $Segments = [regex]::Matches($_.FullName, '\d+') | ForEach-Object { ([int]$_.Value).ToString('D6') }
+                [pscustomobject]@{ Path = $Include.FullName; Version = ($Segments -join '.') }
+            }
+        } |
+        Sort-Object { $_.Version })
+    if ($EnttCandidates.Count -eq 0) {
+        throw "no installed entt package carries entt/entt.hpp; pass -EnttRoot explicitly."
+    }
+    $EnttRoot = $EnttCandidates[-1].Path
+}
 $EnttRoot = (Resolve-Path $EnttRoot).Path
 $Output = if ([System.IO.Path]::IsPathRooted($Output)) { $Output } else { Join-Path $RepoRoot $Output }
 $SourceRoot = Join-Path $LeviLaminaRoot "src"
