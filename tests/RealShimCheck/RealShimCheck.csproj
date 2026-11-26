@@ -4,7 +4,8 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <InteropDirectory Condition="'$(InteropDirectory)' == ''">$(MSBuildThisFileDirectory)..\..\artifacts\emitted-real\interop</InteropDirectory>
+    <InteropDirectory Condition="'$(InteropDirectory)' == ''"
+      >$(MSBuildThisFileDirectory)..\..\artifacts\emitted-real\interop</InteropDirectory>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
   </PropertyGroup>
   <ItemGroup>

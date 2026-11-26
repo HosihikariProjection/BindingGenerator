@@ -13,13 +13,13 @@ The generator turns the versioned IR into the C ABI **binding shim** and the nat
 
 ## Projects
 
-| Path | Purpose |
-|---|---|
-| `src/Hosihikari.Binding.Generator` | .NET CLI: version, IR validation, coverage validation |
-| `frontend/` | libTooling CMake target (LLVM 23.1) |
-| `tests/fixtures/` | Minimal IR fixtures used by the CLI contract and real-shim jobs |
-| `tests/BindingShimSmoke` | End-to-end Windows smoke for the LLAPI slice |
-| `tests/RealShimSmoke` | CI smoke for the link-carrier fixture |
+| Path                               | Purpose                                                         |
+| ---------------------------------- | --------------------------------------------------------------- |
+| `src/Hosihikari.Binding.Generator` | .NET CLI: version, IR validation, coverage validation           |
+| `frontend/`                        | libTooling CMake target (LLVM 23.1)                             |
+| `tests/fixtures/`                  | Minimal IR fixtures used by the CLI contract and real-shim jobs |
+| `tests/BindingShimSmoke`           | End-to-end Windows smoke for the LLAPI slice                    |
+| `tests/RealShimSmoke`              | CI smoke for the link-carrier fixture                           |
 
 ## Commands
 

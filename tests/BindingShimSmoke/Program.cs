@@ -23,12 +23,16 @@ var baseView = new HashedIdBase(id.Handle);
 var expected = Fnv1a(text);
 if (baseView.hash != expected)
 {
-    throw new InvalidOperationException($"EventId.hash was 0x{baseView.hash:x16}, expected 0x{expected:x16}.");
+    throw new InvalidOperationException(
+        $"EventId.hash was 0x{baseView.hash:x16}, expected 0x{expected:x16}."
+    );
 }
 
 if (!baseView.operator_equal(new HashedIdBase(id.Handle)))
 {
-    throw new InvalidOperationException("HashedIdBase::operator== returned false for equal hashes.");
+    throw new InvalidOperationException(
+        "HashedIdBase::operator== returned false for equal hashes."
+    );
 }
 
 using var combiner = HashCombiner.Create(123);
@@ -43,10 +47,12 @@ if (combiner.hash() != 123 || combiner.operator_unsigned_long_long() != 123)
 }
 
 using var version = LlVersion.Create("1.2.3");
-if (version.to_string() != "1.2.3"
+if (
+    version.to_string() != "1.2.3"
     || version.major != 1
     || version.minor != 2
-    || version.patch != 3)
+    || version.patch != 3
+)
 {
     throw new InvalidOperationException("Version round-trip returned unexpected values.");
 }

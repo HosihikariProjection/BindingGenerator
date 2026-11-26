@@ -27,15 +27,34 @@ import os
 import re
 
 LIBRARY_NAMESPACES = {
-    "std", "entt", "webrtc", "rtc", "cricket", "leveldb", "fmt", "rapidjson",
-    "nlohmann", "glm", "gsl", "pfr", "ctre", "concurrentqueue", "moodycamel",
-    "nonstd", "asio", "re2", "snappy", "zlib", "openssl",
+    "std",
+    "entt",
+    "webrtc",
+    "rtc",
+    "cricket",
+    "leveldb",
+    "fmt",
+    "rapidjson",
+    "nlohmann",
+    "glm",
+    "gsl",
+    "pfr",
+    "ctre",
+    "concurrentqueue",
+    "moodycamel",
+    "nonstd",
+    "asio",
+    "re2",
+    "snappy",
+    "zlib",
+    "openssl",
 }
 
 re_namespace = re.compile(r"^\s*namespace\s+([A-Za-z_][\w:]*)\s*\{")
 re_type = re.compile(
     r"^\s*(?:template\s*<.*>\s*)?"
-    r"(class|struct|enum\s+class|enum\s+struct|enum|union)\s+(\w+)\b")
+    r"(class|struct|enum\s+class|enum\s+struct|enum|union)\s+(\w+)\b"
+)
 re_kind_prefix = re.compile(r"^(?:PE)?(?:AEB)?(?:SH)?([VU])(?=[A-Z])")
 
 
@@ -73,7 +92,9 @@ def header_types(root, sources):
                                 if pending is not None:
                                     frames.append((pending[0], pending[1], depth))
                                     if pending[0] == "type":
-                                        qualified = [n for k, n, _ in frames if k == "namespace"]
+                                        qualified = [
+                                            n for k, n, _ in frames if k == "namespace"
+                                        ]
                                         qualified.append(pending[1])
                                         types.setdefault("::".join(qualified), relative)
                                     pending = None
@@ -94,7 +115,7 @@ def spellings(name):
     forms = [name, "::".join(reversed(name.split("::")))]
     prefix = re_kind_prefix.match(name)
     if prefix:
-        stripped = name[prefix.end():]
+        stripped = name[prefix.end() :]
         forms += [stripped, "::".join(reversed(stripped.split("::")))]
     return forms
 
@@ -103,8 +124,12 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", required=True, help="header checkout root")
     parser.add_argument("--sources", default="src/mc,src-server/mc")
-    parser.add_argument("--classes", required=True, help="discovery TSV: class<TAB>symbols")
-    parser.add_argument("--selected", help="class list already bound, one name per line")
+    parser.add_argument(
+        "--classes", required=True, help="discovery TSV: class<TAB>symbols"
+    )
+    parser.add_argument(
+        "--selected", help="class list already bound, one name per line"
+    )
     parser.add_argument("--output", required=True)
     parser.add_argument("--min-symbols", type=int, default=1)
     args = parser.parse_args()
@@ -165,8 +190,10 @@ def main():
         for name, symbols, path in rows:
             stream.write(f"{name}\t{symbols}\t{path}\n")
 
-    print(f"header types {len(types)}; matched {len(matched)}; "
-          f"selected {len(selected)}; candidates {len(rows)}")
+    print(
+        f"header types {len(types)}; matched {len(matched)}; "
+        f"selected {len(selected)}; candidates {len(rows)}"
+    )
     for name, symbols, _ in rows[:15]:
         print(f"  {symbols:5d}  {name}")
 

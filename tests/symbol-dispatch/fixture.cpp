@@ -28,12 +28,12 @@ namespace gsl
 template <typename T>
 struct span
 {
-    T* data;
+    T*          data;
     std::size_t size;
 };
-}
+} // namespace gsl
 
-static FixtureObject g_spanValues[2] = {{11}, {22}};
+static FixtureObject  g_spanValues[2]  = {{11}, {22}};
 static FixtureObject* g_spanObjects[2] = {&g_spanValues[0], &g_spanValues[1]};
 
 template <typename T>
@@ -41,7 +41,10 @@ struct OwnerPtr
 {
     std::shared_ptr<T> mHandle;
     OwnerPtr() = default;
-    explicit OwnerPtr(std::shared_ptr<T> value) : mHandle(std::move(value)) {}
+    explicit OwnerPtr(std::shared_ptr<T> value)
+        : mHandle(std::move(value))
+    {
+    }
 };
 
 template <typename T>
@@ -49,7 +52,10 @@ struct StackRefResult
 {
     std::shared_ptr<T> mHandle;
     StackRefResult() = default;
-    explicit StackRefResult(std::shared_ptr<T> value) : mHandle(std::move(value)) {}
+    explicit StackRefResult(std::shared_ptr<T> value)
+        : mHandle(std::move(value))
+    {
+    }
 };
 
 template <typename T>
@@ -57,7 +63,10 @@ struct WeakRef
 {
     std::weak_ptr<T> mHandle;
     WeakRef() = default;
-    explicit WeakRef(std::weak_ptr<T> value) : mHandle(std::move(value)) {}
+    explicit WeakRef(std::weak_ptr<T> value)
+        : mHandle(std::move(value))
+    {
+    }
 };
 
 namespace gsl
@@ -66,9 +75,12 @@ template <typename T>
 struct not_null
 {
     T value;
-    explicit not_null(T inner) : value(std::move(inner)) {}
+    explicit not_null(T inner)
+        : value(std::move(inner))
+    {
+    }
 };
-}
+} // namespace gsl
 
 struct FixtureHeavy
 {
@@ -79,9 +91,15 @@ struct FixtureHeavy
     ~FixtureHeavy();
 };
 
-FixtureHeavy::FixtureHeavy(std::string value) : text(std::move(value)) {}
+FixtureHeavy::FixtureHeavy(std::string value)
+    : text(std::move(value))
+{
+}
 
-FixtureHeavy::FixtureHeavy(FixtureHeavy const& other) : text(other.text) {}
+FixtureHeavy::FixtureHeavy(FixtureHeavy const& other)
+    : text(other.text)
+{
+}
 
 FixtureHeavy::~FixtureHeavy() = default;
 
@@ -94,54 +112,66 @@ struct FixturePair
     FixturePair(FixturePair const& other);
 };
 
-FixturePair::FixturePair(int x_, int y_) : x(x_), y(y_) {}
+FixturePair::FixturePair(int x_, int y_)
+    : x(x_)
+    , y(y_)
+{
+}
 
-FixturePair::FixturePair(FixturePair const& other) : x(other.x), y(other.y) {}
+FixturePair::FixturePair(FixturePair const& other)
+    : x(other.x)
+    , y(other.y)
+{
+}
 
 class FixtureBlock
 {
 public:
     FixtureBlock(int x, int y);
-    int add(int value) const;
-    virtual int isReady() const;
-    virtual int scale(int factor) const;
-    std::string label() const;
-    std::vector<int> numbers() const;
-    std::vector<std::string> names() const;
-    static std::vector<int> squares(int count);
-    int countNames(std::vector<std::string> const& values) const;
-    int sumValues(std::vector<int> const& values) const;
-    FixturePair pair() const;
-    int sumPair(FixturePair value) const;
-    FixtureHeavy heavy(int value) const;
-    std::unique_ptr<FixtureHeavy> uniqueHeavy(int value) const;
-    int heavySize(FixtureHeavy const& value) const;
-    std::optional<int> maybeNumber(bool present) const;
-    std::optional<FixtureValue> maybeValue(bool present) const;
-    int sumValueOptional(std::optional<FixtureValue> value) const;
-    int sumOptional(std::optional<int> value) const;
-    std::optional<std::string> maybeLabel(bool present) const;
-    int labelSize(std::optional<std::string> value) const;
-    std::shared_ptr<FixtureObject> makeShared(int value) const;
-    int sharedValue(std::shared_ptr<FixtureObject> value) const;
-    std::weak_ptr<FixtureObject> weakRef() const;
-    OwnerPtr<FixtureObject> ownerPtr(int value) const;
-    StackRefResult<FixtureObject> stackRef(int value) const;
-    WeakRef<FixtureObject> weakRefValue(int value) const;
+    int                                    add(int value) const;
+    virtual int                            isReady() const;
+    virtual int                            scale(int factor) const;
+    std::string                            label() const;
+    std::vector<int>                       numbers() const;
+    std::vector<std::string>               names() const;
+    static std::vector<int>                squares(int count);
+    int                                    countNames(std::vector<std::string> const& values) const;
+    int                                    sumValues(std::vector<int> const& values) const;
+    FixturePair                            pair() const;
+    int                                    sumPair(FixturePair value) const;
+    FixtureHeavy                           heavy(int value) const;
+    std::unique_ptr<FixtureHeavy>          uniqueHeavy(int value) const;
+    int                                    heavySize(FixtureHeavy const& value) const;
+    std::optional<int>                     maybeNumber(bool present) const;
+    std::optional<FixtureValue>            maybeValue(bool present) const;
+    int                                    sumValueOptional(std::optional<FixtureValue> value) const;
+    int                                    sumOptional(std::optional<int> value) const;
+    std::optional<std::string>             maybeLabel(bool present) const;
+    int                                    labelSize(std::optional<std::string> value) const;
+    std::shared_ptr<FixtureObject>         makeShared(int value) const;
+    int                                    sharedValue(std::shared_ptr<FixtureObject> value) const;
+    std::weak_ptr<FixtureObject>           weakRef() const;
+    OwnerPtr<FixtureObject>                ownerPtr(int value) const;
+    StackRefResult<FixtureObject>          stackRef(int value) const;
+    WeakRef<FixtureObject>                 weakRefValue(int value) const;
     gsl::not_null<OwnerPtr<FixtureObject>> notNullOwner(int value) const;
-    FixtureObject* makeObject(int value) const;
-    void releaseObject(FixtureObject* value) const;
-    int sumObjectValues(std::vector<FixtureObject*> const& values) const;
-    gsl::span<FixtureObject*> objectSpan() const;
-    static FixtureBlock* create(int x, int y);
-    static void release(FixtureBlock* block);
+    FixtureObject*                         makeObject(int value) const;
+    void                                   releaseObject(FixtureObject* value) const;
+    int                                    sumObjectValues(std::vector<FixtureObject*> const& values) const;
+    gsl::span<FixtureObject*>              objectSpan() const;
+    static FixtureBlock*                   create(int x, int y);
+    static void                            release(FixtureBlock* block);
 
 private:
     int x_;
     int y_;
 };
 
-FixtureBlock::FixtureBlock(int x, int y) : x_(x), y_(y) {}
+FixtureBlock::FixtureBlock(int x, int y)
+    : x_(x)
+    , y_(y)
+{
+}
 
 int FixtureBlock::add(int value) const
 {

@@ -13,13 +13,13 @@
 
 ## 工程
 
-| 路径 | 用途 |
-|---|---|
-| `src/Hosihikari.Binding.Generator` | .NET CLI：version、IR 校验、覆盖校验 |
-| `frontend/` | libTooling CMake 目标（LLVM 23.1） |
-| `tests/fixtures/` | CLI 契约与真实 shim 作业使用的 IR fixture |
-| `tests/BindingShimSmoke` | LLAPI 切片的 Windows 端到端 smoke test |
-| `tests/RealShimSmoke` | link-carrier fixture 的 CI smoke test |
+| 路径                               | 用途                                      |
+| ---------------------------------- | ----------------------------------------- |
+| `src/Hosihikari.Binding.Generator` | .NET CLI：version、IR 校验、覆盖校验      |
+| `frontend/`                        | libTooling CMake 目标（LLVM 23.1）        |
+| `tests/fixtures/`                  | CLI 契约与真实 shim 作业使用的 IR fixture |
+| `tests/BindingShimSmoke`           | LLAPI 切片的 Windows 端到端 smoke test    |
+| `tests/RealShimSmoke`              | link-carrier fixture 的 CI smoke test     |
 
 ## 命令
 

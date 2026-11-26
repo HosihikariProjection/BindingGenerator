@@ -30,18 +30,27 @@ def version(tag: str) -> tuple[int, int, int] | None:
 
 def remote_tags(repository: str) -> list[str]:
     completed = subprocess.run(
-        ["git", "ls-remote", "--tags", "--refs", f"https://github.com/{repository}.git"],
+        [
+            "git",
+            "ls-remote",
+            "--tags",
+            "--refs",
+            f"https://github.com/{repository}.git",
+        ],
         capture_output=True,
         text=True,
         timeout=120,
     )
     if completed.returncode != 0:
-        raise RuntimeError(completed.stderr.strip() or f"git ls-remote exited with {completed.returncode}")
+        raise RuntimeError(
+            completed.stderr.strip()
+            or f"git ls-remote exited with {completed.returncode}"
+        )
     tags = []
     for line in completed.stdout.splitlines():
         _, _, ref = line.partition("\t")
         if ref.startswith("refs/tags/"):
-            tags.append(ref[len("refs/tags/"):])
+            tags.append(ref[len("refs/tags/") :])
     return tags
 
 
@@ -55,7 +64,9 @@ def command(name: str, latest: str) -> str:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--pins", default=str(HERE / "carriers.json"))
-    parser.add_argument("--github-output", help="append the outdated=true/false step output here")
+    parser.add_argument(
+        "--github-output", help="append the outdated=true/false step output here"
+    )
     parser.add_argument("--markdown", help="write the issue body here")
     args = parser.parse_args()
 
@@ -94,7 +105,11 @@ def main() -> int:
             "| Carrier | Pinned | Latest |",
             "|---|---|---|",
         ]
-        lines += [f"| {name} | {pinned} | {latest} |" for name, _, pinned, latest, newer in rows if newer]
+        lines += [
+            f"| {name} | {pinned} | {latest} |"
+            for name, _, pinned, latest, newer in rows
+            if newer
+        ]
         lines += ["", "Regenerate with:"]
         for name, _, _, latest, newer in rows:
             if newer:

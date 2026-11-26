@@ -13,13 +13,16 @@ internal static class ConstantFields
     {
         type = "";
         literal = "";
-        if (member.Value is null
+        if (
+            member.Value is null
             || member.Type is null
             || !BigInteger.TryParse(
                 member.Value,
                 NumberStyles.AllowLeadingSign,
                 CultureInfo.InvariantCulture,
-                out var value))
+                out var value
+            )
+        )
         {
             return false;
         }
@@ -103,16 +106,17 @@ internal static class ConstantFields
         }
     }
 
-    public static bool Fits(string type, BigInteger value) => type switch
-    {
-        "sbyte" => value >= sbyte.MinValue && value <= sbyte.MaxValue,
-        "byte" => value >= byte.MinValue && value <= byte.MaxValue,
-        "short" => value >= short.MinValue && value <= short.MaxValue,
-        "ushort" => value >= ushort.MinValue && value <= ushort.MaxValue,
-        "int" => value >= int.MinValue && value <= int.MaxValue,
-        "uint" => value >= uint.MinValue && value <= uint.MaxValue,
-        "long" => value >= long.MinValue && value <= long.MaxValue,
-        "ulong" => value >= ulong.MinValue && value <= ulong.MaxValue,
-        _ => false,
-    };
+    public static bool Fits(string type, BigInteger value) =>
+        type switch
+        {
+            "sbyte" => value >= sbyte.MinValue && value <= sbyte.MaxValue,
+            "byte" => value >= byte.MinValue && value <= byte.MaxValue,
+            "short" => value >= short.MinValue && value <= short.MaxValue,
+            "ushort" => value >= ushort.MinValue && value <= ushort.MaxValue,
+            "int" => value >= int.MinValue && value <= int.MaxValue,
+            "uint" => value >= uint.MinValue && value <= uint.MaxValue,
+            "long" => value >= long.MinValue && value <= long.MaxValue,
+            "ulong" => value >= ulong.MinValue && value <= ulong.MaxValue,
+            _ => false,
+        };
 }

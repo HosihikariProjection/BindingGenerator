@@ -1,41 +1,41 @@
 {
- "schema": "hosihikari.bindings.ir/1",
- "irVersion": "1.4.1",
- "frontend": {
-  "name": "symbol-dispatch-fixture",
-  "version": "0.1.0",
-  "llvm": "n/a"
- },
- "configurations": [
-  {
-   "id": "linux-x64-server",
-   "os": "linux",
-   "arch": "x64",
-   "target": "server",
-   "defines": [],
-   "definesHash": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-  }
- ],
- "shards": [
-  {
-   "surface": "bedrock",
-   "configuration": "linux-x64-server",
-   "module": "bedrock",
-   "path": "linux-x64-server.jsonl",
-   "sha256": "sha256:ecde36e90cd488e8671f2ea4a15a8f22bee9b00ed1f365cabaf18b7a1b1b8eb6",
-   "sha256Compressed": "sha256:ecde36e90cd488e8671f2ea4a15a8f22bee9b00ed1f365cabaf18b7a1b1b8eb6",
-   "records": 25
-  }
- ],
- "diagnostics": {
-  "errors": 0,
-  "warnings": 0,
-  "shardsWithErrors": []
- },
- "counts": {
-  "declarations": 3,
-  "variants": 3,
-  "members": 19
- },
- "sources": []
+  "schema": "hosihikari.bindings.ir/1",
+  "irVersion": "1.4.1",
+  "frontend": {
+    "name": "symbol-dispatch-fixture",
+    "version": "0.1.0",
+    "llvm": "n/a"
+  },
+  "configurations": [
+    {
+      "id": "linux-x64-server",
+      "os": "linux",
+      "arch": "x64",
+      "target": "server",
+      "defines": [],
+      "definesHash": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "shards": [
+    {
+      "surface": "bedrock",
+      "configuration": "linux-x64-server",
+      "module": "bedrock",
+      "path": "linux-x64-server.jsonl",
+      "sha256": "sha256:ecde36e90cd488e8671f2ea4a15a8f22bee9b00ed1f365cabaf18b7a1b1b8eb6",
+      "sha256Compressed": "sha256:ecde36e90cd488e8671f2ea4a15a8f22bee9b00ed1f365cabaf18b7a1b1b8eb6",
+      "records": 25
+    }
+  ],
+  "diagnostics": {
+    "errors": 0,
+    "warnings": 0,
+    "shardsWithErrors": []
+  },
+  "counts": {
+    "declarations": 3,
+    "variants": 3,
+    "members": 19
+  },
+  "sources": []
 }

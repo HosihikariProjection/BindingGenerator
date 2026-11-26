@@ -14,24 +14,41 @@ Only arguments that are complete at the prelude are instantiated: a scalar, an e
 pointer (the pointee stays opaque), or a class with a recorded layout. An incomplete
 argument would make the translation unit stop at clang's error limit.
 """
+
 import json
 import pathlib
 import sys
 
 BUILTIN = {
-    'void', 'bool', 'char', 'signed char', 'unsigned char', 'short',
-    'unsigned short', 'int', 'unsigned int', 'long', 'unsigned long',
-    'long long', 'unsigned long long', 'float', 'double', 'long double',
-    'wchar_t', 'char8_t', 'char16_t', 'char32_t',
+    "void",
+    "bool",
+    "char",
+    "signed char",
+    "unsigned char",
+    "short",
+    "unsigned short",
+    "int",
+    "unsigned int",
+    "long",
+    "unsigned long",
+    "long long",
+    "unsigned long long",
+    "float",
+    "double",
+    "long double",
+    "wchar_t",
+    "char8_t",
+    "char16_t",
+    "char32_t",
 }
-VALUE_TYPES = {'std::error_code', 'std::basic_string<char>', 'std::string'}
+VALUE_TYPES = {"std::error_code", "std::basic_string<char>", "std::string"}
 
 # Templates whose specialization declaration the ABI planner can carry as a by-value
 # result. Both definitions are complete in the umbrella; instantiating one here keeps
 # its declaration at the original header, inside the source root.
 TEMPLATES = {
-    'Bedrock::Result',
-    'GameplayHandlerResult',
+    "Bedrock::Result",
+    "GameplayHandlerResult",
 }
 
 
@@ -40,11 +57,11 @@ def split_top_level(text):
     depth = 0
     start = 0
     for index, char in enumerate(text):
-        if char == '<':
+        if char == "<":
             depth += 1
-        elif char == '>':
+        elif char == ">":
             depth -= 1
-        elif char == ',' and depth == 0:
+        elif char == "," and depth == 0:
             args.append(text[start:index].strip())
             start = index + 1
     args.append(text[start:].strip())
@@ -52,15 +69,15 @@ def split_top_level(text):
 
 
 def split_template(text):
-    if not text.endswith('>'):
+    if not text.endswith(">"):
         return None, None
-    opening = text.find('<')
+    opening = text.find("<")
     if opening <= 0:
         return None, None
     name = text[:opening].strip()
-    if '<' in name or not name:
+    if "<" in name or not name:
         return None, None
-    return name, text[opening + 1:-1]
+    return name, text[opening + 1 : -1]
 
 
 def load_complete_names(ir):
@@ -68,17 +85,19 @@ def load_complete_names(ir):
     layouts = set()
     enums = set()
     records = {}
-    for shard in sorted(ir.glob('*.jsonl')):
-        with shard.open(encoding='utf-8') as stream:
+    for shard in sorted(ir.glob("*.jsonl")):
+        with shard.open(encoding="utf-8") as stream:
             for line in stream:
                 record = json.loads(line)
-                if record.get('recordType') == 'variant':
-                    layouts.add(record.get('declarationId'))
-                elif record.get('recordType') == 'declaration':
-                    records[record.get('id')] = record.get('qualifiedName')
-                    if record.get('kind') == 'enum':
-                        enums.add(record.get('qualifiedName'))
-    names.update(name for declaration, name in records.items() if declaration in layouts)
+                if record.get("recordType") == "variant":
+                    layouts.add(record.get("declarationId"))
+                elif record.get("recordType") == "declaration":
+                    records[record.get("id")] = record.get("qualifiedName")
+                    if record.get("kind") == "enum":
+                        enums.add(record.get("qualifiedName"))
+    names.update(
+        name for declaration, name in records.items() if declaration in layouts
+    )
     names.update(enums)
     return names
 
@@ -91,35 +110,35 @@ def main():
     def complete_argument(argument):
         if argument in BUILTIN or argument in VALUE_TYPES:
             return True
-        if argument.endswith('*'):
+        if argument.endswith("*"):
             return True
-        if '<' in argument:
+        if "<" in argument:
             return False
         return argument in complete_names
 
     instantiations = set()
-    for shard in sorted(ir.glob('*.jsonl')):
-        with shard.open(encoding='utf-8') as stream:
+    for shard in sorted(ir.glob("*.jsonl")):
+        with shard.open(encoding="utf-8") as stream:
             for line in stream:
                 record = json.loads(line)
-                signature = record.get('signature')
+                signature = record.get("signature")
                 if not signature:
                     continue
-                returned = (signature.get('returnType') or '').strip()
+                returned = (signature.get("returnType") or "").strip()
                 name, inner = split_template(returned)
                 if name is None or name not in TEMPLATES:
                     continue
                 arguments = split_top_level(inner)
-                if name == 'Bedrock::Result' and len(arguments) == 1:
-                    arguments.append('std::error_code')
-                if len(arguments) != (1 if name == 'GameplayHandlerResult' else 2):
+                if name == "Bedrock::Result" and len(arguments) == 1:
+                    arguments.append("std::error_code")
+                if len(arguments) != (1 if name == "GameplayHandlerResult" else 2):
                     continue
                 if any(
-                    argument == ''
-                    or '...' in argument
-                    or '<lambda' in argument
-                    or 'decltype' in argument
-                    or argument.startswith('auto')
+                    argument == ""
+                    or "..." in argument
+                    or "<lambda" in argument
+                    or "decltype" in argument
+                    or argument.startswith("auto")
                     for argument in arguments
                 ):
                     continue
@@ -130,16 +149,19 @@ def main():
     # A sizeof probe forces an implicit instantiation whose declaration keeps the
     # template header's location; an explicit instantiation definition would move the
     # specialization to this prelude, outside the source root, and the IR would drop it.
-    lines = ['// <auto-generated/> by-value template specializations used by return types', '']
+    lines = [
+        "// <auto-generated/> by-value template specializations used by return types",
+        "",
+    ]
     for name, arguments in sorted(instantiations):
-        spelling = ', '.join(arguments)
+        spelling = ", ".join(arguments)
         lines.append(
-            f'static_assert(sizeof(::{name}<{spelling}>) > 0, '
+            f"static_assert(sizeof(::{name}<{spelling}>) > 0, "
             '"instantiate the by-value result specialization");'
         )
-    out.write_text('\n'.join(lines) + '\n', encoding='utf-8')
-    print(f'{len(instantiations)} template instantiations -> {out}')
+    out.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    print(f"{len(instantiations)} template instantiations -> {out}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

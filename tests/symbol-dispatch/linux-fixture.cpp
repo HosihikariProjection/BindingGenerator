@@ -30,42 +30,54 @@ struct FixturePair
     FixturePair(FixturePair const& other);
 };
 
-FixturePair::FixturePair(int x_, int y_) : x(x_), y(y_) {}
+FixturePair::FixturePair(int x_, int y_)
+    : x(x_)
+    , y(y_)
+{
+}
 
-FixturePair::FixturePair(FixturePair const& other) : x(other.x), y(other.y) {}
+FixturePair::FixturePair(FixturePair const& other)
+    : x(other.x)
+    , y(other.y)
+{
+}
 
 class FixtureBlock
 {
 public:
     FixtureBlock(int x, int y);
-    int add(int value) const;
-    virtual int isReady() const;
-    virtual int scale(int factor) const;
-    std::string label() const;
-    std::vector<int> numbers() const;
-    FixturePair pair() const;
-    int sumPair(FixturePair value) const;
-    std::optional<int> maybeNumber(bool present) const;
-    std::optional<FixtureValue> maybeValue(bool present) const;
-    int sumValueOptional(std::optional<FixtureValue> value) const;
-    int sumOptional(std::optional<int> value) const;
-    std::optional<std::string> maybeLabel(bool present) const;
-    int labelSize(std::optional<std::string> value) const;
+    int                            add(int value) const;
+    virtual int                    isReady() const;
+    virtual int                    scale(int factor) const;
+    std::string                    label() const;
+    std::vector<int>               numbers() const;
+    FixturePair                    pair() const;
+    int                            sumPair(FixturePair value) const;
+    std::optional<int>             maybeNumber(bool present) const;
+    std::optional<FixtureValue>    maybeValue(bool present) const;
+    int                            sumValueOptional(std::optional<FixtureValue> value) const;
+    int                            sumOptional(std::optional<int> value) const;
+    std::optional<std::string>     maybeLabel(bool present) const;
+    int                            labelSize(std::optional<std::string> value) const;
     std::shared_ptr<FixtureObject> makeShared(int value) const;
-    int sharedValue(std::shared_ptr<FixtureObject> value) const;
-    std::weak_ptr<FixtureObject> weakRef() const;
-    FixtureObject* makeObject(int value) const;
-    void releaseObject(FixtureObject* value) const;
-    int sumObjectValues(std::vector<FixtureObject*> const& values) const;
-    static FixtureBlock* create(int x, int y);
-    static void release(FixtureBlock* block);
+    int                            sharedValue(std::shared_ptr<FixtureObject> value) const;
+    std::weak_ptr<FixtureObject>   weakRef() const;
+    FixtureObject*                 makeObject(int value) const;
+    void                           releaseObject(FixtureObject* value) const;
+    int                            sumObjectValues(std::vector<FixtureObject*> const& values) const;
+    static FixtureBlock*           create(int x, int y);
+    static void                    release(FixtureBlock* block);
 
 private:
     int x_;
     int y_;
 };
 
-FixtureBlock::FixtureBlock(int x, int y) : x_(x), y_(y) {}
+FixtureBlock::FixtureBlock(int x, int y)
+    : x_(x)
+    , y_(y)
+{
+}
 
 int FixtureBlock::add(int value) const
 {

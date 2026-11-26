@@ -12,7 +12,8 @@ public static class NativeEntryPoint
         var resultPath = Environment.GetEnvironmentVariable("HS_SYMBOL_RESULT");
         try
         {
-            var shim = Environment.GetEnvironmentVariable("HS_SYMBOL_SHIM")
+            var shim =
+                Environment.GetEnvironmentVariable("HS_SYMBOL_SHIM")
                 ?? throw new InvalidOperationException("HS_SYMBOL_SHIM is not set.");
             NativeMethods.Load(shim);
 
@@ -21,10 +22,13 @@ public static class NativeEntryPoint
             using var c = BlockPos.Create(1.0f, 2.0f, 4.0f);
 
             // The hash suffix on toString depends on the IR; resolve it by shape instead.
-            var toString = typeof(BlockPos).GetMethods()
-                .First(method => method.Name.StartsWith("toString", StringComparison.Ordinal)
+            var toString = typeof(BlockPos)
+                .GetMethods()
+                .First(method =>
+                    method.Name.StartsWith("toString", StringComparison.Ordinal)
                     && method.GetParameters().Length == 0
-                    && method.ReturnType == typeof(string));
+                    && method.ReturnType == typeof(string)
+                );
             string Text(BlockPos value) => (string)toString.Invoke(value, null)!;
 
             var textA = Text(a);
@@ -46,7 +50,9 @@ public static class NativeEntryPoint
             using var chunk = ChunkPos.Create(origin);
             using var vector = chunk.toBlockSpaceVec3(64.0f);
             var vectorLength = vector.length();
-            var expectedLength = MathF.Sqrt(vector.x * vector.x + vector.y * vector.y + vector.z * vector.z);
+            var expectedLength = MathF.Sqrt(
+                vector.x * vector.x + vector.y * vector.y + vector.z * vector.z
+            );
             using var normalized = vector.normalized();
             var normalizedLength = normalized.length();
             using var absolute = vector.abs();
@@ -66,9 +72,22 @@ public static class NativeEntryPoint
             // buffer. The shim copies the elements into a thread-local view that the managed
             // side decodes immediately. A header stub can share the signature with the symbol
             // method, so resolve the bound overload by shape.
-            string[] Addresses() => (string[])Bound(platform!, nameof(AppPlatform), "getIPAddresses", "System.String[]");
-            string[] Broadcast() => (string[])Bound(platform!, nameof(AppPlatform), "getBroadcastAddresses", "System.String[]");
-            string[] UserInput() => (string[])Bound(platform!, nameof(AppPlatform), "getUserInput", "System.String[]");
+            string[] Addresses() =>
+                (string[])Bound(
+                    platform!,
+                    nameof(AppPlatform),
+                    "getIPAddresses",
+                    "System.String[]"
+                );
+            string[] Broadcast() =>
+                (string[])Bound(
+                    platform!,
+                    nameof(AppPlatform),
+                    "getBroadcastAddresses",
+                    "System.String[]"
+                );
+            string[] UserInput() =>
+                (string[])Bound(platform!, nameof(AppPlatform), "getUserInput", "System.String[]");
             var addresses = platform is null ? [] : Addresses();
             var addressesAgain = platform is null ? [] : Addresses();
             var broadcast = platform is null ? [] : Broadcast();
@@ -77,15 +96,18 @@ public static class NativeEntryPoint
 
             // ServerInstance exposes NonOwnerPointer results. The shim keeps the returned
             // control block alive and surfaces the object stored in it as the handle target.
-            var serverInstanceText = Environment.GetEnvironmentVariable("HS_SYMBOL_SERVER_INSTANCE");
-            var serverInstance = ulong.TryParse(serverInstanceText, out var serverAddress)
-                && serverAddress != 0
+            var serverInstanceText = Environment.GetEnvironmentVariable(
+                "HS_SYMBOL_SERVER_INSTANCE"
+            );
+            var serverInstance =
+                ulong.TryParse(serverInstanceText, out var serverAddress) && serverAddress != 0
                     ? ServerInstance.Borrow((nint)serverAddress)
                     : null;
             using var cdnConfig = serverInstance?.getCDNConfig();
             using var editorManager = serverInstance?.getEditorManager();
             using var serverTextSettings = serverInstance?.getServerTextSettings();
-            var serverWrappersOk = serverInstance is null
+            var serverWrappersOk =
+                serverInstance is null
                 || (serverTextSettings is not null && serverTextSettings.Target != 0);
 
             // getSecureStorage transfers a unique_ptr<SecureStorage>. SecureStorage is a pure
@@ -98,7 +120,8 @@ public static class NativeEntryPoint
             using var zeroVector = Vec3.ZERO;
             using var maxBlockPos = BlockPos.MAX;
             using var emptyItem = ItemStack.EMPTY_ITEM;
-            var staticConstantsOk = zeroVector.x == 0
+            var staticConstantsOk =
+                zeroVector.x == 0
                 && zeroVector.y == 0
                 && zeroVector.z == 0
                 && maxBlockPos.x != 0
@@ -108,27 +131,47 @@ public static class NativeEntryPoint
 
             // The Item class exposes static string constants; the empty stack exercises the
             // ItemStackBase.getItem pointer-return path without constructing a new stack.
-            var itemStaticsOk = Item.TAG_DAMAGE.Length > 0 && Item.ICON_DESCRIPTION_PREFIX.Length > 0;
+            var itemStaticsOk =
+                Item.TAG_DAMAGE.Length > 0 && Item.ICON_DESCRIPTION_PREFIX.Length > 0;
             using var emptyStackView = ItemStackBase.Borrow(emptyItem.Handle);
             var emptyItemPtr = emptyStackView.getItem();
             var itemLiveOk = itemStaticsOk && (emptyItemPtr is null || emptyItemPtr.Handle != 0);
 
             // A static member that returns std::string by value uses the same hidden return
             // buffer as a free function. Resolve the hash suffix by shape.
-            var hyphenate = typeof(NetworkIdentifier).GetMethods()
-                .First(method => method.Name.StartsWith("hyphenateId", StringComparison.Ordinal)
+            var hyphenate = typeof(NetworkIdentifier)
+                .GetMethods()
+                .First(method =>
+                    method.Name.StartsWith("hyphenateId", StringComparison.Ordinal)
                     && method.IsStatic
                     && method.GetParameters().Length == 1
                     && method.GetParameters()[0].ParameterType == typeof(ulong)
-                    && method.ReturnType == typeof(string));
+                    && method.ReturnType == typeof(string)
+                );
             var hyphenated = (string)hyphenate.Invoke(null, new object[] { 0x1234567890ABCDEFUL })!;
             var staticStringOk = hyphenated.Length > 0;
 
             // Core::PathBuffer<std::string> is a single string member; the shim reads it with
             // the std::string return ABI and releases it with the game's own string destructor.
-            var storagePath = platform is null ? "" : (string)Bound(platform, nameof(AppPlatform), "getInternalStoragePath", "System.String");
-            var userdataPath = platform is null ? "" : (string)Bound(platform, nameof(AppPlatform), "getUserdataPath", "System.String");
-            var currentStoragePath = platform is null ? "" : (string)Bound(platform, nameof(AppPlatform), "getCurrentStoragePath", "System.String");
+            var storagePath = platform is null
+                ? ""
+                : (string)Bound(
+                    platform,
+                    nameof(AppPlatform),
+                    "getInternalStoragePath",
+                    "System.String"
+                );
+            var userdataPath = platform is null
+                ? ""
+                : (string)Bound(platform, nameof(AppPlatform), "getUserdataPath", "System.String");
+            var currentStoragePath = platform is null
+                ? ""
+                : (string)Bound(
+                    platform,
+                    nameof(AppPlatform),
+                    "getCurrentStoragePath",
+                    "System.String"
+                );
 
             // A static field whose type is not projected still resolves through its data
             // symbol and surfaces the storage address. NORMAL is Facing's unit vector table.
@@ -142,9 +185,8 @@ public static class NativeEntryPoint
             var zeroLength = zero.length();
             using var sum = BlockPos.Create(1.0f, 2.0f, 3.0f);
             var summed = sum.x + sum.y + sum.z;
-            var valueTypesOk = MathF.Abs(unitLength - 1.0f) < 0.01f
-                && zeroLength == 0.0f
-                && summed == 6.0f;
+            var valueTypesOk =
+                MathF.Abs(unitLength - 1.0f) < 0.01f && zeroLength == 0.0f && summed == 6.0f;
 
             // std::string by-value returns from both a member and a static member.
             var semVersionOk = false;
@@ -160,11 +202,13 @@ public static class NativeEntryPoint
             }
 
             // A static string hashing helper exercises the scalar-in, scalar-out path.
-            var hashOk = HashedString.computeHash("starlight") is var hashA
+            var hashOk =
+                HashedString.computeHash("starlight") is var hashA
                 && hashA == HashedString.computeHash("starlight")
                 && hashA != HashedString.computeHash("starlight2");
 
-            var ok = textA.Length > 0
+            var ok =
+                textA.Length > 0
                 && textA == textB
                 && textA != textC
                 && seedA == seedB
@@ -248,11 +292,12 @@ public static class NativeEntryPoint
             {
                 try
                 {
-                    File.WriteAllText(resultPath, "load=failed\nresult=FAIL\n" + exception + Environment.NewLine);
+                    File.WriteAllText(
+                        resultPath,
+                        "load=failed\nresult=FAIL\n" + exception + Environment.NewLine
+                    );
                 }
-                catch (IOException)
-                {
-                }
+                catch (IOException) { }
             }
 
             return 1;
@@ -263,13 +308,22 @@ public static class NativeEntryPoint
     /// Finds the bound overload of a zero-argument method by its declared return type. Name
     /// suffixes shift whenever the IR gains a stub with the same signature.
     /// </summary>
-    private static object Bound(object target, string typeName, string methodName, string returnType)
+    private static object Bound(
+        object target,
+        string typeName,
+        string methodName,
+        string returnType
+    )
     {
-        var match = target.GetType().GetMethods().First(candidate =>
-            candidate.Name.StartsWith(methodName, StringComparison.Ordinal)
-            && candidate.GetParameters().Length == 0
-            && candidate.ReturnType.ToString() == returnType
-            && !candidate.GetCustomAttributes(typeof(ObsoleteAttribute), false).Any());
+        var match = target
+            .GetType()
+            .GetMethods()
+            .First(candidate =>
+                candidate.Name.StartsWith(methodName, StringComparison.Ordinal)
+                && candidate.GetParameters().Length == 0
+                && candidate.ReturnType.ToString() == returnType
+                && !candidate.GetCustomAttributes(typeof(ObsoleteAttribute), false).Any()
+            );
         return match.Invoke(target, null)!;
     }
 }

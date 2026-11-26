@@ -39,7 +39,8 @@ switch (args[0])
         if (args.Length < 4)
         {
             Console.Error.WriteLine(
-                "usage: emit <ir-manifest.json> <shard-directory> <output-directory> --abi-header <path> [--native-root <path>] [--link-carrier] [--ll-allocator] [--virtual-dispatch] [--symbol-dispatch] [--target-module <name>] [--allow-ir-errors] [--resolve-by-name]");
+                "usage: emit <ir-manifest.json> <shard-directory> <output-directory> --abi-header <path> [--native-root <path>] [--link-carrier] [--ll-allocator] [--virtual-dispatch] [--symbol-dispatch] [--target-module <name>] [--allow-ir-errors] [--resolve-by-name]"
+            );
             return 2;
         }
 
@@ -119,7 +120,9 @@ switch (args[0])
 
         if (symbolDispatch && (linkCarrier || llAllocator || virtualDispatch))
         {
-            Console.Error.WriteLine("--symbol-dispatch cannot be combined with source-based emit modes.");
+            Console.Error.WriteLine(
+                "--symbol-dispatch cannot be combined with source-based emit modes."
+            );
             return 2;
         }
 
@@ -127,7 +130,8 @@ switch (args[0])
         if (allowIrErrors)
         {
             Console.Error.WriteLine(
-                $"warning: {manifest.Diagnostics.Errors} parse error(s) ignored by --allow-ir-errors");
+                $"warning: {manifest.Diagnostics.Errors} parse error(s) ignored by --allow-ir-errors"
+            );
             manifest.Diagnostics.Errors = 0;
             manifest.Diagnostics.ShardsWithErrors = [];
         }
@@ -148,7 +152,14 @@ switch (args[0])
             records = AddStaticFields(records, manifest);
         }
 
-        var plan = AbiPlan.Build(records, nativeRoot, linkCarrier, llAllocator, virtualDispatch, symbolDispatch);
+        var plan = AbiPlan.Build(
+            records,
+            nativeRoot,
+            linkCarrier,
+            llAllocator,
+            virtualDispatch,
+            symbolDispatch
+        );
         foreach (var subdirectory in new[] { "interop", "shim", "coverage" })
         {
             DeleteDirectory(Path.Combine(output, subdirectory));
@@ -156,10 +167,20 @@ switch (args[0])
 
         Directory.CreateDirectory(output);
         InteropEmitter.Emit(records, output, plan);
-        ShimEmitter.Emit(manifest, records, output, manifestHash, plan, abiHeader, targetModule, resolveByName);
+        ShimEmitter.Emit(
+            manifest,
+            records,
+            output,
+            manifestHash,
+            plan,
+            abiHeader,
+            targetModule,
+            resolveByName
+        );
         CoverageEmitter.Emit(manifest, records, output, manifestHash, plan);
         Console.WriteLine(
-            $"emitted {records.Count} records to {output} ({plan.Functions.Count} BindingShim functions)");
+            $"emitted {records.Count} records to {output} ({plan.Functions.Count} BindingShim functions)"
+        );
         return 0;
     }
 
@@ -167,7 +188,9 @@ switch (args[0])
     {
         if (args.Length != 3)
         {
-            Console.Error.WriteLine("usage: validate-coverage <coverage-summary.json> <coverage-manifest.jsonl>");
+            Console.Error.WriteLine(
+                "usage: validate-coverage <coverage-summary.json> <coverage-manifest.jsonl>"
+            );
             return 2;
         }
 
@@ -201,8 +224,11 @@ static IrManifest ReadManifest(string path)
 static List<IrRecord> ReadRecords(string directory)
 {
     var records = new List<IrRecord>();
-    foreach (var file in Directory.EnumerateFiles(directory, "*.jsonl", SearchOption.AllDirectories)
-                 .OrderBy(path => path, StringComparer.Ordinal))
+    foreach (
+        var file in Directory
+            .EnumerateFiles(directory, "*.jsonl", SearchOption.AllDirectories)
+            .OrderBy(path => path, StringComparer.Ordinal)
+    )
     {
         using var stream = File.OpenRead(file);
         records.AddRange(IrJson.ReadRecords(stream));
@@ -251,7 +277,8 @@ static List<IrRecord> AddRecordSupport(List<IrRecord> records, IrManifest manife
         return records;
     }
 
-    var declarations = records.OfType<DeclarationRecord>()
+    var declarations = records
+        .OfType<DeclarationRecord>()
         .GroupBy(declaration => declaration.QualifiedName, StringComparer.Ordinal)
         .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
     var additions = new List<MemberRecord>();
@@ -265,7 +292,8 @@ static List<IrRecord> AddRecordSupport(List<IrRecord> records, IrManifest manife
         // A header-declared destructor or copy constructor usually has no symbol of its own.
         // Attach the resolved support symbol to that member instead of emitting a second copy.
         // Only public members qualify: a private destructor keeps the synthetic public one.
-        var existing = records.OfType<MemberRecord>()
+        var existing = records
+            .OfType<MemberRecord>()
             .Where(member => member.DeclarationId == declaration.Id)
             .ToList();
 
@@ -277,14 +305,17 @@ static List<IrRecord> AddRecordSupport(List<IrRecord> records, IrManifest manife
                     member.Kind == "destructor"
                     && member.Access == "public"
                     && member.Configuration == configuration
-                    && !HasSupportSymbol(member));
+                    && !HasSupportSymbol(member)
+                );
                 if (target is not null)
                 {
                     ApplySupport(target, destructor);
                 }
                 else
                 {
-                    additions.Add(SupportMember(declaration, name, configuration, destructor, copy: false));
+                    additions.Add(
+                        SupportMember(declaration, name, configuration, destructor, copy: false)
+                    );
                 }
             }
 
@@ -295,14 +326,17 @@ static List<IrRecord> AddRecordSupport(List<IrRecord> records, IrManifest manife
                     && member.Access == "public"
                     && member.Configuration == configuration
                     && !HasSupportSymbol(member)
-                    && IsCopyConstructorOf(member, name));
+                    && IsCopyConstructorOf(member, name)
+                );
                 if (target is not null)
                 {
                     ApplySupport(target, copy);
                 }
                 else
                 {
-                    additions.Add(SupportMember(declaration, name, configuration, copy, copy: true));
+                    additions.Add(
+                        SupportMember(declaration, name, configuration, copy, copy: true)
+                    );
                 }
             }
         }
@@ -311,7 +345,9 @@ static List<IrRecord> AddRecordSupport(List<IrRecord> records, IrManifest manife
     return additions.Count == 0 ? records : [.. records, .. additions];
 
     bool HasSupportSymbol(MemberRecord member) =>
-        !string.IsNullOrWhiteSpace(member.Symbol) || member.Rva is not null || member.Address is not null;
+        !string.IsNullOrWhiteSpace(member.Symbol)
+        || member.Rva is not null
+        || member.Address is not null;
 
     bool IsCopyConstructorOf(MemberRecord member, string name)
     {
@@ -328,8 +364,8 @@ static List<IrRecord> AddRecordSupport(List<IrRecord> records, IrManifest manife
         }
 
         return type.Replace("const ", "", StringComparison.Ordinal)
-            .Replace(" const", "", StringComparison.Ordinal)
-            .Trim() == name;
+                .Replace(" const", "", StringComparison.Ordinal)
+                .Trim() == name;
     }
 
     void ApplySupport(MemberRecord member, IrSupportSymbol support)
@@ -344,7 +380,8 @@ static List<IrRecord> AddRecordSupport(List<IrRecord> records, IrManifest manife
         string name,
         string configuration,
         IrSupportSymbol support,
-        bool copy) =>
+        bool copy
+    ) =>
         new()
         {
             Id = declaration.Id + (copy ? "@support:copyConstructor" : "@support:destructor"),
@@ -363,11 +400,7 @@ static List<IrRecord> AddRecordSupport(List<IrRecord> records, IrManifest manife
                     ReturnType = "void",
                     Parameters = [new ParameterInfo { Type = "const " + name + " &" }],
                 }
-                : new SignatureInfo
-                {
-                    Canonical = name + "::~" + name,
-                    ReturnType = "void",
-                },
+                : new SignatureInfo { Canonical = name + "::~" + name, ReturnType = "void" },
         };
 }
 
@@ -378,7 +411,8 @@ static List<IrRecord> AddStaticFields(List<IrRecord> records, IrManifest manifes
         return records;
     }
 
-    var declarations = records.OfType<DeclarationRecord>()
+    var declarations = records
+        .OfType<DeclarationRecord>()
         .GroupBy(declaration => declaration.QualifiedName, StringComparer.Ordinal)
         .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
     foreach (var (key, byConfiguration) in manifest.StaticFields)
@@ -398,11 +432,14 @@ static List<IrRecord> AddStaticFields(List<IrRecord> records, IrManifest manifes
 
         foreach (var (configuration, symbol) in byConfiguration)
         {
-            var field = records.OfType<MemberRecord>().FirstOrDefault(member =>
-                string.Equals(member.DeclarationId, declaration.Id, StringComparison.Ordinal)
-                && string.Equals(member.Kind, "static_field", StringComparison.Ordinal)
-                && string.Equals(member.Name, fieldName, StringComparison.Ordinal)
-                && string.Equals(member.Configuration, configuration, StringComparison.Ordinal));
+            var field = records
+                .OfType<MemberRecord>()
+                .FirstOrDefault(member =>
+                    string.Equals(member.DeclarationId, declaration.Id, StringComparison.Ordinal)
+                    && string.Equals(member.Kind, "static_field", StringComparison.Ordinal)
+                    && string.Equals(member.Name, fieldName, StringComparison.Ordinal)
+                    && string.Equals(member.Configuration, configuration, StringComparison.Ordinal)
+                );
             if (field is null)
             {
                 continue;

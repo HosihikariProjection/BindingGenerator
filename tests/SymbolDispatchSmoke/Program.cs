@@ -10,7 +10,8 @@ if (args.Length != 2)
 NativeLibrary.Load(Path.GetFullPath(args[0]));
 NativeMethods.Load(args[1]);
 
-var block = FixtureBlock.create(2, 3)
+var block =
+    FixtureBlock.create(2, 3)
     ?? throw new InvalidOperationException("FixtureBlock.create returned null.");
 
 if (block.add(4) != 9)
@@ -44,7 +45,9 @@ using (var pair = block.pair())
 {
     if (block.sumPair(pair) != 7)
     {
-        throw new InvalidOperationException("The trivially destructible by-value record is incorrect.");
+        throw new InvalidOperationException(
+            "The trivially destructible by-value record is incorrect."
+        );
     }
 }
 
@@ -76,7 +79,10 @@ if (block.maybeValue(false) is not null)
 if (typeof(FixtureBlock).GetMethod("maybeLabel") is not null)
 {
     var maybeLabel = typeof(FixtureBlock).GetMethod("maybeLabel")!;
-    if ((string?)maybeLabel.Invoke(block, [true]) != "2" || (string?)maybeLabel.Invoke(block, [false]) is not null)
+    if (
+        (string?)maybeLabel.Invoke(block, [true]) != "2"
+        || (string?)maybeLabel.Invoke(block, [false]) is not null
+    )
     {
         throw new InvalidOperationException("The optional string value is incorrect.");
     }
@@ -88,7 +94,8 @@ if (typeof(FixtureBlock).GetMethod("maybeLabel") is not null)
     }
 }
 
-var shared = block.makeShared(42)
+var shared =
+    block.makeShared(42)
     ?? throw new InvalidOperationException("FixtureBlock.makeShared returned null.");
 try
 {
@@ -102,7 +109,8 @@ finally
     shared.Dispose();
 }
 
-var weak = block.weakRef()
+var weak =
+    block.weakRef()
     ?? throw new InvalidOperationException("FixtureBlock.weakRef returned an expired handle.");
 try
 {
@@ -147,7 +155,9 @@ if (heavyMethod is not null)
         var heavySize = typeof(FixtureBlock).GetMethod("heavySize")!;
         if ((int)heavySize.Invoke(block, [heavy])! != 4)
         {
-            throw new InvalidOperationException("The non-trivial by-value record return is incorrect.");
+            throw new InvalidOperationException(
+                "The non-trivial by-value record return is incorrect."
+            );
         }
     }
     finally
@@ -182,9 +192,10 @@ if (uniqueHeavyMethod is not null)
 
 // A raw handle is nullable: the shim reports a handle it could not produce as absent
 // rather than as zero.
-var objectA = block.makeObject(10)
-    ?? throw new InvalidOperationException("The first object handle is null.");
-var objectB = block.makeObject(20)
+var objectA =
+    block.makeObject(10) ?? throw new InvalidOperationException("The first object handle is null.");
+var objectB =
+    block.makeObject(20)
     ?? throw new InvalidOperationException("The second object handle is null.");
 if (block.sumObjectValues([objectA, objectB]) != 32)
 {
@@ -228,7 +239,8 @@ return 0;
 
 static T Call<T>(FixtureBlock target, string name, params object?[] arguments)
 {
-    var method = typeof(FixtureBlock).GetMethod(name)
+    var method =
+        typeof(FixtureBlock).GetMethod(name)
         ?? throw new InvalidOperationException($"FixtureBlock.{name} is unavailable.");
     return (T)method.Invoke(method.IsStatic ? null : target, arguments)!;
 }

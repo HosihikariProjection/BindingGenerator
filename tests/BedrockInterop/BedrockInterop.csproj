@@ -5,7 +5,8 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <AssemblyName>Hosihikari.Binding.Bedrock.Interop</AssemblyName>
-    <InteropDirectory Condition="'$(InteropDirectory)' == ''">$(MSBuildThisFileDirectory)..\..\artifacts\t26\sym-emitted2\interop\bedrock</InteropDirectory>
+    <InteropDirectory Condition="'$(InteropDirectory)' == ''"
+      >$(MSBuildThisFileDirectory)..\..\artifacts\t26\sym-emitted2\interop\bedrock</InteropDirectory>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="$(InteropDirectory)/**/*.cs" />

@@ -1,12 +1,20 @@
 #pragma once
 
-namespace demo {
-class Counter {
+namespace demo
+{
+class Counter
+{
 public:
-    explicit Counter(int value) : value(value) {}
+    explicit Counter(int value)
+        : value(value)
+    {
+    }
     ~Counter() = default;
 
-    [[nodiscard]] int get() const { return value; }
+    [[nodiscard]] int get() const
+    {
+        return value;
+    }
 
     int value;
 };

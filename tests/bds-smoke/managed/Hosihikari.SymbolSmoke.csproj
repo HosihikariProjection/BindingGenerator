@@ -1,5 +1,4 @@
 <Project Sdk="Microsoft.NET.Sdk">
-
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
@@ -8,7 +7,8 @@
     <EnableDynamicLoading>true</EnableDynamicLoading>
     <AssemblyName>Hosihikari.SymbolSmoke</AssemblyName>
     <RootNamespace>Hosihikari.SymbolSmoke</RootNamespace>
-    <InteropDirectory Condition="'$(InteropDirectory)' == ''">$(MSBuildThisFileDirectory)..\..\..\artifacts\bds-smoke\interop</InteropDirectory>
+    <InteropDirectory Condition="'$(InteropDirectory)' == ''"
+      >$(MSBuildThisFileDirectory)..\..\..\artifacts\bds-smoke\interop</InteropDirectory>
   </PropertyGroup>
 
   <ItemGroup>
@@ -18,5 +18,4 @@
   <ItemGroup>
     <ProjectReference Include="../../../../Binding.Abi/src/Hosihikari.Binding.Abi/Hosihikari.Binding.Abi.csproj" />
   </ItemGroup>
-
 </Project>

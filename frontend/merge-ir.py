@@ -54,10 +54,13 @@ def main():
 
     records = base_records + added
     shard_text = "".join(
-        json.dumps(record, ensure_ascii=False, separators=(",", ":"), sort_keys=True) + "\n"
+        json.dumps(record, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+        + "\n"
         for record in records
     )
-    with open(os.path.join(args.output, "shard.jsonl"), "w", encoding="utf-8", newline="\n") as stream:
+    with open(
+        os.path.join(args.output, "shard.jsonl"), "w", encoding="utf-8", newline="\n"
+    ) as stream:
         stream.write(shard_text)
 
     manifest_path = os.path.join(args.base, "ir-manifest.json")
@@ -79,7 +82,12 @@ def main():
     manifest["counts"]["variants"] = counts["variant"]
     manifest["counts"]["members"] = counts["member"]
 
-    with open(os.path.join(args.output, "ir-manifest.json"), "w", encoding="utf-8", newline="\n") as stream:
+    with open(
+        os.path.join(args.output, "ir-manifest.json"),
+        "w",
+        encoding="utf-8",
+        newline="\n",
+    ) as stream:
         json.dump(manifest, stream, ensure_ascii=False, indent=2)
         stream.write("\n")
 

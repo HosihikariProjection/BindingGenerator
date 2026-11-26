@@ -1,6 +1,6 @@
 {
-    "name": "hosihikari-symbol-smoke",
-    "entry": "hosihikari-symbol-smoke.dll",
-    "version": "0.1.0",
-    "type": "preload-native"
+  "name": "hosihikari-symbol-smoke",
+  "entry": "hosihikari-symbol-smoke.dll",
+  "version": "0.1.0",
+  "type": "preload-native"
 }

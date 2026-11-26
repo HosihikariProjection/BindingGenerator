@@ -41,7 +41,11 @@ def _read_source(path, header_root):
         # Re-root them so an IR produced elsewhere still finds its annotations.
         marker = max(path.rfind("\\src\\"), path.rfind("/src/"))
         if marker >= 0:
-            candidates.append(os.path.join(header_root, "src", path[marker + 5:].replace("/", os.sep)))
+            candidates.append(
+                os.path.join(
+                    header_root, "src", path[marker + 5 :].replace("/", os.sep)
+                )
+            )
     for candidate in candidates:
         try:
             with open(candidate, encoding="utf-8", errors="replace") as stream:
@@ -75,7 +79,7 @@ def source_member_offsets(source, header_root=None):
     depth = 0
     started = False
     offsets = []
-    for text in lines[line - 1:]:
+    for text in lines[line - 1 :]:
         code = text.split("//")[0]
         opens = code.count("{")
         depth += opens - code.count("}")
@@ -94,9 +98,12 @@ def source_member_offsets(source, header_root=None):
 
 
 def serialize(records):
-    ordered = sorted(records, key=lambda record: (record_key(record), record.get("recordType", "")))
+    ordered = sorted(
+        records, key=lambda record: (record_key(record), record.get("recordType", ""))
+    )
     return "".join(
-        json.dumps(record, sort_keys=True, separators=(",", ":"), ensure_ascii=False) + "\n"
+        json.dumps(record, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+        + "\n"
         for record in ordered
     )
 
@@ -111,18 +118,28 @@ def normalize_signature(identifier):
     prefix, signature = identifier.split("#", 1)
     signature = signature.replace(" ", "")
     signature = signature.replace("class", "").replace("struct", "").replace("enum", "")
-    signature = signature.replace("std::__1::", "std::").replace("std::__cxx11::", "std::")
+    signature = signature.replace("std::__1::", "std::").replace(
+        "std::__cxx11::", "std::"
+    )
     signature = signature.replace("Puv::Legacy::", "")
     signature = signature.replace("const", "").replace("volatile", "")
     signature = signature.replace("unsigned__int64", "unsignedlonglong")
     signature = signature.replace("__int64", "longlong")
     signature = signature.replace("unsignedlong", "unsignedlonglong")
-    signature = signature.replace("std::basic_string<char,std::char_traits<char>,std::allocator<char>>", "std::string")
-    signature = signature.replace("std::basic_string<unsignedshort,std::char_traits<unsignedshort>,std::allocator<unsignedshort>>", "std::u16string")
+    signature = signature.replace(
+        "std::basic_string<char,std::char_traits<char>,std::allocator<char>>",
+        "std::string",
+    )
+    signature = signature.replace(
+        "std::basic_string<unsignedshort,std::char_traits<unsignedshort>,std::allocator<unsignedshort>>",
+        "std::u16string",
+    )
     # The header side spells the default template arguments away; the demangler keeps them.
     signature = signature.replace("std::basic_string<char>", "std::string")
     signature = signature.replace("std::basic_string_view<char>", "std::string_view")
-    signature = signature.replace("std::basic_string_view<unsignedshort>", "std::u16string_view")
+    signature = signature.replace(
+        "std::basic_string_view<unsignedshort>", "std::u16string_view"
+    )
     # The demangler prints default allocator/delete arguments; clang canonical types omit them.
     while True:
         simplified = re.sub(r",std::allocator<[^<>]*>>", ">", signature)
@@ -153,7 +170,9 @@ def main():
     parser.add_argument("--classes-file", default="")
     parser.add_argument(
         "--layout-trust",
-        default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "layout-trust.txt"),
+        default=os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "layout-trust.txt"
+        ),
         help="Layouts to accept without the completeness check, one qualified name per line.",
     )
     parser.add_argument(
@@ -177,18 +196,27 @@ def main():
             ]
     else:
         classes = [item.strip() for item in args.classes.split(",") if item.strip()]
-    with open(os.path.join(args.symbol, "ir-manifest.json"), encoding="utf-8") as stream:
+    with open(
+        os.path.join(args.symbol, "ir-manifest.json"), encoding="utf-8"
+    ) as stream:
         symbol_manifest = json.load(stream)
-    with open(os.path.join(args.header, "ir-manifest.json"), encoding="utf-8") as stream:
+    with open(
+        os.path.join(args.header, "ir-manifest.json"), encoding="utf-8"
+    ) as stream:
         header_manifest = json.load(stream)
 
-    configurations = [configuration["id"] for configuration in symbol_manifest.get("configurations", [])]
+    configurations = [
+        configuration["id"]
+        for configuration in symbol_manifest.get("configurations", [])
+    ]
     symbol_records = {configuration: [] for configuration in configurations}
     for configuration in configurations:
         shard = find_shard(symbol_manifest, configuration)
         if shard is None:
             raise SystemExit(f"symbol manifest has no shard for {configuration}")
-        symbol_records[configuration] = load_records(os.path.join(args.symbol, shard["path"]))
+        symbol_records[configuration] = load_records(
+            os.path.join(args.symbol, shard["path"])
+        )
 
     # Existence checks below run once per class and once per header member. Scanning the
     # record list each time made the merge quadratic and took tens of minutes once the class
@@ -229,14 +257,18 @@ def main():
                 ]
         symbol_records[configuration] = records
 
-    header_configuration = header_manifest.get("configurations", [{}])[0].get("id", "win-x64-server")
+    header_configuration = header_manifest.get("configurations", [{}])[0].get(
+        "id", "win-x64-server"
+    )
     header_shard = find_shard(header_manifest, header_configuration)
     if header_shard is None:
         raise SystemExit("header manifest has no shard")
     header_records = load_records(os.path.join(args.header, header_shard["path"]))
 
     header_declarations = {
-        record["id"]: record for record in header_records if record.get("recordType") == "declaration"
+        record["id"]: record
+        for record in header_records
+        if record.get("recordType") == "declaration"
     }
     header_declarations_by_compact_id = {
         re.sub(r",\s+", ",", declaration_id): declaration
@@ -245,7 +277,8 @@ def main():
     header_variants = {
         record["declarationId"]: record
         for record in header_records
-        if record.get("recordType") == "variant" and record.get("configuration") == header_configuration
+        if record.get("recordType") == "variant"
+        and record.get("configuration") == header_configuration
     }
     header_members = {}
     for record in header_records:
@@ -269,9 +302,9 @@ def main():
     for configuration, records in symbol_records.items():
         for record in records:
             if record.get("recordType") == "member":
-                existing_methods_by_declaration.setdefault(record.get("declarationId"), set()).add(
-                    normalize_signature(record.get("id", ""))
-                )
+                existing_methods_by_declaration.setdefault(
+                    record.get("declarationId"), set()
+                ).add(normalize_signature(record.get("id", "")))
 
     added_declarations = 0
     copied_fields = 0
@@ -307,11 +340,17 @@ def main():
     if args.layout_trust and os.path.exists(args.layout_trust):
         with open(args.layout_trust, encoding="utf-8") as stream:
             trusted_names = [
-                line.strip() for line in stream if line.strip() and not line.strip().startswith("#")
+                line.strip()
+                for line in stream
+                if line.strip() and not line.strip().startswith("#")
             ]
 
     def allow_listed(declaration_id):
-        name = declaration_id[len("bedrock:"):] if declaration_id.startswith("bedrock:") else declaration_id
+        name = (
+            declaration_id[len("bedrock:") :]
+            if declaration_id.startswith("bedrock:")
+            else declaration_id
+        )
         for entry in trusted_names:
             if entry.endswith("*"):
                 if name.startswith(entry[:-1]):
@@ -321,7 +360,10 @@ def main():
         return False
 
     def header_layout_trusted(declaration_id, stack=None):
-        nonlocal rejected_incomplete_layouts, rejected_mismatched_layouts, rejected_missing_sources
+        nonlocal \
+            rejected_incomplete_layouts, \
+            rejected_mismatched_layouts, \
+            rejected_missing_sources
         nonlocal unverified_layouts
         if declaration_id in trusted_layouts:
             return trusted_layouts[declaration_id]
@@ -353,13 +395,16 @@ def main():
             return False
         if annotated is None:
             unverified_layouts += 1
-        elif annotated != [offset["bitOffset"] // 8 for offset in layout["fieldOffsets"]]:
+        elif annotated != [
+            offset["bitOffset"] // 8 for offset in layout["fieldOffsets"]
+        ]:
             rejected_mismatched_layouts += 1
             trusted_layouts[declaration_id] = False
             return False
         stack.add(declaration_id)
         trusted = all(
-            header_layout_trusted(base.get("declarationId"), stack) for base in layout.get("bases", [])
+            header_layout_trusted(base.get("declarationId"), stack)
+            for base in layout.get("bases", [])
         )
         stack.discard(declaration_id)
         trusted_layouts[declaration_id] = trusted
@@ -377,7 +422,11 @@ def main():
     counted_class_sizes = set()
 
     def class_size(declaration_id):
-        name = declaration_id[len("bedrock:"):] if declaration_id.startswith("bedrock:") else declaration_id
+        name = (
+            declaration_id[len("bedrock:") :]
+            if declaration_id.startswith("bedrock:")
+            else declaration_id
+        )
         return class_sizes.get(name)
 
     def layout_for(declaration_id):
@@ -397,7 +446,9 @@ def main():
                 {
                     "size": exact,
                     "align": header_layout.get("align", 0) if keep_fields else 16,
-                    "fieldOffsets": header_layout.get("fieldOffsets", []) if keep_fields else [],
+                    "fieldOffsets": header_layout.get("fieldOffsets", [])
+                    if keep_fields
+                    else [],
                     "bases": [],
                 },
                 keep_fields,
@@ -423,11 +474,16 @@ def main():
         bases = []
         for configuration, records in symbol_records.items():
             for record in records:
-                if record.get("recordType") == "variant" and record.get("declarationId") == class_id:
+                if (
+                    record.get("recordType") == "variant"
+                    and record.get("declarationId") == class_id
+                ):
                     bases.extend(record.get("bases", []))
 
         if class_id not in symbol_declarations and class_id in header_declarations:
-            symbol_records[configurations[0]].append(copy.deepcopy(header_declarations[class_id]))
+            symbol_records[configurations[0]].append(
+                copy.deepcopy(header_declarations[class_id])
+            )
             symbol_declarations[class_id] = header_declarations[class_id]
             added_declarations += 1
 
@@ -479,7 +535,9 @@ def main():
         # destructor does, so the header facts are optional here.
         header_declaration = header_declarations.get(declaration_id, {})
 
-        symbol_declaration["abstract"] = header_declaration.get("abstract", symbol_declaration.get("abstract", False))
+        symbol_declaration["abstract"] = header_declaration.get(
+            "abstract", symbol_declaration.get("abstract", False)
+        )
         symbol_declaration["copyConstructible"] = header_declaration.get(
             "copyConstructible", symbol_declaration.get("copyConstructible", False)
         )
@@ -487,7 +545,8 @@ def main():
             "triviallyCopyable", symbol_declaration.get("triviallyCopyable", False)
         )
         symbol_declaration["triviallyDestructible"] = header_declaration.get(
-            "triviallyDestructible", symbol_declaration.get("triviallyDestructible", False)
+            "triviallyDestructible",
+            symbol_declaration.get("triviallyDestructible", False),
         )
 
         header_variant = header_variants.get(declaration_id, {})
@@ -556,9 +615,9 @@ def main():
                 if key not in existing_keys:
                     symbol_records[configuration].append(member)
                     existing_keys.add(key)
-                    existing_methods_by_declaration.setdefault(declaration_id, set()).add(
-                        normalize_signature(identifier)
-                    )
+                    existing_methods_by_declaration.setdefault(
+                        declaration_id, set()
+                    ).add(normalize_signature(identifier))
                     copied_methods += 1
 
     base_class_ids = [
@@ -630,16 +689,22 @@ def main():
         if not name:
             return []
         prefix = None
-        for candidate in ("std::vector<", "std::optional<", "std::unordered_set<", "std::shared_ptr<", "std::unique_ptr<"):
+        for candidate in (
+            "std::vector<",
+            "std::optional<",
+            "std::unordered_set<",
+            "std::shared_ptr<",
+            "std::unique_ptr<",
+        ):
             if name.startswith(candidate) and name.endswith(">"):
                 prefix = candidate
                 break
         if prefix is not None:
-            arguments = split_template_arguments(name[len(prefix):-1])
+            arguments = split_template_arguments(name[len(prefix) : -1])
             return referenced_record_names(arguments[0]) if arguments else []
         if name.startswith("std::pair<") and name.endswith(">"):
             names = []
-            for argument in split_template_arguments(name[len("std::pair<"):-1]):
+            for argument in split_template_arguments(name[len("std::pair<") : -1]):
                 names.extend(referenced_record_names(argument))
             return names
         if name.startswith("std::") or "(" in name or ")" in name:
@@ -656,20 +721,35 @@ def main():
             if record.get("recordType") != "member":
                 continue
             signature = record.get("signature") or {}
-            referenced_types.update(referenced_record_names(signature.get("returnType", "")))
+            referenced_types.update(
+                referenced_record_names(signature.get("returnType", ""))
+            )
             for parameter in signature.get("parameters", []):
-                referenced_types.update(referenced_record_names(parameter.get("type", "")))
+                referenced_types.update(
+                    referenced_record_names(parameter.get("type", ""))
+                )
 
     for type_name in sorted(referenced_types):
-        if not type_name or type_name.startswith("std::") or "(" in type_name or ")" in type_name:
+        if (
+            not type_name
+            or type_name.startswith("std::")
+            or "(" in type_name
+            or ")" in type_name
+        ):
             continue
         declaration_id = "bedrock:" + type_name
         header_declaration = header_declarations.get(
             declaration_id
         ) or header_declarations_by_compact_id.get(declaration_id)
-        if header_declaration is None or header_declaration.get("kind") not in ("class", "struct", "union"):
+        if header_declaration is None or header_declaration.get("kind") not in (
+            "class",
+            "struct",
+            "union",
+        ):
             continue
-        header_variant = header_variants.get(header_declaration.get("id", declaration_id), {})
+        header_variant = header_variants.get(
+            header_declaration.get("id", declaration_id), {}
+        )
         layout = header_variant.get("layout")
         # The declaration is copied either way so the type stays in the surface with its
         # symbol and vtable members. Only a proven size is attached: the shim sizes its
@@ -686,7 +766,9 @@ def main():
             copied_declaration = copy.deepcopy(header_declaration)
             # The demangler omits spaces after template commas; make the dependency id match
             # the spelling used by the symbol signatures.
-            compact_name = re.sub(r",\s+", ",", copied_declaration.get("qualifiedName", ""))
+            compact_name = re.sub(
+                r",\s+", ",", copied_declaration.get("qualifiedName", "")
+            )
             if compact_name != copied_declaration.get("qualifiedName"):
                 copied_declaration["qualifiedName"] = compact_name
                 copied_declaration["id"] = "bedrock:" + compact_name
@@ -726,7 +808,9 @@ def main():
         unique = []
         for record in symbol_records[configuration]:
             key = (
-                record.get("declarationId") if record.get("recordType") == "variant" else record.get("id"),
+                record.get("declarationId")
+                if record.get("recordType") == "variant"
+                else record.get("id"),
                 configuration,
                 record.get("recordType"),
             )
@@ -745,7 +829,9 @@ def main():
     for configuration in configurations:
         text = serialize(symbol_records[configuration])
         path = f"{configuration}.jsonl"
-        with open(os.path.join(args.output, path), "w", encoding="utf-8", newline="\n") as stream:
+        with open(
+            os.path.join(args.output, path), "w", encoding="utf-8", newline="\n"
+        ) as stream:
             stream.write(text)
         shard_paths[configuration] = (path, text)
 
@@ -753,12 +839,18 @@ def main():
     variants = 0
     members = 0
     for records in symbol_records.values():
-        declarations += sum(1 for record in records if record.get("recordType") == "declaration")
-        variants += sum(1 for record in records if record.get("recordType") == "variant")
+        declarations += sum(
+            1 for record in records if record.get("recordType") == "declaration"
+        )
+        variants += sum(
+            1 for record in records if record.get("recordType") == "variant"
+        )
         members += sum(1 for record in records if record.get("recordType") == "member")
     # Declarations are only emitted in the first configuration shard.
     declarations = sum(
-        1 for record in symbol_records[configurations[0]] if record.get("recordType") == "declaration"
+        1
+        for record in symbol_records[configurations[0]]
+        if record.get("recordType") == "declaration"
     )
 
     for shard in symbol_manifest.get("shards", []):
@@ -775,15 +867,29 @@ def main():
         "variants": variants,
         "members": members,
     }
+
     # The merged IR carries header facts the symbol stream does not have (enum values,
     # layouts), so its schema version is at least the header manifest's.
     def version_key(text):
         return tuple(int(part) for part in (text or "0").split(".") if part.isdigit())
 
-    if version_key(header_manifest.get("irVersion")) > version_key(symbol_manifest.get("irVersion")):
+    if version_key(header_manifest.get("irVersion")) > version_key(
+        symbol_manifest.get("irVersion")
+    ):
         symbol_manifest["irVersion"] = header_manifest.get("irVersion")
-    with open(os.path.join(args.output, "ir-manifest.json"), "w", encoding="utf-8", newline="\n") as stream:
-        json.dump(symbol_manifest, stream, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    with open(
+        os.path.join(args.output, "ir-manifest.json"),
+        "w",
+        encoding="utf-8",
+        newline="\n",
+    ) as stream:
+        json.dump(
+            symbol_manifest,
+            stream,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+        )
         stream.write("\n")
 
     print(

@@ -35,11 +35,13 @@ internal enum AbiFunctionKind
     Get,
     Set,
     Method,
+
     /// <summary>
     /// A companion setter for a member that returns <c>std::string&amp;</c>; it is a
     /// second function on the same member, so it is not part of the field accessor pair.
     /// </summary>
     StringSetter,
+
     /// <summary>
     /// A static accessor returning <c>ll::event::getEventId&lt;T&gt;</c> for an event type.
     /// The value is a compile-time constant, so no listener has to spell the canonical
@@ -197,7 +199,8 @@ internal sealed class VariantAbiInfo
     public string Surface { get; init; } = "";
     public string ClassName { get; init; } = "";
     public string WrapperType => "global::" + NamespaceName + "." + ClassName;
-    public string NamespaceName => $"Hosihikari.Binding.{TypeNames.SurfaceNamespace(Surface)}.Interop";
+    public string NamespaceName =>
+        $"Hosihikari.Binding.{TypeNames.SurfaceNamespace(Surface)}.Interop";
     public List<VariantAlternative> Alternatives { get; init; } = [];
     public List<AbiFunction> CreateFunctions { get; } = [];
     public List<AbiFunction> GetFunctions { get; } = [];
@@ -309,7 +312,8 @@ internal sealed class AbiFunction
     public string NativeReturnType { get; init; } = "";
     public string? ReturnWrapperType { get; init; }
     public bool ReturnOwned { get; init; }
-    public bool ReturnBorrowed => ReturnKind == AbiKind.Opaque && ReturnWrapperType is not null && !ReturnOwned;
+    public bool ReturnBorrowed =>
+        ReturnKind == AbiKind.Opaque && ReturnWrapperType is not null && !ReturnOwned;
     public bool ReturnUniquePtr { get; init; }
     public bool ReturnOptional { get; init; }
     public bool ReturnArray { get; init; }
@@ -459,7 +463,8 @@ internal sealed class CallableAbiInfo
     public string NativeType { get; init; } = "";
     public string Surface { get; init; } = "";
     public string ClassName { get; init; } = "";
-    public string NamespaceName => $"Hosihikari.Binding.{TypeNames.SurfaceNamespace(Surface)}.Interop";
+    public string NamespaceName =>
+        $"Hosihikari.Binding.{TypeNames.SurfaceNamespace(Surface)}.Interop";
     public string WrapperType => "global::" + NamespaceName + "." + ClassName;
     public AbiCallback Signature { get; init; } = new();
     public AbiFunction? InvokeFunction { get; set; }
@@ -526,7 +531,8 @@ internal sealed class AbiPlan
         IReadOnlyDictionary<string, IReadOnlyList<MemberRecord>> syntheticMembers,
         IReadOnlyList<VariantAbiInfo> usedVariants,
         IReadOnlyList<CallableAbiInfo> usedCallables,
-        IReadOnlyList<AbiFunctionStub> functionStubs)
+        IReadOnlyList<AbiFunctionStub> functionStubs
+    )
     {
         Functions = functions;
         IncludesBySurface = includesBySurface;
@@ -541,13 +547,19 @@ internal sealed class AbiPlan
         UsedVariants = usedVariants;
         UsedCallables = usedCallables;
         CreateByMember = functions
-            .Where(function => function.Kind == AbiFunctionKind.Create && function.MemberId is not null)
+            .Where(function =>
+                function.Kind == AbiFunctionKind.Create && function.MemberId is not null
+            )
             .ToDictionary(function => function.MemberId!, StringComparer.Ordinal);
         GetByMember = functions
-            .Where(function => function.Kind == AbiFunctionKind.Get && function.MemberId is not null)
+            .Where(function =>
+                function.Kind == AbiFunctionKind.Get && function.MemberId is not null
+            )
             .ToDictionary(function => function.MemberId!, StringComparer.Ordinal);
         SetByMember = functions
-            .Where(function => function.Kind == AbiFunctionKind.Set && function.MemberId is not null)
+            .Where(function =>
+                function.Kind == AbiFunctionKind.Set && function.MemberId is not null
+            )
             .ToDictionary(function => function.MemberId!, StringComparer.Ordinal);
         // Two overloads of the same accessor derive the same setter name; an ordinal keeps
         // the C# surface compiling. The functions are rewritten in place because the emit
@@ -555,20 +567,29 @@ internal sealed class AbiPlan
         StringSetters = functions
             .Where(function => function.Kind == AbiFunctionKind.StringSetter)
             .ToList();
-        foreach (var group in StringSetters
-                     .GroupBy(function => function.DeclarationId, StringComparer.Ordinal))
+        foreach (
+            var group in StringSetters.GroupBy(
+                function => function.DeclarationId,
+                StringComparer.Ordinal
+            )
+        )
         {
             var ordinal = 0;
-            foreach (var setter in group.OrderBy(function => function.MemberId, StringComparer.Ordinal))
+            foreach (
+                var setter in group.OrderBy(function => function.MemberId, StringComparer.Ordinal)
+            )
             {
                 if (ordinal++ > 0)
                 {
-                    setter.CSharpMemberName += "_" + ordinal.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                    setter.CSharpMemberName +=
+                        "_" + ordinal.ToString(System.Globalization.CultureInfo.InvariantCulture);
                 }
             }
         }
         MethodByMember = functions
-            .Where(function => function.Kind == AbiFunctionKind.Method && function.MemberId is not null)
+            .Where(function =>
+                function.Kind == AbiFunctionKind.Method && function.MemberId is not null
+            )
             .ToDictionary(function => function.MemberId!, StringComparer.Ordinal);
         DestroyByDeclaration = functions
             .Where(function => function.Kind == AbiFunctionKind.Destroy)
@@ -600,6 +621,7 @@ internal sealed class AbiPlan
 
     public bool TryGetSkipReason(string memberId, out string reason) =>
         SkipReasons.TryGetValue(memberId, out reason!);
+
     public IReadOnlyDictionary<string, AbiFunction> CreateByMember { get; }
     public IReadOnlyDictionary<string, AbiFunction> GetByMember { get; }
     public IReadOnlyDictionary<string, AbiFunction> SetByMember { get; }
@@ -610,10 +632,26 @@ internal sealed class AbiPlan
     /// <summary>Companion setters for members that return a mutable string reference.</summary>
     public IReadOnlyList<AbiFunction> StringSetters { get; }
 
-    public static AbiPlan Empty { get; } = new([], new Dictionary<string, IReadOnlyList<AbiFunction>>(StringComparer.Ordinal), new Dictionary<string, DeclarationName>(StringComparer.Ordinal), false, false, false, false, new Dictionary<string, string>(StringComparer.Ordinal), new Dictionary<string, IReadOnlyList<MemberRecord>>(StringComparer.Ordinal), [], [], []);
+    public static AbiPlan Empty { get; } =
+        new(
+            [],
+            new Dictionary<string, IReadOnlyList<AbiFunction>>(StringComparer.Ordinal),
+            new Dictionary<string, DeclarationName>(StringComparer.Ordinal),
+            false,
+            false,
+            false,
+            false,
+            new Dictionary<string, string>(StringComparer.Ordinal),
+            new Dictionary<string, IReadOnlyList<MemberRecord>>(StringComparer.Ordinal),
+            [],
+            [],
+            []
+        );
 
     public IEnumerable<AbiFunction> FunctionsForSurface(string surface) =>
-        Functions.Where(function => string.Equals(function.Surface, surface, StringComparison.Ordinal));
+        Functions.Where(function =>
+            string.Equals(function.Surface, surface, StringComparison.Ordinal)
+        );
 
     public bool HasMemberFunction(string memberId) =>
         CreateByMember.ContainsKey(memberId)
@@ -627,15 +665,19 @@ internal sealed class AbiPlan
         bool linkCarrier = false,
         bool llAllocator = false,
         bool virtualDispatch = false,
-        bool symbolDispatch = false)
+        bool symbolDispatch = false
+    )
     {
-        if (!symbolDispatch
-            && (string.IsNullOrWhiteSpace(nativeRoot) || !Directory.Exists(nativeRoot)))
+        if (
+            !symbolDispatch
+            && (string.IsNullOrWhiteSpace(nativeRoot) || !Directory.Exists(nativeRoot))
+        )
         {
             return Empty;
         }
 
-        var allClassDeclarations = records.OfType<DeclarationRecord>()
+        var allClassDeclarations = records
+            .OfType<DeclarationRecord>()
             .Where(declaration => declaration.Kind is "class" or "struct" or "union")
             .OrderBy(declaration => declaration.Id, StringComparer.Ordinal)
             .ToList();
@@ -644,87 +686,126 @@ internal sealed class AbiPlan
             .Where(declaration => declaration.Access == "public")
             .GroupBy(declaration => declaration.QualifiedName, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
-        var allDeclarationsByQualifiedName = records.OfType<DeclarationRecord>()
-            .GroupBy(declaration => declaration.QualifiedName, StringComparer.Ordinal)            .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
-        var abstractDeclarationIds = records.OfType<MemberRecord>()
+        var allDeclarationsByQualifiedName = records
+            .OfType<DeclarationRecord>()
+            .GroupBy(declaration => declaration.QualifiedName, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
+        var abstractDeclarationIds = records
+            .OfType<MemberRecord>()
             .Where(member => member.Pure)
             .Select(member => member.DeclarationId)
             .ToHashSet(StringComparer.Ordinal);
-        var enumUnderlyingByName = records.OfType<DeclarationRecord>()
-            .Where(declaration => declaration.Kind == "enum"
-                && !string.IsNullOrWhiteSpace(declaration.UnderlyingType))
+        var enumUnderlyingByName = records
+            .OfType<DeclarationRecord>()
+            .Where(declaration =>
+                declaration.Kind == "enum" && !string.IsNullOrWhiteSpace(declaration.UnderlyingType)
+            )
             .GroupBy(declaration => declaration.QualifiedName, StringComparer.Ordinal)
-            .ToDictionary(group => group.Key, group => group.First().UnderlyingType!, StringComparer.Ordinal);
+            .ToDictionary(
+                group => group.Key,
+                group => group.First().UnderlyingType!,
+                StringComparer.Ordinal
+            );
 
-        var membersByDeclaration = records.OfType<MemberRecord>()
+        var membersByDeclaration = records
+            .OfType<MemberRecord>()
             .GroupBy(member => member.DeclarationId, StringComparer.Ordinal)
             .ToDictionary(
                 group => group.Key,
-                group => group.GroupBy(member => member.Id, StringComparer.Ordinal)
-                    .Select(byId => byId.First())
-                    .OrderBy(member => member.Id, StringComparer.Ordinal)
-                    .ToList(),
-                StringComparer.Ordinal);
+                group =>
+                    group
+                        .GroupBy(member => member.Id, StringComparer.Ordinal)
+                        .Select(byId => byId.First())
+                        .OrderBy(member => member.Id, StringComparer.Ordinal)
+                        .ToList(),
+                StringComparer.Ordinal
+            );
 
         var symbolDestroyableDeclarationIds = symbolDispatch
             ? membersByDeclaration
-                .Where(pair => pair.Value.Any(member =>
-                    member.Kind == "destructor"
-                    && member.Access == "public"
-                    && (!string.IsNullOrWhiteSpace(member.Symbol)
-                        || member.Rva is not null
-                        || member.Address is not null)))
+                .Where(pair =>
+                    pair.Value.Any(member =>
+                        member.Kind == "destructor"
+                        && member.Access == "public"
+                        && (
+                            !string.IsNullOrWhiteSpace(member.Symbol)
+                            || member.Rva is not null
+                            || member.Address is not null
+                        )
+                    )
+                )
                 .Select(pair => pair.Key)
                 .ToHashSet(StringComparer.Ordinal)
             : new HashSet<string>(StringComparer.Ordinal);
 
-        var layoutDeclarationIds = records.OfType<VariantRecord>()
+        var layoutDeclarationIds = records
+            .OfType<VariantRecord>()
             .Where(variant => variant.Layout is { Size: > 0 })
             .Select(variant => variant.DeclarationId)
             .ToHashSet(StringComparer.Ordinal);
-        var layoutByDeclarationId = records.OfType<VariantRecord>()
+        var layoutByDeclarationId = records
+            .OfType<VariantRecord>()
             .Where(variant => variant.Layout is { Size: > 0 })
-            .GroupBy(variant => variant.DeclarationId, StringComparer.Ordinal)
-            .ToDictionary(group => group.Key, group => group.First().Layout!, StringComparer.Ordinal);
-        var basesByDeclarationForFields = records.OfType<VariantRecord>()
             .GroupBy(variant => variant.DeclarationId, StringComparer.Ordinal)
             .ToDictionary(
                 group => group.Key,
-                group => group
-                    .SelectMany(variant => variant.Bases.Count > 0
-                        ? variant.Bases
-                        : variant.Layout?.Bases ?? [])
-                    .Where(baseInfo => baseInfo.Access == "public" && !baseInfo.Virtual)
-                    .GroupBy(baseInfo => baseInfo.DeclarationId, StringComparer.Ordinal)
-                    .Select(byId => byId.First())
-                    .ToList(),
-                StringComparer.Ordinal);
+                group => group.First().Layout!,
+                StringComparer.Ordinal
+            );
+        var basesByDeclarationForFields = records
+            .OfType<VariantRecord>()
+            .GroupBy(variant => variant.DeclarationId, StringComparer.Ordinal)
+            .ToDictionary(
+                group => group.Key,
+                group =>
+                    group
+                        .SelectMany(variant =>
+                            variant.Bases.Count > 0 ? variant.Bases : variant.Layout?.Bases ?? []
+                        )
+                        .Where(baseInfo => baseInfo.Access == "public" && !baseInfo.Virtual)
+                        .GroupBy(baseInfo => baseInfo.DeclarationId, StringComparer.Ordinal)
+                        .Select(byId => byId.First())
+                        .ToList(),
+                StringComparer.Ordinal
+            );
         var syntheticMembers = new Dictionary<string, List<MemberRecord>>(StringComparer.Ordinal);
-        var symbolByValueReturns = new Dictionary<string, DeclarationRecord>(StringComparer.Ordinal);
+        var symbolByValueReturns = new Dictionary<string, DeclarationRecord>(
+            StringComparer.Ordinal
+        );
         var symbolByValueCopyRequired = new Dictionary<string, bool>(StringComparer.Ordinal);
-        var symbolVectorElements = new Dictionary<string, DeclarationRecord>(StringComparer.Ordinal);
-        var symbolOptionalRecords = new Dictionary<string, DeclarationRecord>(StringComparer.Ordinal);
+        var symbolVectorElements = new Dictionary<string, DeclarationRecord>(
+            StringComparer.Ordinal
+        );
+        var symbolOptionalRecords = new Dictionary<string, DeclarationRecord>(
+            StringComparer.Ordinal
+        );
         if (symbolDispatch)
         {
             foreach (var candidate in publicDeclarationsByQualifiedName.Values)
             {
-                if (candidate.Kind is not ("class" or "struct" or "union")
+                if (
+                    candidate.Kind is not ("class" or "struct" or "union")
                     || !layoutByDeclarationId.TryGetValue(candidate.Id, out var layout)
                     || layout.Size <= 0
-                    || candidate.Abstract)
+                    || candidate.Abstract
+                )
                 {
                     continue;
                 }
 
-                var candidateMembers = membersByDeclaration.TryGetValue(candidate.Id, out var value) ? value : [];
+                var candidateMembers = membersByDeclaration.TryGetValue(candidate.Id, out var value)
+                    ? value
+                    : [];
 
                 // The generated headers carry some templates as empty shells whose real
                 // layout only exists in the game binary. A by-value result sized from such
                 // a shell would be too small, so a template may only carry one when its
                 // header proves the layout with a data member or a base record.
-                if (candidate.Template is not null
+                if (
+                    candidate.Template is not null
                     && !candidateMembers.Any(member => member.Kind == "field")
-                    && layout.Bases.Count == 0)
+                    && layout.Bases.Count == 0
+                )
                 {
                     continue;
                 }
@@ -736,7 +817,10 @@ internal sealed class AbiPlan
                     {
                         // Trivial records use the register path when small and the memory path
                         // otherwise.
-                        if (hasVirtual || (layout.Size <= 8 && layout.Size is not (1 or 2 or 4 or 8)))
+                        if (
+                            hasVirtual
+                            || (layout.Size <= 8 && layout.Size is not (1 or 2 or 4 or 8))
+                        )
                         {
                             continue;
                         }
@@ -755,7 +839,8 @@ internal sealed class AbiPlan
                     var destructor = candidateMembers.FirstOrDefault(member =>
                         member.Kind == "destructor"
                         && member.Access == "public"
-                        && HasSymbolAddress(member));
+                        && HasSymbolAddress(member)
+                    );
                     if (destructor is null)
                     {
                         continue;
@@ -763,7 +848,8 @@ internal sealed class AbiPlan
                 }
 
                 symbolByValueReturns[candidate.QualifiedName] = candidate;
-                symbolByValueCopyRequired[candidate.QualifiedName] = !candidate.TriviallyDestructible;
+                symbolByValueCopyRequired[candidate.QualifiedName] =
+                    !candidate.TriviallyDestructible;
             }
 
             // Clang prints a template type without its defaulted trailing arguments, so a
@@ -776,7 +862,10 @@ internal sealed class AbiPlan
                 if (shortName is not null)
                 {
                     symbolByValueReturns.TryAdd(shortName, declaration);
-                    symbolByValueCopyRequired.TryAdd(shortName, symbolByValueCopyRequired[qualifiedName]);
+                    symbolByValueCopyRequired.TryAdd(
+                        shortName,
+                        symbolByValueCopyRequired[qualifiedName]
+                    );
                 }
             }
 
@@ -785,11 +874,13 @@ internal sealed class AbiPlan
             // long as the record's storage is trivially destructible.
             foreach (var candidate in publicDeclarationsByQualifiedName.Values)
             {
-                if (candidate.Kind is not ("class" or "struct" or "union")
+                if (
+                    candidate.Kind is not ("class" or "struct" or "union")
                     || candidate.Abstract
                     || !candidate.TriviallyDestructible
                     || !layoutByDeclarationId.TryGetValue(candidate.Id, out var vectorLayout)
-                    || vectorLayout.Size <= 0)
+                    || vectorLayout.Size <= 0
+                )
                 {
                     continue;
                 }
@@ -801,11 +892,13 @@ internal sealed class AbiPlan
             // must be trivially copyable for the optional to keep the trivial call ABI.
             foreach (var candidate in publicDeclarationsByQualifiedName.Values)
             {
-                if (candidate.Kind is not ("class" or "struct" or "union")
+                if (
+                    candidate.Kind is not ("class" or "struct" or "union")
                     || candidate.Abstract
                     || !candidate.TriviallyCopyable
                     || !layoutByDeclarationId.TryGetValue(candidate.Id, out var optionalLayout)
-                    || optionalLayout.Size <= 0)
+                    || optionalLayout.Size <= 0
+                )
                 {
                     continue;
                 }
@@ -823,8 +916,7 @@ internal sealed class AbiPlan
             || !string.IsNullOrWhiteSpace(member.MangledName);
 
         static bool HasDispatchEntry(MemberRecord member) =>
-            HasSymbolAddress(member)
-            || (member.Virtual && member.VTableIndex is not null);
+            HasSymbolAddress(member) || (member.Virtual && member.VTableIndex is not null);
 
         var skipReasons = new Dictionary<string, string>(StringComparer.Ordinal);
         var declarations = new List<DeclarationRecord>();
@@ -833,7 +925,11 @@ internal sealed class AbiPlan
             .Where(member => member.Signature is not null)
             .Select(member => NormalizeTypeName(member.Signature!.ReturnType))
             .ToHashSet(StringComparer.Ordinal);
-        foreach (var declaration in allClassDeclarations.Where(declaration => declaration.Access == "public"))
+        foreach (
+            var declaration in allClassDeclarations.Where(declaration =>
+                declaration.Access == "public"
+            )
+        )
         {
             string? declarationReason = null;
             if (symbolDispatch)
@@ -844,26 +940,47 @@ internal sealed class AbiPlan
                 // short Bedrock::Result<T> spelling while the declaration carries the
                 // defaulted error argument, so both spellings are accepted. The header must
                 // prove the layout; a reconstructed shell would size the buffer wrongly.
-                var templateLayoutProven = declaration.Template is null
-                    || (layoutByDeclarationId.TryGetValue(declaration.Id, out var templateLayout)
-                        && (templateLayout.Bases.Count > 0
-                            || (membersByDeclaration.TryGetValue(declaration.Id, out var templateMembers)
-                                && templateMembers.Any(member => member.Kind == "field"))));
-                var byValueReturnTemplate = declaration.Template is not null
+                var templateLayoutProven =
+                    declaration.Template is null
+                    || (
+                        layoutByDeclarationId.TryGetValue(declaration.Id, out var templateLayout)
+                        && (
+                            templateLayout.Bases.Count > 0
+                            || (
+                                membersByDeclaration.TryGetValue(
+                                    declaration.Id,
+                                    out var templateMembers
+                                ) && templateMembers.Any(member => member.Kind == "field")
+                            )
+                        )
+                    );
+                var byValueReturnTemplate =
+                    declaration.Template is not null
                     && templateLayoutProven
-                    && (byValueReturnNames.Contains(declaration.QualifiedName)
-                        || (ShortDefaultedResultSpelling(declaration.QualifiedName) is { } shortResultName
-                            && byValueReturnNames.Contains(shortResultName)));
+                    && (
+                        byValueReturnNames.Contains(declaration.QualifiedName)
+                        || (
+                            ShortDefaultedResultSpelling(declaration.QualifiedName)
+                                is { } shortResultName
+                            && byValueReturnNames.Contains(shortResultName)
+                        )
+                    );
                 // A template instance whose members are all inline bodies needs no symbol: the
                 // shim includes the header and calls them directly. Keep the declaration so
                 // those members are planned; the ones without a body still fall out below.
-                var inlineBodyTemplate = declaration.Template is not null
+                var inlineBodyTemplate =
+                    declaration.Template is not null
                     && membersByDeclaration.TryGetValue(declaration.Id, out var templateMemberList)
                     && templateMemberList.Any(member =>
                         member.Access == "public"
                         && member.Inline
-                        && (member.Defined || IsPatternCallable(member)));
-                if (declaration.Template is not null && !byValueReturnTemplate && !inlineBodyTemplate)
+                        && (member.Defined || IsPatternCallable(member))
+                    );
+                if (
+                    declaration.Template is not null
+                    && !byValueReturnTemplate
+                    && !inlineBodyTemplate
+                )
                 {
                     declarationReason = "template classes are not supported by symbol dispatch";
                 }
@@ -873,7 +990,8 @@ internal sealed class AbiPlan
                 }
                 else if (HasMsvcInternalTypeName(declaration.QualifiedName))
                 {
-                    declarationReason = "the native name uses implementation-specific standard library types";
+                    declarationReason =
+                        "the native name uses implementation-specific standard library types";
                 }
             }
             else if (!linkCarrier && !virtualDispatch && declaration.Template is not null)
@@ -886,13 +1004,18 @@ internal sealed class AbiPlan
             }
             else if (HasMsvcInternalTypeName(declaration.QualifiedName))
             {
-                declarationReason = "the native name uses implementation-specific standard library types";
+                declarationReason =
+                    "the native name uses implementation-specific standard library types";
             }
-            else if (declaration.Template is not null
-                && ((linkCarrier || virtualDispatch)
-                    ? HasInaccessibleTemplateArgument(declaration)
-                        || HasBareIncompleteTemplateArgument(declaration)
-                    : !AreTemplateArgumentsUsable(declaration, allDeclarationsByQualifiedName)))
+            else if (
+                declaration.Template is not null
+                && (
+                    (linkCarrier || virtualDispatch)
+                        ? HasInaccessibleTemplateArgument(declaration)
+                            || HasBareIncompleteTemplateArgument(declaration)
+                        : !AreTemplateArgumentsUsable(declaration, allDeclarationsByQualifiedName)
+                )
+            )
             {
                 declarationReason = "the template arguments are inaccessible or incomplete";
             }
@@ -913,38 +1036,48 @@ internal sealed class AbiPlan
 
             if (membersByDeclaration.TryGetValue(declaration.Id, out var declarationMembers))
             {
-                foreach (var member in declarationMembers.Where(member => member.Access == "public"))
+                foreach (
+                    var member in declarationMembers.Where(member => member.Access == "public")
+                )
                 {
                     skipReasons[member.Id] = declarationReason;
                 }
             }
         }
 
-        var allDeclarationsById = records.OfType<DeclarationRecord>()
+        var allDeclarationsById = records
+            .OfType<DeclarationRecord>()
             .GroupBy(declaration => declaration.Id, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
-        var basesByDeclaration = records.OfType<VariantRecord>()
+        var basesByDeclaration = records
+            .OfType<VariantRecord>()
             .GroupBy(variant => variant.DeclarationId, StringComparer.Ordinal)
             .ToDictionary(
                 group => group.Key,
-                group => group
-                    .SelectMany(variant => variant.Layout?.Bases ?? [])
-                    .Select(baseInfo => baseInfo.DeclarationId)
-                    .Distinct(StringComparer.Ordinal)
-                    .ToList(),
-                StringComparer.Ordinal);
-        var publicBaseInfosByDeclaration = records.OfType<VariantRecord>()
+                group =>
+                    group
+                        .SelectMany(variant => variant.Layout?.Bases ?? [])
+                        .Select(baseInfo => baseInfo.DeclarationId)
+                        .Distinct(StringComparer.Ordinal)
+                        .ToList(),
+                StringComparer.Ordinal
+            );
+        var publicBaseInfosByDeclaration = records
+            .OfType<VariantRecord>()
             .GroupBy(variant => variant.DeclarationId, StringComparer.Ordinal)
             .ToDictionary(
                 group => group.Key,
-                group => group
-                    .SelectMany(variant => variant.Layout?.Bases ?? [])
-                    .Where(baseInfo => baseInfo.Access == "public")
-                    .GroupBy(baseInfo => baseInfo.DeclarationId)
-                    .Select(byId => byId.First())
-                    .ToList(),
-                StringComparer.Ordinal);
-        var polymorphicDeclarationIds = records.OfType<MemberRecord>()
+                group =>
+                    group
+                        .SelectMany(variant => variant.Layout?.Bases ?? [])
+                        .Where(baseInfo => baseInfo.Access == "public")
+                        .GroupBy(baseInfo => baseInfo.DeclarationId)
+                        .Select(byId => byId.First())
+                        .ToList(),
+                StringComparer.Ordinal
+            );
+        var polymorphicDeclarationIds = records
+            .OfType<MemberRecord>()
             .Where(member => member.Virtual || member.Pure)
             .Select(member => member.DeclarationId)
             .ToHashSet(StringComparer.Ordinal);
@@ -966,10 +1099,13 @@ internal sealed class AbiPlan
             // Break inheritance cycles conservatively.
             linkSafeMemo[declarationId] = false;
 
-            if (membersByDeclaration.TryGetValue(declarationId, out var members)
+            if (
+                membersByDeclaration.TryGetValue(declarationId, out var members)
                 && members.Any(member =>
                     (member.Kind is "method" or "operator" or "constructor" or "destructor")
-                    && !member.Inline))
+                    && !member.Inline
+                )
+            )
             {
                 return false;
             }
@@ -989,45 +1125,66 @@ internal sealed class AbiPlan
             return true;
         }
 
-        bool IsDestructorUsable(DeclarationRecord declaration, List<MemberRecord> declarationMembers)
+        bool IsDestructorUsable(
+            DeclarationRecord declaration,
+            List<MemberRecord> declarationMembers
+        )
         {
-            var destructor = declarationMembers.FirstOrDefault(member => member.Kind == "destructor");
+            var destructor = declarationMembers.FirstOrDefault(member =>
+                member.Kind == "destructor"
+            );
             if (symbolDispatch)
             {
                 return destructor is null
-                    || (destructor.Access == "public"
+                    || (
+                        destructor.Access == "public"
                         && HasSymbolAddress(destructor)
-                        && !HasUnavailableAnnotation(destructor));
+                        && !HasUnavailableAnnotation(destructor)
+                    );
             }
 
             var hasOutOfLineMethod = declarationMembers.Any(member =>
                 (member.Kind is "method" or "operator" or "constructor" or "destructor")
-                && !member.Inline);
+                && !member.Inline
+            );
             return linkCarrier
-                ? destructor is null
-                    || (destructor.Access == "public"
-                        && HasExportedSymbol(declaration, destructor)
-                        && (declaration.Template is null || destructor.Defined))
-                : destructor is null
-                    ? !hasOutOfLineMethod
-                    : destructor.Access == "public" && destructor.Inline && !hasOutOfLineMethod;
+                    ? destructor is null
+                        || (
+                            destructor.Access == "public"
+                            && HasExportedSymbol(declaration, destructor)
+                            && (declaration.Template is null || destructor.Defined)
+                        )
+                : destructor is null ? !hasOutOfLineMethod
+                : destructor.Access == "public" && destructor.Inline && !hasOutOfLineMethod;
         }
 
-        bool HasImplicitSpecializationMembers(DeclarationRecord declaration, List<MemberRecord> declarationMembers) =>
+        bool HasImplicitSpecializationMembers(
+            DeclarationRecord declaration,
+            List<MemberRecord> declarationMembers
+        ) =>
             declarationMembers.Any(member =>
-                (member.Signature?.Canonical.StartsWith(declaration.QualifiedName + "<", StringComparison.Ordinal) ?? false)
-                || member.Id.Contains(declaration.QualifiedName + "<", StringComparison.Ordinal));
+                (
+                    member.Signature?.Canonical.StartsWith(
+                        declaration.QualifiedName + "<",
+                        StringComparison.Ordinal
+                    ) ?? false
+                ) || member.Id.Contains(declaration.QualifiedName + "<", StringComparison.Ordinal)
+            );
 
         bool CanDeleteImplicitDestructor(
             DeclarationRecord declaration,
             List<MemberRecord> declarationMembers,
-            out bool explicitDestructor)
+            out bool explicitDestructor
+        )
         {
             explicitDestructor = false;
-            var destructor = declarationMembers.FirstOrDefault(member => member.Kind == "destructor");
+            var destructor = declarationMembers.FirstOrDefault(member =>
+                member.Kind == "destructor"
+            );
             if (symbolDispatch)
             {
-                explicitDestructor = destructor is not null
+                explicitDestructor =
+                    destructor is not null
                     && destructor.Access == "public"
                     && HasSymbolAddress(destructor)
                     && !HasUnavailableAnnotation(destructor);
@@ -1036,25 +1193,35 @@ internal sealed class AbiPlan
 
             if (destructor is not null)
             {
-                explicitDestructor = destructor.Access == "public"
-                    && (linkCarrier ? HasExportedSymbol(declaration, destructor) : destructor.Inline)
+                explicitDestructor =
+                    destructor.Access == "public"
+                    && (
+                        linkCarrier ? HasExportedSymbol(declaration, destructor) : destructor.Inline
+                    )
                     && (declaration.Template is null || destructor.Defined);
                 return explicitDestructor;
             }
 
             // An implicit destructor is instantiated at the delete site. Member smart pointers
             // to incomplete implementation types make that instantiation ill-formed.
-            if (declarationMembers.Any(member =>
+            if (
+                declarationMembers.Any(member =>
                     member.Kind == "field"
                     && member.Type is not null
-                    && member.Type.Canonical.StartsWith("std::unique_ptr<", StringComparison.Ordinal)))
+                    && member.Type.Canonical.StartsWith(
+                        "std::unique_ptr<",
+                        StringComparison.Ordinal
+                    )
+                )
+            )
             {
                 return false;
             }
 
-            var constructors = declarationMembers.Where(member => member.Kind == "constructor").ToList();
-            return constructors.Count == 0
-                || constructors.Any(member => member.Access == "public");
+            var constructors = declarationMembers
+                .Where(member => member.Kind == "constructor")
+                .ToList();
+            return constructors.Count == 0 || constructors.Any(member => member.Access == "public");
         }
 
         var allowOwnedByValue = linkCarrier || virtualDispatch;
@@ -1072,8 +1239,10 @@ internal sealed class AbiPlan
             {
                 uniquePointee = directPointee;
             }
-            else if (TryParseVector(returnType, out var vectorElement)
-                && TryParseUniquePtr(vectorElement, out var nestedPointee))
+            else if (
+                TryParseVector(returnType, out var vectorElement)
+                && TryParseUniquePtr(vectorElement, out var nestedPointee)
+            )
             {
                 uniquePointee = nestedPointee;
             }
@@ -1082,8 +1251,13 @@ internal sealed class AbiPlan
                 continue;
             }
 
-            if (!allDeclarationsByQualifiedName.TryGetValue(uniquePointee, out var uniqueDeclaration)
-                || uniqueDeclaration.Access != "public")
+            if (
+                !allDeclarationsByQualifiedName.TryGetValue(
+                    uniquePointee,
+                    out var uniqueDeclaration
+                )
+                || uniqueDeclaration.Access != "public"
+            )
             {
                 continue;
             }
@@ -1097,7 +1271,11 @@ internal sealed class AbiPlan
         // destroy function. Limit this path to memberless classes that actually appear as
         // variant alternatives so unrelated declarations stay untouched.
         var memberlessVariantAlternativeIds = allowOwnedByValue
-            ? CollectMemberlessVariantAlternatives(records, membersByDeclaration, publicDeclarationsByQualifiedName)
+            ? CollectMemberlessVariantAlternatives(
+                records,
+                membersByDeclaration,
+                publicDeclarationsByQualifiedName
+            )
             : new HashSet<string>(StringComparer.Ordinal);
         var destroyableDeclarationIds = new HashSet<string>(StringComparer.Ordinal);
         foreach (var declaration in allowOwnedByValue ? declarations : [])
@@ -1112,10 +1290,12 @@ internal sealed class AbiPlan
                 declarationMembers = [];
             }
 
-            if (HasImplicitSpecializationMembers(declaration, declarationMembers)
+            if (
+                HasImplicitSpecializationMembers(declaration, declarationMembers)
                 || !(linkCarrier || virtualDispatch || IsLinkSafe(declaration.Id))
                 || (declaration.Abstract && !uniquePtrOwnedDeclarationIds.Contains(declaration.Id))
-                || !CanDeleteImplicitDestructor(declaration, declarationMembers, out _))
+                || !CanDeleteImplicitDestructor(declaration, declarationMembers, out _)
+            )
             {
                 continue;
             }
@@ -1129,7 +1309,8 @@ internal sealed class AbiPlan
             declarationNames,
             destroyableDeclarationIds,
             enumUnderlyingByName,
-            allowOwnedByValue);
+            allowOwnedByValue
+        );
         var callables = BuildCallableRegistry(records, enumUnderlyingByName);
 
         var functions = new List<AbiFunction>();
@@ -1140,8 +1321,13 @@ internal sealed class AbiPlan
             {
                 // Header-derived dependency records carry no members. A by-value eligible
                 // record still needs its destroy entry because returned copies are owned.
-                if (!destroyableDeclarationIds.Contains(declaration.Id)
-                    && !(symbolDispatch && symbolByValueReturns.ContainsKey(declaration.QualifiedName)))
+                if (
+                    !destroyableDeclarationIds.Contains(declaration.Id)
+                    && !(
+                        symbolDispatch
+                        && symbolByValueReturns.ContainsKey(declaration.QualifiedName)
+                    )
+                )
                 {
                     continue;
                 }
@@ -1161,9 +1347,16 @@ internal sealed class AbiPlan
             // An instantiation over void is the header's own holder for out-of-line member
             // bodies; no object of it exists, and naming it in the shim only produces casts
             // the class hierarchy rejects.
-            if (declaration.Template is not null
+            if (
+                declaration.Template is not null
                 && declaration.Template.Arguments.Any(argument =>
-                    string.Equals(NormalizeTypeName(argument.Value), "void", StringComparison.Ordinal)))
+                    string.Equals(
+                        NormalizeTypeName(argument.Value),
+                        "void",
+                        StringComparison.Ordinal
+                    )
+                )
+            )
             {
                 uncastableDeclarationIds.Add(declaration.Id);
                 continue;
@@ -1175,30 +1368,46 @@ internal sealed class AbiPlan
             var ownsBorrowedString = declarationMembers.Any(member =>
                 member.Kind == "field"
                 && member.Type is not null
-                && (IsStringViewType(member.Type.Canonical)
-                    || (IsReferenceType(member.Type.Canonical)
+                && (
+                    IsStringViewType(member.Type.Canonical)
+                    || (
+                        IsReferenceType(member.Type.Canonical)
                         && !IsRValueReference(member.Type.Canonical)
-                        && IsStringType(member.Type.Canonical))));
-            var linkSafe = symbolDispatch || linkCarrier || virtualDispatch || IsLinkSafe(declaration.Id);
+                        && IsStringType(member.Type.Canonical)
+                    )
+                )
+            );
+            var linkSafe =
+                symbolDispatch || linkCarrier || virtualDispatch || IsLinkSafe(declaration.Id);
             var destructorUsable = IsDestructorUsable(declaration, declarationMembers);
-            var hasPublicDestructor = linkSafe
+            var hasPublicDestructor =
+                linkSafe
                 && (symbolDispatch || !virtualDispatch)
                 && (!symbolDispatch || layoutDeclarationIds.Contains(declaration.Id))
                 && CanDeleteImplicitDestructor(
                     declaration,
                     declarationMembers,
-                    out var explicitDestructor)
+                    out var explicitDestructor
+                )
                 && explicitDestructor;
             var destructorAccessible = linkSafe && destructorUsable;
             var isAbstract = declaration.Abstract || declarationMembers.Any(member => member.Pure);
-            var hasAbstractTemplateArgument = declaration.Template is not null
-                && HasAbstractTemplateArgument(declaration, allDeclarationsByQualifiedName, abstractDeclarationIds);
+            var hasAbstractTemplateArgument =
+                declaration.Template is not null
+                && HasAbstractTemplateArgument(
+                    declaration,
+                    allDeclarationsByQualifiedName,
+                    abstractDeclarationIds
+                );
             var created = false;
 
-            foreach (var constructor in declarationMembers.Where(member =>
-                         member.Kind == "constructor"
-                         && member.Access == "public"
-                         && !member.Id.Contains("@support:", StringComparison.Ordinal)))
+            foreach (
+                var constructor in declarationMembers.Where(member =>
+                    member.Kind == "constructor"
+                    && member.Access == "public"
+                    && !member.Id.Contains("@support:", StringComparison.Ordinal)
+                )
+            )
             {
                 string? reason = null;
                 if (HasUnavailableAnnotation(constructor))
@@ -1221,19 +1430,25 @@ internal sealed class AbiPlan
                         reason = "the class layout is unavailable";
                     }
                 }
-                else if (!(virtualDispatch ? constructor.Inline
+                else if (
+                    !(
+                        virtualDispatch ? constructor.Inline
                         : linkCarrier ? HasExportedSymbol(declaration, constructor)
-                        : constructor.Inline))
+                        : constructor.Inline
+                    )
+                )
                 {
                     reason = virtualDispatch
                         ? "the constructor requires linking against the carrier"
                         : "the constructor is not exported by the carrier";
                 }
-                else if (linkCarrier
+                else if (
+                    linkCarrier
                     && declaration.Template is not null
                     && constructor.Inline
                     && !constructor.Defined
-                    && (!constructor.PatternDefined || IsMoveConstructor(constructor)))
+                    && (!constructor.PatternDefined || IsMoveConstructor(constructor))
+                )
                 {
                     // The pattern body is enough for ordinary constructors and for a copy
                     // constructor, which only calls the payload's copy constructor. A move
@@ -1265,7 +1480,8 @@ internal sealed class AbiPlan
                     continue;
                 }
 
-                if (!TryBuildCreate(
+                if (
+                    !TryBuildCreate(
                         declaration,
                         constructor,
                         publicDeclarationsByQualifiedName,
@@ -1277,22 +1493,35 @@ internal sealed class AbiPlan
                         symbolDispatch,
                         variants,
                         out var create,
-                        out reason))
+                        out reason
+                    )
+                )
                 {
                     skipReasons[constructor.Id] = reason ?? "the constructor cannot be projected";
                     continue;
                 }
 
-                if (symbolDispatch && !IsSymbolDispatchSupported(create, symbolByValueReturns, symbolVectorElements, symbolOptionalRecords, out reason))
+                if (
+                    symbolDispatch
+                    && !IsSymbolDispatchSupported(
+                        create,
+                        symbolByValueReturns,
+                        symbolVectorElements,
+                        symbolOptionalRecords,
+                        out reason
+                    )
+                )
                 {
-                    skipReasons[constructor.Id] = reason ?? "the constructor is not supported by symbol dispatch";
+                    skipReasons[constructor.Id] =
+                        reason ?? "the constructor is not supported by symbol dispatch";
                     continue;
                 }
 
                 // A pattern-defined copy construction copies the payload in place, so it only
                 // compiles where the payload is itself copyable. The IR does not record
                 // copyability, so the shim guards the call at compile time instead.
-                create.TemplateCopyConstruction = linkCarrier
+                create.TemplateCopyConstruction =
+                    linkCarrier
                     && declaration.Template is not null
                     && !constructor.Defined
                     && constructor.PatternDefined
@@ -1305,7 +1534,8 @@ internal sealed class AbiPlan
                 created = true;
             }
 
-            var hasDestroy = created
+            var hasDestroy =
+                created
                 || (hasPublicDestructor && !virtualDispatch)
                 || (allowOwnedByValue && destroyableDeclarationIds.Contains(declaration.Id))
                 || (symbolDispatch && symbolByValueReturns.ContainsKey(declaration.QualifiedName));
@@ -1316,7 +1546,8 @@ internal sealed class AbiPlan
             else
             {
                 var destructor = declarationMembers.FirstOrDefault(member =>
-                    member.Kind == "destructor" && member.Access == "public");
+                    member.Kind == "destructor" && member.Access == "public"
+                );
                 if (destructor is not null)
                 {
                     skipReasons[destructor.Id] = HasUnavailableAnnotation(destructor)
@@ -1325,12 +1556,17 @@ internal sealed class AbiPlan
                 }
             }
 
-            foreach (var field in declarationMembers.Where(member =>
-                         (member.Kind == "field" || member.Kind == "static_field")
-                         && member.Access == "public"))
+            foreach (
+                var field in declarationMembers.Where(member =>
+                    (member.Kind == "field" || member.Kind == "static_field")
+                    && member.Access == "public"
+                )
+            )
             {
-                if (field.Kind == "static_field"
-                    && ConstantFields.TryCSharpConstant(field, out _, out _))
+                if (
+                    field.Kind == "static_field"
+                    && ConstantFields.TryCSharpConstant(field, out _, out _)
+                )
                 {
                     // The projection is the constant itself; no shim entry is needed.
                     continue;
@@ -1338,7 +1574,8 @@ internal sealed class AbiPlan
 
                 if (symbolDispatch)
                 {
-                    if (!TryPlanSymbolField(
+                    if (
+                        !TryPlanSymbolField(
                             declaration,
                             field,
                             field.BitOffset ?? -1,
@@ -1348,9 +1585,12 @@ internal sealed class AbiPlan
                             enumUnderlyingByName,
                             out var symbolGetter,
                             out var symbolSetter,
-                            out var symbolFieldReason))
+                            out var symbolFieldReason
+                        )
+                    )
                     {
-                        skipReasons[field.Id] = symbolFieldReason ?? "the field is not supported by symbol dispatch";
+                        skipReasons[field.Id] =
+                            symbolFieldReason ?? "the field is not supported by symbol dispatch";
                         continue;
                     }
 
@@ -1369,9 +1609,11 @@ internal sealed class AbiPlan
                     continue;
                 }
 
-                if (field.Kind == "static_field"
+                if (
+                    field.Kind == "static_field"
                     && !linkCarrier
-                    && !(virtualDispatch && field.Inline))
+                    && !(virtualDispatch && field.Inline)
+                )
                 {
                     skipReasons[field.Id] = "the static field requires linking against the carrier";
                     continue;
@@ -1383,7 +1625,8 @@ internal sealed class AbiPlan
                     continue;
                 }
 
-                if (!TryBuildField(
+                if (
+                    !TryBuildField(
                         declaration,
                         field,
                         publicDeclarationsByQualifiedName,
@@ -1394,7 +1637,9 @@ internal sealed class AbiPlan
                         variants,
                         out var getter,
                         out var setter,
-                        out var fieldReason))
+                        out var fieldReason
+                    )
+                )
                 {
                     skipReasons[field.Id] = fieldReason ?? "the field type is not supported";
                     continue;
@@ -1409,7 +1654,9 @@ internal sealed class AbiPlan
 
             if (symbolDispatch)
             {
-                var inheritedFields = new Dictionary<string, (MemberRecord Field, long BitOffset)>(StringComparer.Ordinal);
+                var inheritedFields = new Dictionary<string, (MemberRecord Field, long BitOffset)>(
+                    StringComparer.Ordinal
+                );
                 CollectInheritedSymbolFields(
                     declaration.Id,
                     0,
@@ -1417,12 +1664,18 @@ internal sealed class AbiPlan
                     0,
                     basesByDeclarationForFields,
                     membersByDeclaration,
-                    inheritedFields);
+                    inheritedFields
+                );
 
-                foreach (var (baseField, bitOffset) in inheritedFields.Values.OrderBy(pair => pair.BitOffset))
+                foreach (
+                    var (baseField, bitOffset) in inheritedFields.Values.OrderBy(pair =>
+                        pair.BitOffset
+                    )
+                )
                 {
                     var syntheticId = baseField.Id + "::inherited::" + declaration.Id;
-                    if (!TryPlanSymbolField(
+                    if (
+                        !TryPlanSymbolField(
                             declaration,
                             baseField,
                             bitOffset,
@@ -1432,7 +1685,9 @@ internal sealed class AbiPlan
                             enumUnderlyingByName,
                             out var inheritedGetter,
                             out var inheritedSetter,
-                            out _))
+                            out _
+                        )
+                    )
                     {
                         continue;
                     }
@@ -1443,18 +1698,20 @@ internal sealed class AbiPlan
                         syntheticMembers[declaration.Id] = members;
                     }
 
-                    members.Add(new MemberRecord
-                    {
-                        Id = syntheticId,
-                        DeclarationId = declaration.Id,
-                        Kind = "field",
-                        Name = baseField.Name,
-                        Access = "public",
-                        Static = false,
-                        Type = baseField.Type,
-                        BitOffset = bitOffset,
-                        BitWidth = 0,
-                    });
+                    members.Add(
+                        new MemberRecord
+                        {
+                            Id = syntheticId,
+                            DeclarationId = declaration.Id,
+                            Kind = "field",
+                            Name = baseField.Name,
+                            Access = "public",
+                            Static = false,
+                            Type = baseField.Type,
+                            BitOffset = bitOffset,
+                            BitWidth = 0,
+                        }
+                    );
                     functions.Add(inheritedGetter);
                     if (inheritedSetter is not null)
                     {
@@ -1463,8 +1720,11 @@ internal sealed class AbiPlan
                 }
             }
 
-            foreach (var method in declarationMembers.Where(member =>
-                         member.Kind is "method" or "operator" && member.Access == "public"))
+            foreach (
+                var method in declarationMembers.Where(member =>
+                    member.Kind is "method" or "operator" && member.Access == "public"
+                )
+            )
             {
                 string? reason = null;
                 if (HasUnavailableAnnotation(method))
@@ -1473,8 +1733,7 @@ internal sealed class AbiPlan
                 }
                 else if (symbolDispatch)
                 {
-                    if (method.Inline
-                        && (method.Defined || IsPatternCallable(method)))
+                    if (method.Inline && (method.Defined || IsPatternCallable(method)))
                     {
                         // The body is in the header the shim includes; a template instance
                         // never gets a game symbol, so calling it directly is the only route.
@@ -1496,9 +1755,13 @@ internal sealed class AbiPlan
                 {
                     reason = "the class is not link-safe in the current mode";
                 }
-                else if (!(virtualDispatch
-                    ? method.Inline || method.Virtual
-                    : linkCarrier ? HasExportedSymbol(declaration, method) : method.Inline))
+                else if (
+                    !(
+                        virtualDispatch ? method.Inline || method.Virtual
+                        : linkCarrier ? HasExportedSymbol(declaration, method)
+                        : method.Inline
+                    )
+                )
                 {
                     reason = virtualDispatch
                         ? "the member requires linking against the carrier"
@@ -1513,25 +1776,31 @@ internal sealed class AbiPlan
                     // The body addresses CommandRegistry::parse<T>, a static member of a
                     // class template that the carrier never instantiates and never exports,
                     // so compiling the inline body leaves an unresolved import.
-                    reason = "the inline body addresses a template member the carrier does not export";
+                    reason =
+                        "the inline body addresses a template member the carrier does not export";
                 }
-                else if (linkCarrier
+                else if (
+                    linkCarrier
                     && IsOverriddenBaseMember(
                         declaration,
                         method,
                         allDeclarationsByQualifiedName,
-                        membersByDeclaration))
+                        membersByDeclaration
+                    )
+                )
                 {
                     // The derived specialization replaces this base member because the
                     // base body does not compile for that argument type.
-                    reason = "the derived specialization overrides this member and the base body is not instantiable";
+                    reason =
+                        "the derived specialization overrides this member and the base body is not instantiable";
                 }
                 else if (linkCarrier && IsUnavailableParserMember(method))
                 {
                     // The inline body takes the address of CommandRegistry::parse<T>; the
                     // carrier instantiates that only for the parameter types its own
                     // commands register, so these have no import to link against.
-                    reason = "the carrier does not export the parser instantiation addressed by the inline body";
+                    reason =
+                        "the carrier does not export the parser instantiation addressed by the inline body";
                 }
                 else if (linkCarrier && IsUncompilableInlineBody(method))
                 {
@@ -1541,10 +1810,12 @@ internal sealed class AbiPlan
                 {
                     reason = "member function templates are not projected";
                 }
-                else if (string.Equals(method.Name, "operator=", StringComparison.Ordinal)
+                else if (
+                    string.Equals(method.Name, "operator=", StringComparison.Ordinal)
                     && declaration.Template is not null
                     && !method.Defined
-                    && (!method.PatternDefined || IsMoveAssignment(method)))
+                    && (!method.PatternDefined || IsMoveAssignment(method))
+                )
                 {
                     // Like the constructors: the pattern body of a copy assignment only
                     // assigns the payload, which is enough to compile; the move assignment
@@ -1560,7 +1831,8 @@ internal sealed class AbiPlan
                     continue;
                 }
 
-                if (!TryBuildMethod(
+                if (
+                    !TryBuildMethod(
                         declaration,
                         method,
                         publicDeclarationsByQualifiedName,
@@ -1578,22 +1850,42 @@ internal sealed class AbiPlan
                         callables,
                         membersByDeclaration,
                         out var function,
-                        out reason))
+                        out reason
+                    )
+                )
                 {
                     skipReasons[method.Id] = reason ?? "the member cannot be projected";
                     continue;
                 }
 
-                if (symbolDispatch && !IsSymbolDispatchSupported(function, symbolByValueReturns, symbolVectorElements, symbolOptionalRecords, out reason))
+                if (
+                    symbolDispatch
+                    && !IsSymbolDispatchSupported(
+                        function,
+                        symbolByValueReturns,
+                        symbolVectorElements,
+                        symbolOptionalRecords,
+                        out reason
+                    )
+                )
                 {
-                    skipReasons[method.Id] = reason ?? "the member is not supported by symbol dispatch";
+                    skipReasons[method.Id] =
+                        reason ?? "the member is not supported by symbol dispatch";
                     continue;
                 }
 
                 functions.Add(function);
 
-                if (TryBuildStringReferenceSetter(
-                        declaration, method, function, declarationNames, declarationMembers, out var setter))
+                if (
+                    TryBuildStringReferenceSetter(
+                        declaration,
+                        method,
+                        function,
+                        declarationNames,
+                        declarationMembers,
+                        out var setter
+                    )
+                )
                 {
                     functions.Add(setter);
                 }
@@ -1616,8 +1908,10 @@ internal sealed class AbiPlan
                         .Where(member => member.Access == "public")
                         .Select(member => TypeNames.Sanitize(member.Name))
                     : [],
-                StringComparer.Ordinal),
-            StringComparer.Ordinal);
+                StringComparer.Ordinal
+            ),
+            StringComparer.Ordinal
+        );
 
         string CastMemberName(string ownerId, string candidate, string targetId)
         {
@@ -1661,8 +1955,10 @@ internal sealed class AbiPlan
 
         foreach (var declaration in declarations)
         {
-            if (!castableDeclarationIds.Contains(declaration.Id)
-                || !publicBaseInfosByDeclaration.TryGetValue(declaration.Id, out var baseInfos))
+            if (
+                !castableDeclarationIds.Contains(declaration.Id)
+                || !publicBaseInfosByDeclaration.TryGetValue(declaration.Id, out var baseInfos)
+            )
             {
                 continue;
             }
@@ -1672,13 +1968,19 @@ internal sealed class AbiPlan
             while (pending.Count > 0)
             {
                 var baseId = pending.Pop();
-                if (!visited.Add(baseId)
+                if (
+                    !visited.Add(baseId)
                     || !castableDeclarationIds.Contains(baseId)
                     || !allDeclarationsById.TryGetValue(baseId, out var baseDeclaration)
                     || baseDeclaration.Kind is not ("class" or "struct" or "union")
                     || baseDeclaration.Access != "public"
-                    || !string.Equals(baseDeclaration.Surface, declaration.Surface, StringComparison.Ordinal)
-                    || !declarationNames.ContainsKey(baseId))
+                    || !string.Equals(
+                        baseDeclaration.Surface,
+                        declaration.Surface,
+                        StringComparison.Ordinal
+                    )
+                    || !declarationNames.ContainsKey(baseId)
+                )
                 {
                     continue;
                 }
@@ -1688,8 +1990,10 @@ internal sealed class AbiPlan
                     continue;
                 }
 
-                if (emittedCastPairs.Add((declaration.Id, baseId))
-                    && CountBasePaths(declaration.Id, baseId, 0) < 2)
+                if (
+                    emittedCastPairs.Add((declaration.Id, baseId))
+                    && CountBasePaths(declaration.Id, baseId, 0) < 2
+                )
                 {
                     castPairs.Add((declaration, baseDeclaration));
                 }
@@ -1706,31 +2010,40 @@ internal sealed class AbiPlan
 
         foreach (var (declaration, baseDeclaration) in castPairs)
         {
-            if (!declarationNames.TryGetValue(declaration.Id, out var derivedName)
-                || !declarationNames.TryGetValue(baseDeclaration.Id, out var baseName))
+            if (
+                !declarationNames.TryGetValue(declaration.Id, out var derivedName)
+                || !declarationNames.TryGetValue(baseDeclaration.Id, out var baseName)
+            )
             {
                 continue;
             }
 
             var upcastId = declaration.Id + "::cast::up::" + baseDeclaration.Id;
-            functions.Add(new AbiFunction
-            {
-                CppName = "hs_cast_" + CSharpNaming.ShortHash(upcastId),
-                Kind = AbiFunctionKind.Cast,
-                CastKind = AbiCastKind.Upcast,
-                Surface = declaration.Surface,
-                DeclarationId = declaration.Id,
-                MemberId = upcastId,
-                ClassCppName = declaration.QualifiedName,
-                ClassName = derivedName,
-                TargetCppName = baseDeclaration.QualifiedName,
-                TargetDeclarationId = baseDeclaration.Id,
-                NativeMemberName = "",
-                CSharpMemberName = CastMemberName(declaration.Id, "As" + baseName.ClassName, baseDeclaration.Id),
-                ReturnKind = AbiKind.Opaque,
-                NativeReturnType = baseDeclaration.QualifiedName + " *",
-                ReturnWrapperType = "global::" + baseName.NamespaceName + "." + baseName.ClassName,
-            });
+            functions.Add(
+                new AbiFunction
+                {
+                    CppName = "hs_cast_" + CSharpNaming.ShortHash(upcastId),
+                    Kind = AbiFunctionKind.Cast,
+                    CastKind = AbiCastKind.Upcast,
+                    Surface = declaration.Surface,
+                    DeclarationId = declaration.Id,
+                    MemberId = upcastId,
+                    ClassCppName = declaration.QualifiedName,
+                    ClassName = derivedName,
+                    TargetCppName = baseDeclaration.QualifiedName,
+                    TargetDeclarationId = baseDeclaration.Id,
+                    NativeMemberName = "",
+                    CSharpMemberName = CastMemberName(
+                        declaration.Id,
+                        "As" + baseName.ClassName,
+                        baseDeclaration.Id
+                    ),
+                    ReturnKind = AbiKind.Opaque,
+                    NativeReturnType = baseDeclaration.QualifiedName + " *",
+                    ReturnWrapperType =
+                        "global::" + baseName.NamespaceName + "." + baseName.ClassName,
+                }
+            );
 
             if (!polymorphicDeclarationIds.Contains(baseDeclaration.Id))
             {
@@ -1738,25 +2051,32 @@ internal sealed class AbiPlan
             }
 
             var downcastId = baseDeclaration.Id + "::cast::down::" + declaration.Id;
-            functions.Add(new AbiFunction
-            {
-                CppName = "hs_cast_" + CSharpNaming.ShortHash(downcastId),
-                Kind = AbiFunctionKind.Cast,
-                CastKind = AbiCastKind.Downcast,
-                Surface = baseDeclaration.Surface,
-                DeclarationId = baseDeclaration.Id,
-                MemberId = downcastId,
-                ClassCppName = baseDeclaration.QualifiedName,
-                ClassName = baseName,
-                TargetCppName = declaration.QualifiedName,
-                TargetDeclarationId = declaration.Id,
-                NativeMemberName = "",
-                CSharpMemberName = CastMemberName(baseDeclaration.Id, "TryAs" + derivedName.ClassName, declaration.Id),
-                ReturnKind = AbiKind.Opaque,
-                NativeReturnType = declaration.QualifiedName + " *",
-                ReturnWrapperType = "global::" + derivedName.NamespaceName + "." + derivedName.ClassName,
-                ReturnNullable = true,
-            });
+            functions.Add(
+                new AbiFunction
+                {
+                    CppName = "hs_cast_" + CSharpNaming.ShortHash(downcastId),
+                    Kind = AbiFunctionKind.Cast,
+                    CastKind = AbiCastKind.Downcast,
+                    Surface = baseDeclaration.Surface,
+                    DeclarationId = baseDeclaration.Id,
+                    MemberId = downcastId,
+                    ClassCppName = baseDeclaration.QualifiedName,
+                    ClassName = baseName,
+                    TargetCppName = declaration.QualifiedName,
+                    TargetDeclarationId = declaration.Id,
+                    NativeMemberName = "",
+                    CSharpMemberName = CastMemberName(
+                        baseDeclaration.Id,
+                        "TryAs" + derivedName.ClassName,
+                        declaration.Id
+                    ),
+                    ReturnKind = AbiKind.Opaque,
+                    NativeReturnType = declaration.QualifiedName + " *",
+                    ReturnWrapperType =
+                        "global::" + derivedName.NamespaceName + "." + derivedName.ClassName,
+                    ReturnNullable = true,
+                }
+            );
         }
 
         // Every final event type gets its id from getEventId<T>; the canonical-name
@@ -1765,9 +2085,11 @@ internal sealed class AbiPlan
         var eventDeclarationIds = new HashSet<string>(StringComparer.Ordinal);
         foreach (var declaration in declarations)
         {
-            if (declaration.Surface != "levilamina"
+            if (
+                declaration.Surface != "levilamina"
                 || declaration.Template is not null
-                || !declarationNames.ContainsKey(declaration.Id))
+                || !declarationNames.ContainsKey(declaration.Id)
+            )
             {
                 continue;
             }
@@ -1777,7 +2099,8 @@ internal sealed class AbiPlan
             // takes its id through the base) falls back to the same type-name constant the
             // macro would produce, without instantiating the template.
             var isFinal = declaration.Attributes.Any(attribute =>
-                string.Equals(attribute.Name, "final", StringComparison.Ordinal));
+                string.Equals(attribute.Name, "final", StringComparison.Ordinal)
+            );
 
             var isEvent = false;
             var pending = new Queue<string>([declaration.Id]);
@@ -1812,24 +2135,26 @@ internal sealed class AbiPlan
 
             var eventName = declarationNames[declaration.Id];
             var eventIdId = declaration.Id + "::event-id";
-            functions.Add(new AbiFunction
-            {
-                CppName = "hs_event_id_" + CSharpNaming.ShortHash(eventIdId),
-                Kind = AbiFunctionKind.EventId,
-                Surface = declaration.Surface,
-                DeclarationId = declaration.Id,
-                MemberId = eventIdId,
-                ClassCppName = declaration.QualifiedName,
-                ClassName = eventName,
-                NativeMemberName = "event-id",
-                CSharpMemberName = "eventId",
-                ReturnKind = AbiKind.Opaque,
-                NativeReturnType = "ll::event::EventIdView",
-                Parameters = [],
-                Static = true,
-                // getEventId<T> only compiles for a final type.
-                EventIdUsesTypeName = !isFinal,
-            });
+            functions.Add(
+                new AbiFunction
+                {
+                    CppName = "hs_event_id_" + CSharpNaming.ShortHash(eventIdId),
+                    Kind = AbiFunctionKind.EventId,
+                    Surface = declaration.Surface,
+                    DeclarationId = declaration.Id,
+                    MemberId = eventIdId,
+                    ClassCppName = declaration.QualifiedName,
+                    ClassName = eventName,
+                    NativeMemberName = "event-id",
+                    CSharpMemberName = "eventId",
+                    ReturnKind = AbiKind.Opaque,
+                    NativeReturnType = "ll::event::EventIdView",
+                    Parameters = [],
+                    Static = true,
+                    // getEventId<T> only compiles for a final type.
+                    EventIdUsesTypeName = !isFinal,
+                }
+            );
             eventDeclarationIds.Add(declaration.Id);
         }
 
@@ -1843,15 +2168,32 @@ internal sealed class AbiPlan
             && !parameter.IsUniquePtrParam
             && !parameter.IsVector
             && !parameter.IsMap
-            && (parameter.Kind == AbiKind.Shared
-                || parameter.Kind is AbiKind.Bool or AbiKind.I8 or AbiKind.U8
-                    or AbiKind.I16 or AbiKind.U16 or AbiKind.I32 or AbiKind.U32
-                    or AbiKind.I64 or AbiKind.U64 or AbiKind.USize or AbiKind.ISize
-                    or AbiKind.F32 or AbiKind.F64);
+            && (
+                parameter.Kind == AbiKind.Shared
+                || parameter.Kind
+                    is AbiKind.Bool
+                        or AbiKind.I8
+                        or AbiKind.U8
+                        or AbiKind.I16
+                        or AbiKind.U16
+                        or AbiKind.I32
+                        or AbiKind.U32
+                        or AbiKind.I64
+                        or AbiKind.U64
+                        or AbiKind.USize
+                        or AbiKind.ISize
+                        or AbiKind.F32
+                        or AbiKind.F64
+            );
 
         static bool IsDirectorCallbackParameter(AbiParameter parameter)
         {
-            if (parameter.IsOptional || parameter.IsUniquePtrParam || parameter.IsVector || parameter.IsMap)
+            if (
+                parameter.IsOptional
+                || parameter.IsUniquePtrParam
+                || parameter.IsVector
+                || parameter.IsMap
+            )
             {
                 return false;
             }
@@ -1860,7 +2202,8 @@ internal sealed class AbiPlan
             {
                 var core = StripTopLevelQualifiers(parameter.NativeType);
                 var isPointer = core.EndsWith("*", StringComparison.Ordinal);
-                var isReference = core.EndsWith("&", StringComparison.Ordinal)
+                var isReference =
+                    core.EndsWith("&", StringComparison.Ordinal)
                     && !core.EndsWith("&&", StringComparison.Ordinal);
                 if (!isPointer && !isReference)
                 {
@@ -1872,25 +2215,39 @@ internal sealed class AbiPlan
                     && !pointee.EndsWith("&", StringComparison.Ordinal);
             }
 
-            return parameter.Kind is AbiKind.Bool or AbiKind.I8 or AbiKind.U8
-                or AbiKind.I16 or AbiKind.U16 or AbiKind.I32 or AbiKind.U32
-                or AbiKind.I64 or AbiKind.U64 or AbiKind.USize or AbiKind.ISize
-                or AbiKind.F32 or AbiKind.F64;
+            return parameter.Kind
+                is AbiKind.Bool
+                    or AbiKind.I8
+                    or AbiKind.U8
+                    or AbiKind.I16
+                    or AbiKind.U16
+                    or AbiKind.I32
+                    or AbiKind.U32
+                    or AbiKind.I64
+                    or AbiKind.U64
+                    or AbiKind.USize
+                    or AbiKind.ISize
+                    or AbiKind.F32
+                    or AbiKind.F64;
         }
 
         foreach (var declaration in declarations)
         {
-            if (!castableDeclarationIds.Contains(declaration.Id)
+            if (
+                !castableDeclarationIds.Contains(declaration.Id)
                 || declaration.Template is not null
-                || !membersByDeclaration.TryGetValue(declaration.Id, out var directorMembers))
+                || !membersByDeclaration.TryGetValue(declaration.Id, out var directorMembers)
+            )
             {
                 continue;
             }
 
             var pureMethods = directorMembers
-                .Where(member => member.Pure
+                .Where(member =>
+                    member.Pure
                     && member.Kind == "method"
-                    && member.Access is "public" or "protected")
+                    && member.Access is "public" or "protected"
+                )
                 .ToList();
             if (pureMethods.Count != 1)
             {
@@ -1908,7 +2265,8 @@ internal sealed class AbiPlan
             var callbackUsable = true;
             foreach (var parameter in callSignature.Parameters)
             {
-                if (!TryMapParameter(
+                if (
+                    !TryMapParameter(
                         declaration.Surface,
                         parameter.Name,
                         parameter.Type,
@@ -1920,8 +2278,9 @@ internal sealed class AbiPlan
                         symbolDispatch,
                         variants,
                         out var mapped,
-                        out _)
-                    || !IsDirectorCallbackParameter(mapped))
+                        out _
+                    ) || !IsDirectorCallbackParameter(mapped)
+                )
                 {
                     callbackUsable = false;
                     break;
@@ -1943,38 +2302,53 @@ internal sealed class AbiPlan
             {
                 directorReturnKind = AbiKind.Void;
             }
-            else if (!(TryMapEnumUnderlying(returnText, enumUnderlyingByName, out directorReturnKind)
-                || TryMapFundamental(returnText, out directorReturnKind)))
+            else if (
+                !(
+                    TryMapEnumUnderlying(returnText, enumUnderlyingByName, out directorReturnKind)
+                    || TryMapFundamental(returnText, out directorReturnKind)
+                )
+            )
             {
                 continue;
             }
 
             var destructor = directorMembers.FirstOrDefault(member => member.Kind == "destructor");
-            if (destructor is null
+            if (
+                destructor is null
                 || !destructor.Virtual
                 || destructor.Access != "public"
-                || !(virtualDispatch
-                    ? destructor.Inline
-                    : linkCarrier ? HasExportedSymbol(declaration, destructor) : destructor.Inline))
+                || !(
+                    virtualDispatch ? destructor.Inline
+                    : linkCarrier ? HasExportedSymbol(declaration, destructor)
+                    : destructor.Inline
+                )
+            )
             {
                 continue;
             }
 
             var directorParameters = new List<AbiParameter>();
             var hasConstructor = !directorMembers.Any(member => member.Kind == "constructor");
-            foreach (var constructor in directorMembers
-                         .Where(member => member.Kind == "constructor"
-                             && member.Access is "public" or "protected")
-                         .OrderBy(member => member.Id, StringComparer.Ordinal))
+            foreach (
+                var constructor in directorMembers
+                    .Where(member =>
+                        member.Kind == "constructor" && member.Access is "public" or "protected"
+                    )
+                    .OrderBy(member => member.Id, StringComparer.Ordinal)
+            )
             {
                 if (constructor.Signature is null || constructor.Signature.Variadic)
                 {
                     continue;
                 }
 
-                if (!(virtualDispatch
-                        ? constructor.Inline
-                        : linkCarrier ? HasExportedSymbol(declaration, constructor) : constructor.Inline))
+                if (
+                    !(
+                        virtualDispatch ? constructor.Inline
+                        : linkCarrier ? HasExportedSymbol(declaration, constructor)
+                        : constructor.Inline
+                    )
+                )
                 {
                     continue;
                 }
@@ -1983,7 +2357,8 @@ internal sealed class AbiPlan
                 var usable = true;
                 foreach (var parameter in constructor.Signature.Parameters)
                 {
-                    if (!TryMapParameter(
+                    if (
+                        !TryMapParameter(
                             declaration.Surface,
                             parameter.Name,
                             parameter.Type,
@@ -1995,8 +2370,9 @@ internal sealed class AbiPlan
                             symbolDispatch,
                             variants,
                             out var mapped,
-                            out _)
-                        || !IsDirectorConstructorParameter(mapped))
+                            out _
+                        ) || !IsDirectorConstructorParameter(mapped)
+                    )
                     {
                         usable = false;
                         break;
@@ -2021,34 +2397,61 @@ internal sealed class AbiPlan
             }
 
             var constructorCount = directorParameters.Count;
-            directorParameters.Add(new AbiParameter { Name = "invoke", Kind = AbiKind.Opaque, NativeType = "void*" });
-            directorParameters.Add(new AbiParameter { Name = "userData", Kind = AbiKind.Opaque, NativeType = "void*" });
-            directorParameters.Add(new AbiParameter { Name = "release", Kind = AbiKind.Opaque, NativeType = "void*" });
+            directorParameters.Add(
+                new AbiParameter
+                {
+                    Name = "invoke",
+                    Kind = AbiKind.Opaque,
+                    NativeType = "void*",
+                }
+            );
+            directorParameters.Add(
+                new AbiParameter
+                {
+                    Name = "userData",
+                    Kind = AbiKind.Opaque,
+                    NativeType = "void*",
+                }
+            );
+            directorParameters.Add(
+                new AbiParameter
+                {
+                    Name = "release",
+                    Kind = AbiKind.Opaque,
+                    NativeType = "void*",
+                }
+            );
 
             var directorId = declaration.Id + "::director";
-            functions.Add(new AbiFunction
-            {
-                CppName = "hs_director_" + CSharpNaming.ShortHash(directorId),
-                Kind = AbiFunctionKind.DirectorCreate,
-                Surface = declaration.Surface,
-                DeclarationId = declaration.Id,
-                MemberId = directorId,
-                ClassCppName = declaration.QualifiedName,
-                ClassName = declarationNames[declaration.Id],
-                NativeMemberName = callMethod.Name,
-                CSharpMemberName = CastMemberName(declaration.Id, "CreateDirector", callMethod.Id),
-                ReturnKind = AbiKind.Shared,
-                NativeReturnType = "std::shared_ptr<" + declaration.QualifiedName + ">",
-                SharedWrapper = SharedWrapperKind.SharedPtr,
-                ReturnNullable = true,
-                Parameters = directorParameters,
-                Static = true,
-                DirectorConstructorParameterCount = constructorCount,
-                DirectorCallbackParameters = callbackParameters,
-                DirectorReturnKind = directorReturnKind,
-                DirectorReturnNativeType = returnText,
-                DirectorMethodIsConst = callSignature.Const,
-            });
+            functions.Add(
+                new AbiFunction
+                {
+                    CppName = "hs_director_" + CSharpNaming.ShortHash(directorId),
+                    Kind = AbiFunctionKind.DirectorCreate,
+                    Surface = declaration.Surface,
+                    DeclarationId = declaration.Id,
+                    MemberId = directorId,
+                    ClassCppName = declaration.QualifiedName,
+                    ClassName = declarationNames[declaration.Id],
+                    NativeMemberName = callMethod.Name,
+                    CSharpMemberName = CastMemberName(
+                        declaration.Id,
+                        "CreateDirector",
+                        callMethod.Id
+                    ),
+                    ReturnKind = AbiKind.Shared,
+                    NativeReturnType = "std::shared_ptr<" + declaration.QualifiedName + ">",
+                    SharedWrapper = SharedWrapperKind.SharedPtr,
+                    ReturnNullable = true,
+                    Parameters = directorParameters,
+                    Static = true,
+                    DirectorConstructorParameterCount = constructorCount,
+                    DirectorCallbackParameters = callbackParameters,
+                    DirectorReturnKind = directorReturnKind,
+                    DirectorReturnNativeType = returnText,
+                    DirectorMethodIsConst = callSignature.Const,
+                }
+            );
         }
 
         // Namespace-level functions are emitted as static C# classes. An inline body compiles
@@ -2070,7 +2473,8 @@ internal sealed class AbiPlan
 
             var core = StripTopLevelQualifiers(parameter.NativeType);
             var isPointer = core.EndsWith("*", StringComparison.Ordinal);
-            var isReference = core.EndsWith("&", StringComparison.Ordinal)
+            var isReference =
+                core.EndsWith("&", StringComparison.Ordinal)
                 && !core.EndsWith("&&", StringComparison.Ordinal);
             if (!isPointer && !isReference)
             {
@@ -2093,39 +2497,60 @@ internal sealed class AbiPlan
         var functionStubs = new List<AbiFunctionStub>();
         if (linkCarrier || virtualDispatch)
         {
-            var occupiedFunctionTypeNames = declarationNames.Values
-                .Select(name => name.NamespaceName + "." + name.ClassName)
+            var occupiedFunctionTypeNames = declarationNames
+                .Values.Select(name => name.NamespaceName + "." + name.ClassName)
                 .ToHashSet(StringComparer.Ordinal);
-            var functionClassNamesByNamespace = new Dictionary<string, DeclarationName>(StringComparer.Ordinal);
-            var freeFunctionCandidates = new List<(DeclarationRecord Function, DeclarationName ClassName, string BaseName, string? StubReason)>();
+            var functionClassNamesByNamespace = new Dictionary<string, DeclarationName>(
+                StringComparer.Ordinal
+            );
+            var freeFunctionCandidates =
+                new List<(
+                    DeclarationRecord Function,
+                    DeclarationName ClassName,
+                    string BaseName,
+                    string? StubReason
+                )>();
 
-            foreach (var function in records.OfType<DeclarationRecord>()
-                         .Where(declaration => declaration.Kind == "function")
-                         .OrderBy(declaration => declaration.Id, StringComparer.Ordinal))
+            foreach (
+                var function in records
+                    .OfType<DeclarationRecord>()
+                    .Where(declaration => declaration.Kind == "function")
+                    .OrderBy(declaration => declaration.Id, StringComparer.Ordinal)
+            )
             {
                 // In virtual-dispatch mode the shim compiles the umbrella that declares the
                 // function; a body recorded as not visible is still in that translation unit
                 // when the declaration is inline.
                 var callableInline = function.Inline && (function.Defined || virtualDispatch);
-                var callableImported = linkCarrier
+                var callableImported =
+                    linkCarrier
                     && (HasExportAttribute(function.Attributes) || HasExportMacro(function.Macros));
                 // A mapped comparison operator has an identifier name in C#, so validate the
                 // projected name rather than the native spelling.
                 var nameParts = TypeNames.SplitQualifiedName(function.QualifiedName).ToList();
-                var mappedOperatorName = nameParts.Count > 0
+                var mappedOperatorName =
+                    nameParts.Count > 0
                     && nameParts[^1].StartsWith("operator", StringComparison.Ordinal)
                         ? OperatorMethodName(nameParts[^1])
                         : null;
-                var validName = nameParts.Count > 0
-                    && IsValidCppQualifiedName(string.Join(
-                        "::",
-                        nameParts.Take(nameParts.Count - 1).Append(mappedOperatorName ?? nameParts[^1])));
+                var validName =
+                    nameParts.Count > 0
+                    && IsValidCppQualifiedName(
+                        string.Join(
+                            "::",
+                            nameParts
+                                .Take(nameParts.Count - 1)
+                                .Append(mappedOperatorName ?? nameParts[^1])
+                        )
+                    );
                 var signature = function.Signature;
-                if (function.Access != "public"
+                if (
+                    function.Access != "public"
                     || function.Template is not null
                     || signature is null
                     || function.Source is null
-                    || !IsNativeSourceAvailable(nativeRoot, function.Source.File))
+                    || !IsNativeSourceAvailable(nativeRoot, function.Source.File)
+                )
                 {
                     continue;
                 }
@@ -2172,21 +2597,37 @@ internal sealed class AbiPlan
                 {
                     stubReason = "the native name is not a valid C++ qualified name";
                 }
-                else if (HasMsvcInternalTypeName(signature.ReturnType)
-                    || signature.Parameters.Any(parameter => HasMsvcInternalTypeName(parameter.Type)))
+                else if (
+                    HasMsvcInternalTypeName(signature.ReturnType)
+                    || signature.Parameters.Any(parameter =>
+                        HasMsvcInternalTypeName(parameter.Type)
+                    )
+                )
                 {
-                    stubReason = "the signature uses an implementation-specific standard library type";
+                    stubReason =
+                        "the signature uses an implementation-specific standard library type";
                 }
-                else if (HasUnnameableTypeName(signature.ReturnType)
-                    || signature.Parameters.Any(parameter => HasUnnameableTypeName(parameter.Type)))
+                else if (
+                    HasUnnameableTypeName(signature.ReturnType)
+                    || signature.Parameters.Any(parameter => HasUnnameableTypeName(parameter.Type))
+                )
                 {
                     stubReason = "the signature uses a type the binding cannot name";
                 }
 
-                var surfaceNamespace = "Hosihikari.Binding." + TypeNames.SurfaceNamespace(function.Surface) + ".Interop";
-                var namespaceName = parts.Count > 1
-                    ? surfaceNamespace + "." + string.Join(".", parts.Take(parts.Count - 1).Select(TypeNames.Sanitize))
-                    : surfaceNamespace;
+                var surfaceNamespace =
+                    "Hosihikari.Binding."
+                    + TypeNames.SurfaceNamespace(function.Surface)
+                    + ".Interop";
+                var namespaceName =
+                    parts.Count > 1
+                        ? surfaceNamespace
+                            + "."
+                            + string.Join(
+                                ".",
+                                parts.Take(parts.Count - 1).Select(TypeNames.Sanitize)
+                            )
+                        : surfaceNamespace;
 
                 if (!functionClassNamesByNamespace.TryGetValue(namespaceName, out var className))
                 {
@@ -2208,8 +2649,15 @@ internal sealed class AbiPlan
                 freeFunctionCandidates.Add((function, className, baseName, stubReason));
             }
 
-            foreach (var group in freeFunctionCandidates.GroupBy(
-                         candidate => (candidate.ClassName.NamespaceName, candidate.ClassName.ClassName, candidate.BaseName)))
+            foreach (
+                var group in freeFunctionCandidates.GroupBy(candidate =>
+                    (
+                        candidate.ClassName.NamespaceName,
+                        candidate.ClassName.ClassName,
+                        candidate.BaseName
+                    )
+                )
+            )
             {
                 var duplicate = group.Count() > 1;
                 foreach (var candidate in group)
@@ -2218,16 +2666,18 @@ internal sealed class AbiPlan
                         ? candidate.BaseName + "_" + CSharpNaming.ShortHash(candidate.Function.Id)
                         : candidate.BaseName;
                     void AddFunctionStub(string reason) =>
-                        functionStubs.Add(new AbiFunctionStub
-                        {
-                            Surface = candidate.Function.Surface,
-                            NamespaceName = candidate.ClassName.NamespaceName,
-                            ClassName = candidate.ClassName.ClassName,
-                            CSharpMemberName = csharpMemberName,
-                            ReturnType = candidate.Function.Signature!.ReturnType,
-                            Parameters = candidate.Function.Signature.Parameters,
-                            Reason = reason,
-                        });
+                        functionStubs.Add(
+                            new AbiFunctionStub
+                            {
+                                Surface = candidate.Function.Surface,
+                                NamespaceName = candidate.ClassName.NamespaceName,
+                                ClassName = candidate.ClassName.ClassName,
+                                CSharpMemberName = csharpMemberName,
+                                ReturnType = candidate.Function.Signature!.ReturnType,
+                                Parameters = candidate.Function.Signature.Parameters,
+                                Reason = reason,
+                            }
+                        );
 
                     if (candidate.StubReason is not null)
                     {
@@ -2235,7 +2685,8 @@ internal sealed class AbiPlan
                         continue;
                     }
 
-                    if (!TryMapReturnType(
+                    if (
+                        !TryMapReturnType(
                             candidate.Function.Surface,
                             candidate.Function.Signature!.ReturnType,
                             publicDeclarationsByQualifiedName,
@@ -2280,7 +2731,9 @@ internal sealed class AbiPlan
                             out var returnCallable,
                             out var returnGameRef,
                             out var returnGameRefType,
-                            out var returnReason))
+                            out var returnReason
+                        )
+                    )
                     {
                         AddFunctionStub(returnReason ?? "the return type is not supported");
                         continue;
@@ -2290,7 +2743,8 @@ internal sealed class AbiPlan
                     var usable = true;
                     foreach (var parameter in candidate.Function.Signature.Parameters)
                     {
-                        if (!TryMapParameter(
+                        if (
+                            !TryMapParameter(
                                 candidate.Function.Surface,
                                 parameter.Name,
                                 parameter.Type,
@@ -2302,16 +2756,22 @@ internal sealed class AbiPlan
                                 symbolDispatch,
                                 variants,
                                 out var mapped,
-                                out var parameterReason))
+                                out var parameterReason
+                            )
+                        )
                         {
-                            AddFunctionStub(parameterReason ?? "the parameter type is not supported");
+                            AddFunctionStub(
+                                parameterReason ?? "the parameter type is not supported"
+                            );
                             usable = false;
                             break;
                         }
 
                         if (!IsFreeFunctionParameterSupported(mapped))
                         {
-                            AddFunctionStub("the parameter type is not supported by a free function");
+                            AddFunctionStub(
+                                "the parameter type is not supported by a free function"
+                            );
                             usable = false;
                             break;
                         }
@@ -2328,59 +2788,65 @@ internal sealed class AbiPlan
                     AssignUniqueParameterNames(parameters);
 
                     var nativeLeaf = TypeNames.SplitQualifiedName(candidate.Function.QualifiedName);
-                    var operatorLeaf = nativeLeaf.Count > 0
+                    var operatorLeaf =
+                        nativeLeaf.Count > 0
                         && nativeLeaf[^1].StartsWith("operator", StringComparison.Ordinal)
                         && OperatorMethodName(nativeLeaf[^1]) is not null
                             ? nativeLeaf[^1]
                             : null;
 
-                    functions.Add(new AbiFunction
-                    {
-                        CppName = "hs_function_" + CSharpNaming.ShortHash(candidate.Function.Id),
-                        Kind = AbiFunctionKind.FreeFunction,
-                        Surface = candidate.Function.Surface,
-                        DeclarationId = candidate.Function.Id,
-                        MemberId = candidate.Function.Id,
-                        ClassCppName = candidate.Function.QualifiedName,
-                        ClassName = candidate.ClassName,
-                        // A comparison operator may be a hidden friend of a class template;
-                        // the unqualified name lets ADL find it.
-                        NativeMemberName = operatorLeaf ?? candidate.Function.QualifiedName,
-                        CSharpMemberName = csharpMemberName,
-                        ReturnKind = returnKind,
-                        NativeReturnType = nativeReturnType,
-                        ReturnPathBuffer = IsPathBufferType(candidate.Function.Signature.ReturnType),
-                        ReturnWrapperType = returnWrapperType,
-                        ReturnOwned = returnOwned,
-                        ReturnUniquePtr = returnUniquePtr,
-                        ReturnOptional = returnOptional,
-                        ReturnArray = returnArray,
-                        ReturnSpan = returnSpan,
-                        ArrayElementKind = arrayElementKind,
-                        ArrayElementType = arrayElementType,
-                        ArrayElementSharedWrapper = arrayElementSharedWrapper,
-                        ArrayElementOwnership = arrayElementOwnership,
-                        ArrayElementWrapperType = arrayElementWrapperType,
-                        ArrayElementNativeType = arrayElementNativeType,
-                        SharedWrapper = sharedWrapper,
-                        TimeConversion = timeConversion,
-                        TimeClockType = timeClockType,
-                        TimeDurationType = timeDurationType,
-                        SpecialValue = specialValue,
-                        SpecialValueType = specialValueType,
-                        MapKeyKind = mapKeyKind,
-                        MapValueKind = mapValueKind,
-                        MapValueWrapperType = mapValueWrapperType,
-                        MapValueOwnership = mapValueOwnership,
-                        MapValueNativeType = mapValueNativeType,
-                        ReturnNullable = returnNullable,
-                        ReturnExpected = returnExpected,
-                        ExpectedErrorType = expectedErrorType,
-                        VariantInfo = returnVariant,
-                        CallableInfo = returnCallable,
-                        Parameters = parameters,
-                        Static = true,
-                    });
+                    functions.Add(
+                        new AbiFunction
+                        {
+                            CppName =
+                                "hs_function_" + CSharpNaming.ShortHash(candidate.Function.Id),
+                            Kind = AbiFunctionKind.FreeFunction,
+                            Surface = candidate.Function.Surface,
+                            DeclarationId = candidate.Function.Id,
+                            MemberId = candidate.Function.Id,
+                            ClassCppName = candidate.Function.QualifiedName,
+                            ClassName = candidate.ClassName,
+                            // A comparison operator may be a hidden friend of a class template;
+                            // the unqualified name lets ADL find it.
+                            NativeMemberName = operatorLeaf ?? candidate.Function.QualifiedName,
+                            CSharpMemberName = csharpMemberName,
+                            ReturnKind = returnKind,
+                            NativeReturnType = nativeReturnType,
+                            ReturnPathBuffer = IsPathBufferType(
+                                candidate.Function.Signature.ReturnType
+                            ),
+                            ReturnWrapperType = returnWrapperType,
+                            ReturnOwned = returnOwned,
+                            ReturnUniquePtr = returnUniquePtr,
+                            ReturnOptional = returnOptional,
+                            ReturnArray = returnArray,
+                            ReturnSpan = returnSpan,
+                            ArrayElementKind = arrayElementKind,
+                            ArrayElementType = arrayElementType,
+                            ArrayElementSharedWrapper = arrayElementSharedWrapper,
+                            ArrayElementOwnership = arrayElementOwnership,
+                            ArrayElementWrapperType = arrayElementWrapperType,
+                            ArrayElementNativeType = arrayElementNativeType,
+                            SharedWrapper = sharedWrapper,
+                            TimeConversion = timeConversion,
+                            TimeClockType = timeClockType,
+                            TimeDurationType = timeDurationType,
+                            SpecialValue = specialValue,
+                            SpecialValueType = specialValueType,
+                            MapKeyKind = mapKeyKind,
+                            MapValueKind = mapValueKind,
+                            MapValueWrapperType = mapValueWrapperType,
+                            MapValueOwnership = mapValueOwnership,
+                            MapValueNativeType = mapValueNativeType,
+                            ReturnNullable = returnNullable,
+                            ReturnExpected = returnExpected,
+                            ExpectedErrorType = expectedErrorType,
+                            VariantInfo = returnVariant,
+                            CallableInfo = returnCallable,
+                            Parameters = parameters,
+                            Static = true,
+                        }
+                    );
                 }
             }
         }
@@ -2395,17 +2861,21 @@ internal sealed class AbiPlan
                 .Select(function => function.DeclarationId)
                 .ToHashSet(StringComparer.Ordinal);
             var ownedElementNames = functions
-                .Where(function => function.ReturnArray
-                    && function.ArrayElementOwnership == ArrayElementOwnership.RecordCopy)
+                .Where(function =>
+                    function.ReturnArray
+                    && function.ArrayElementOwnership == ArrayElementOwnership.RecordCopy
+                )
                 .Select(function => function.ArrayElementNativeType)
                 .OfType<string>()
                 .Distinct(StringComparer.Ordinal)
                 .ToList();
             foreach (var elementName in ownedElementNames)
             {
-                if (!symbolVectorElements.TryGetValue(elementName, out var elementDeclaration)
+                if (
+                    !symbolVectorElements.TryGetValue(elementName, out var elementDeclaration)
                     || !declarationNames.ContainsKey(elementDeclaration.Id)
-                    || !destroyableIds.Add(elementDeclaration.Id))
+                    || !destroyableIds.Add(elementDeclaration.Id)
+                )
                 {
                     continue;
                 }
@@ -2415,9 +2885,11 @@ internal sealed class AbiPlan
         }
 
         var usedVariants = functions
-            .SelectMany(function => function.Parameters
-                .Select(parameter => parameter.VariantInfo)
-                .Append(function.VariantInfo))
+            .SelectMany(function =>
+                function
+                    .Parameters.Select(parameter => parameter.VariantInfo)
+                    .Append(function.VariantInfo)
+            )
             .OfType<VariantAbiInfo>()
             .Distinct()
             .ToList();
@@ -2452,10 +2924,12 @@ internal sealed class AbiPlan
             string uniqueName;
             do
             {
-                uniqueName = function.CppName + "_" + suffix.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                uniqueName =
+                    function.CppName
+                    + "_"
+                    + suffix.ToString(System.Globalization.CultureInfo.InvariantCulture);
                 suffix++;
-            }
-            while (!usedFunctionNames.Add(uniqueName));
+            } while (!usedFunctionNames.Add(uniqueName));
 
             function.CppName = uniqueName;
         }
@@ -2464,11 +2938,13 @@ internal sealed class AbiPlan
             .Where(function => !IsUnprojectable(function))
             .GroupBy(function => function.Surface, StringComparer.Ordinal)
             .OrderBy(group => group.Key, StringComparer.Ordinal)
-            .SelectMany(group => group
-                .OrderBy(function => function.DeclarationId, StringComparer.Ordinal)
-                .ThenBy(function => function.MemberId, StringComparer.Ordinal)
-                .ThenBy(function => function.Kind)
-                .ThenBy(function => function.CppName, StringComparer.Ordinal))
+            .SelectMany(group =>
+                group
+                    .OrderBy(function => function.DeclarationId, StringComparer.Ordinal)
+                    .ThenBy(function => function.MemberId, StringComparer.Ordinal)
+                    .ThenBy(function => function.Kind)
+                    .ThenBy(function => function.CppName, StringComparer.Ordinal)
+            )
             .ToList();
 
         // The include set is taken from the unfiltered list. A carrier header often completes
@@ -2478,7 +2954,11 @@ internal sealed class AbiPlan
         // first removed its own include.
         var includeSources = functions
             .GroupBy(function => function.Surface, StringComparer.Ordinal)
-            .ToDictionary(group => group.Key, group => (IReadOnlyList<AbiFunction>)group.ToList(), StringComparer.Ordinal);
+            .ToDictionary(
+                group => group.Key,
+                group => (IReadOnlyList<AbiFunction>)group.ToList(),
+                StringComparer.Ordinal
+            );
 
         var indexBySurface = new Dictionary<string, int>(StringComparer.Ordinal);
         foreach (var function in ordered)
@@ -2500,77 +2980,82 @@ internal sealed class AbiPlan
             syntheticMembers.ToDictionary(
                 pair => pair.Key,
                 pair => (IReadOnlyList<MemberRecord>)pair.Value,
-                StringComparer.Ordinal),
+                StringComparer.Ordinal
+            ),
             usedVariants,
             usedCallables,
-            functionStubs);
+            functionStubs
+        );
     }
 
-    public static string CppType(AbiKind kind) => kind switch
-    {
-        AbiKind.Void => "void",
-        AbiKind.Bool => "bool",
-        AbiKind.I8 => "std::int8_t",
-        AbiKind.U8 => "std::uint8_t",
-        AbiKind.I16 => "std::int16_t",
-        AbiKind.U16 => "std::uint16_t",
-        AbiKind.I32 => "std::int32_t",
-        AbiKind.U32 => "std::uint32_t",
-        AbiKind.I64 => "std::int64_t",
-        AbiKind.U64 => "std::uint64_t",
-        AbiKind.USize => "std::size_t",
-        AbiKind.ISize => "std::ptrdiff_t",
-        AbiKind.F32 => "float",
-        AbiKind.F64 => "double",
-        AbiKind.Opaque => "void*",
-        AbiKind.StringView => "HosihikariStringView",
-        AbiKind.Callback => "void*",
-        AbiKind.ArrayView => "HosihikariArrayView",
-        AbiKind.Vector => "void",
-        AbiKind.Shared => "HosihikariSharedHandle",
-        AbiKind.MapView => "HosihikariArrayView",
-        _ => "void",
-    };
+    public static string CppType(AbiKind kind) =>
+        kind switch
+        {
+            AbiKind.Void => "void",
+            AbiKind.Bool => "bool",
+            AbiKind.I8 => "std::int8_t",
+            AbiKind.U8 => "std::uint8_t",
+            AbiKind.I16 => "std::int16_t",
+            AbiKind.U16 => "std::uint16_t",
+            AbiKind.I32 => "std::int32_t",
+            AbiKind.U32 => "std::uint32_t",
+            AbiKind.I64 => "std::int64_t",
+            AbiKind.U64 => "std::uint64_t",
+            AbiKind.USize => "std::size_t",
+            AbiKind.ISize => "std::ptrdiff_t",
+            AbiKind.F32 => "float",
+            AbiKind.F64 => "double",
+            AbiKind.Opaque => "void*",
+            AbiKind.StringView => "HosihikariStringView",
+            AbiKind.Callback => "void*",
+            AbiKind.ArrayView => "HosihikariArrayView",
+            AbiKind.Vector => "void",
+            AbiKind.Shared => "HosihikariSharedHandle",
+            AbiKind.MapView => "HosihikariArrayView",
+            _ => "void",
+        };
 
-    public static string CSharpType(AbiKind kind) => kind switch
-    {
-        AbiKind.Void => "void",
-        AbiKind.Bool => "bool",
-        AbiKind.I8 => "sbyte",
-        AbiKind.U8 => "byte",
-        AbiKind.I16 => "short",
-        AbiKind.U16 => "ushort",
-        AbiKind.I32 => "int",
-        AbiKind.U32 => "uint",
-        AbiKind.I64 => "long",
-        AbiKind.U64 => "ulong",
-        AbiKind.USize => "nuint",
-        AbiKind.ISize => "nint",
-        AbiKind.F32 => "float",
-        AbiKind.F64 => "double",
-        AbiKind.Opaque => "nint",
-        AbiKind.StringView => "string",
-        AbiKind.Callback => "nint",
-        AbiKind.ArrayView => "nint",
-        AbiKind.Vector => "nint",
-        AbiKind.Shared => "nint",
-        AbiKind.MapView => "nint",
-        _ => "nint",
-    };
+    public static string CSharpType(AbiKind kind) =>
+        kind switch
+        {
+            AbiKind.Void => "void",
+            AbiKind.Bool => "bool",
+            AbiKind.I8 => "sbyte",
+            AbiKind.U8 => "byte",
+            AbiKind.I16 => "short",
+            AbiKind.U16 => "ushort",
+            AbiKind.I32 => "int",
+            AbiKind.U32 => "uint",
+            AbiKind.I64 => "long",
+            AbiKind.U64 => "ulong",
+            AbiKind.USize => "nuint",
+            AbiKind.ISize => "nint",
+            AbiKind.F32 => "float",
+            AbiKind.F64 => "double",
+            AbiKind.Opaque => "nint",
+            AbiKind.StringView => "string",
+            AbiKind.Callback => "nint",
+            AbiKind.ArrayView => "nint",
+            AbiKind.Vector => "nint",
+            AbiKind.Shared => "nint",
+            AbiKind.MapView => "nint",
+            _ => "nint",
+        };
 
-    public static string CSharpTableType(AbiKind kind) => kind switch
-    {
-        // Managed bool returns are normalized to 0/1; the native side only guarantees
-        // the low byte of the return register, so read it as a byte and compare.
-        AbiKind.Bool => "byte",
-        AbiKind.Opaque => "void*",
-        AbiKind.StringView => "global::Hosihikari.Binding.Abi.StringView",
-        AbiKind.ArrayView => "global::Hosihikari.Binding.Abi.ArrayView",
-        AbiKind.Vector => "nint",
-        AbiKind.Shared => "global::Hosihikari.Binding.Abi.SharedHandleData",
-        AbiKind.MapView => "global::Hosihikari.Binding.Abi.ArrayView",
-        _ => CSharpType(kind),
-    };
+    public static string CSharpTableType(AbiKind kind) =>
+        kind switch
+        {
+            // Managed bool returns are normalized to 0/1; the native side only guarantees
+            // the low byte of the return register, so read it as a byte and compare.
+            AbiKind.Bool => "byte",
+            AbiKind.Opaque => "void*",
+            AbiKind.StringView => "global::Hosihikari.Binding.Abi.StringView",
+            AbiKind.ArrayView => "global::Hosihikari.Binding.Abi.ArrayView",
+            AbiKind.Vector => "nint",
+            AbiKind.Shared => "global::Hosihikari.Binding.Abi.SharedHandleData",
+            AbiKind.MapView => "global::Hosihikari.Binding.Abi.ArrayView",
+            _ => CSharpType(kind),
+        };
 
     public static string CSharpParameterType(AbiParameter parameter) =>
         parameter.IsMap
@@ -2585,35 +3070,39 @@ internal sealed class AbiPlan
                 _ => CSharpType(parameter.Kind),
             };
 
-    public static string CSharpMapKeyType(AbiKind kind) => kind switch
-    {
-        AbiKind.StringView => "string",
-        AbiKind.Opaque => "nint",
-        _ => CSharpType(kind),
-    };
+    public static string CSharpMapKeyType(AbiKind kind) =>
+        kind switch
+        {
+            AbiKind.StringView => "string",
+            AbiKind.Opaque => "nint",
+            _ => CSharpType(kind),
+        };
 
-    public static string CSharpMapValueType(AbiParameter parameter) => parameter.MapValueKind switch
-    {
-        AbiKind.StringView => "string",
-        AbiKind.Opaque => parameter.MapValueOwnership == ArrayElementOwnership.None
-            ? "nint"
-            : parameter.MapValueWrapperType!,
-        _ => CSharpType(parameter.MapValueKind),
-    };
+    public static string CSharpMapValueType(AbiParameter parameter) =>
+        parameter.MapValueKind switch
+        {
+            AbiKind.StringView => "string",
+            AbiKind.Opaque => parameter.MapValueOwnership == ArrayElementOwnership.None
+                ? "nint"
+                : parameter.MapValueWrapperType!,
+            _ => CSharpType(parameter.MapValueKind),
+        };
 
-    public static string CSharpPropertyType(AbiKind kind) => kind switch
-    {
-        AbiKind.StringView => "string",
-        AbiKind.Opaque => "nint",
-        _ => CSharpType(kind),
-    };
+    public static string CSharpPropertyType(AbiKind kind) =>
+        kind switch
+        {
+            AbiKind.StringView => "string",
+            AbiKind.Opaque => "nint",
+            _ => CSharpType(kind),
+        };
 
-    public static string CppParameterType(AbiParameter parameter) => parameter.Kind switch
-    {
-        AbiKind.Opaque => "void*",
-        AbiKind.StringView => "const char*, std::size_t",
-        _ => CppType(parameter.Kind),
-    };
+    public static string CppParameterType(AbiParameter parameter) =>
+        parameter.Kind switch
+        {
+            AbiKind.Opaque => "void*",
+            AbiKind.StringView => "const char*, std::size_t",
+            _ => CppType(parameter.Kind),
+        };
 
     public static bool IsStringViewType(string? canonical)
     {
@@ -2661,7 +3150,8 @@ internal sealed class AbiPlan
         var compact = type.Replace(" ", "", StringComparison.Ordinal);
         return compact switch
         {
-            "std::basic_string<char,std::char_traits<char>,std::allocator<char>>" => "std::basic_string<char>",
+            "std::basic_string<char,std::char_traits<char>,std::allocator<char>>" =>
+                "std::basic_string<char>",
             "std::basic_string_view<char,std::char_traits<char>>" => "std::basic_string_view<char>",
             _ => compact,
         };
@@ -2670,7 +3160,10 @@ internal sealed class AbiPlan
     private static string NormalizeTypeName(string canonical)
     {
         var text = StripTopLevelQualifiers(canonical);
-        while (text.EndsWith("&", StringComparison.Ordinal) || text.EndsWith("*", StringComparison.Ordinal))
+        while (
+            text.EndsWith("&", StringComparison.Ordinal)
+            || text.EndsWith("*", StringComparison.Ordinal)
+        )
         {
             text = StripTopLevelQualifiers(text[..^1].TrimEnd());
         }
@@ -2715,17 +3208,21 @@ internal sealed class AbiPlan
 
             // A qualifier on a pointer itself is spelled without a space (`T*const`); drop
             // it so the caller still sees the pointer.
-            if (text.EndsWith("const", StringComparison.Ordinal)
+            if (
+                text.EndsWith("const", StringComparison.Ordinal)
                 && text.Length > "const".Length
-                && text[^("const".Length + 1)] is '*' or '&')
+                && text[^("const".Length + 1)] is '*' or '&'
+            )
             {
                 text = text[..^"const".Length];
                 changed = true;
             }
 
-            if (text.EndsWith("volatile", StringComparison.Ordinal)
+            if (
+                text.EndsWith("volatile", StringComparison.Ordinal)
                 && text.Length > "volatile".Length
-                && text[^("volatile".Length + 1)] is '*' or '&')
+                && text[^("volatile".Length + 1)] is '*' or '&'
+            )
             {
                 text = text[..^"volatile".Length];
                 changed = true;
@@ -2760,7 +3257,8 @@ internal sealed class AbiPlan
         method.Name == "parseFn"
         && method.DeclarationId.Contains("ParamTraitsBase<", StringComparison.Ordinal)
         && UninstantiatedParserTypes.Any(type =>
-            method.DeclarationId.Contains("<" + type + ">", StringComparison.Ordinal));
+            method.DeclarationId.Contains("<" + type + ">", StringComparison.Ordinal)
+        );
 
     /// <summary>
     /// Member bodies the carrier ships in a form that cannot be instantiated by the shim.
@@ -2769,16 +3267,22 @@ internal sealed class AbiPlan
     /// to its derived type. Both are rejected by the standard library and the language.
     /// </summary>
     private static bool IsUncompilableInlineBody(MemberRecord method) =>
-        (method.DeclarationId.Contains("BidirectionalUnorderedMap<", StringComparison.Ordinal)
-            && method.Name is "operator[]" or "operator()")
+        (
+            method.DeclarationId.Contains("BidirectionalUnorderedMap<", StringComparison.Ordinal)
+            && method.Name is "operator[]" or "operator()"
+        )
         // The vector bases' const subscript casts its const this to the derived type, and
         // cross is constrained to plain arithmetic elements, which the projected
         // instantiations (vector element types, integer bases) do not meet.
-        || (method.DeclarationId.StartsWith("levilamina:ll::math::", StringComparison.Ordinal)
-            && method.Name is "operator[]" or "cross")
-        || (method.DeclarationId.Contains("CommutativeGroup<", StringComparison.Ordinal)
+        || (
+            method.DeclarationId.StartsWith("levilamina:ll::math::", StringComparison.Ordinal)
+            && method.Name is "operator[]" or "cross"
+        )
+        || (
+            method.DeclarationId.Contains("CommutativeGroup<", StringComparison.Ordinal)
             // The compound assignment operators live on the derived arithmetic classes only.
-            && method.Name is "operator+=" or "operator-=" or "operator*=" or "operator/=");
+            && method.Name is "operator+=" or "operator-=" or "operator*=" or "operator/="
+        );
 
     /// <summary>
     /// True when <c>ParamTraits&lt;T&gt;</c> replaces a <c>ParamTraitsBase&lt;T&gt;</c>
@@ -2791,22 +3295,30 @@ internal sealed class AbiPlan
         DeclarationRecord declaration,
         MemberRecord member,
         IReadOnlyDictionary<string, DeclarationRecord> declarationsByQualifiedName,
-        IReadOnlyDictionary<string, List<MemberRecord>> membersByDeclaration)
+        IReadOnlyDictionary<string, List<MemberRecord>> membersByDeclaration
+    )
     {
         const string basePrefix = "ParamTraitsBase<";
-        if (member.Kind != "method"
+        if (
+            member.Kind != "method"
             || member.Name != "parseFn"
-            || !declaration.QualifiedName.Contains(basePrefix, StringComparison.Ordinal))
+            || !declaration.QualifiedName.Contains(basePrefix, StringComparison.Ordinal)
+        )
         {
             return false;
         }
 
-        var derivedName = declaration.QualifiedName.Replace(basePrefix, "ParamTraits<", StringComparison.Ordinal);
+        var derivedName = declaration.QualifiedName.Replace(
+            basePrefix,
+            "ParamTraits<",
+            StringComparison.Ordinal
+        );
         return declarationsByQualifiedName.TryGetValue(derivedName, out var derived)
             && membersByDeclaration.TryGetValue(derived.Id, out var derivedMembers)
             && derivedMembers.Any(candidate =>
                 candidate.Kind == "method"
-                && string.Equals(candidate.Name, member.Name, StringComparison.Ordinal));
+                && string.Equals(candidate.Name, member.Name, StringComparison.Ordinal)
+            );
     }
 
     private static bool HasExportedSymbol(DeclarationRecord declaration, MemberRecord member) =>
@@ -2819,10 +3331,19 @@ internal sealed class AbiPlan
     private static bool HasExportAttribute(IEnumerable<AttributeInfo> attributes) =>
         attributes.Any(attribute =>
             attribute.Name.Equals("dllexport", StringComparison.OrdinalIgnoreCase)
-            || attribute.Name.Equals("dllimport", StringComparison.OrdinalIgnoreCase));
+            || attribute.Name.Equals("dllimport", StringComparison.OrdinalIgnoreCase)
+        );
 
     private static bool HasExportMacro(IEnumerable<MacroUseInfo> macros) =>
-        macros.Any(macro => macro.Name is "LLAPI" or "LLNDAPI" or "LLCAPI" or "MCAPI" or "MCNAPI" or "ENDSTONE_EVENT");
+        macros.Any(macro =>
+            macro.Name
+                is "LLAPI"
+                    or "LLNDAPI"
+                    or "LLCAPI"
+                    or "MCAPI"
+                    or "MCNAPI"
+                    or "ENDSTONE_EVENT"
+        );
 
     // MCNAPI is the carrier's "known but not exported" marker. Such a member has a
     // mangled name, but the server never exports it: a prelink against the pinned
@@ -2872,7 +3393,8 @@ internal sealed class AbiPlan
         }
 
         return value.All(current =>
-            char.IsDigit(current) || current is '.' or 'U' or 'u' or 'L' or 'l' or 'F' or 'f');
+            char.IsDigit(current) || current is '.' or 'U' or 'u' or 'L' or 'l' or 'F' or 'f'
+        );
     }
 
     internal static string? ExtractTemplateArguments(string type)
@@ -2933,17 +3455,35 @@ internal sealed class AbiPlan
         yield return inner[start..].Trim();
     }
 
-    private static bool IsScalarAliasType(string type) => type is
-        "uint8" or "uint16" or "uint32" or "uint64"
-        or "int8" or "int16" or "int32" or "int64"
-        or "uchar" or "ushort" or "uint" or "ulong" or "ulonglong"
-        or "schar" or "ssize_t" or "intptr_t" or "uintptr_t"
-        or "wchar_t" or "char8_t" or "char16_t" or "char32_t";
+    private static bool IsScalarAliasType(string type) =>
+        type
+            is "uint8"
+                or "uint16"
+                or "uint32"
+                or "uint64"
+                or "int8"
+                or "int16"
+                or "int32"
+                or "int64"
+                or "uchar"
+                or "ushort"
+                or "uint"
+                or "ulong"
+                or "ulonglong"
+                or "schar"
+                or "ssize_t"
+                or "intptr_t"
+                or "uintptr_t"
+                or "wchar_t"
+                or "char8_t"
+                or "char16_t"
+                or "char32_t";
 
     private static bool HasAbstractTemplateArgument(
         DeclarationRecord declaration,
         IReadOnlyDictionary<string, DeclarationRecord> declarationsByQualifiedName,
-        HashSet<string> abstractDeclarationIds)
+        HashSet<string> abstractDeclarationIds
+    )
     {
         if (declaration.Template is null)
         {
@@ -2957,14 +3497,28 @@ internal sealed class AbiPlan
             {
                 foreach (var part in PackArgumentParts(argument.Value))
                 {
-                    if (IsAbstractTemplateType(part, declarationsByQualifiedName, abstractDeclarationIds, visited))
+                    if (
+                        IsAbstractTemplateType(
+                            part,
+                            declarationsByQualifiedName,
+                            abstractDeclarationIds,
+                            visited
+                        )
+                    )
                     {
                         return true;
                     }
                 }
             }
-            else if (string.Equals(argument.Kind, "type", StringComparison.Ordinal)
-                && IsAbstractTemplateType(argument.Value, declarationsByQualifiedName, abstractDeclarationIds, visited))
+            else if (
+                string.Equals(argument.Kind, "type", StringComparison.Ordinal)
+                && IsAbstractTemplateType(
+                    argument.Value,
+                    declarationsByQualifiedName,
+                    abstractDeclarationIds,
+                    visited
+                )
+            )
             {
                 return true;
             }
@@ -2977,7 +3531,8 @@ internal sealed class AbiPlan
         string value,
         IReadOnlyDictionary<string, DeclarationRecord> declarationsByQualifiedName,
         HashSet<string> abstractDeclarationIds,
-        HashSet<string> visited)
+        HashSet<string> visited
+    )
     {
         var type = NormalizeTypeName(value);
         if (string.IsNullOrWhiteSpace(type) || !visited.Add(type))
@@ -2996,12 +3551,15 @@ internal sealed class AbiPlan
             {
                 foreach (var argument in declaration.Template.Arguments)
                 {
-                    if (string.Equals(argument.Kind, "type", StringComparison.Ordinal)
+                    if (
+                        string.Equals(argument.Kind, "type", StringComparison.Ordinal)
                         && IsAbstractTemplateType(
                             argument.Value,
                             declarationsByQualifiedName,
                             abstractDeclarationIds,
-                            visited))
+                            visited
+                        )
+                    )
                     {
                         return true;
                     }
@@ -3022,13 +3580,21 @@ internal sealed class AbiPlan
             return false;
         }
 
-        return SplitTemplateArguments(inner).Any(part =>
-            IsAbstractTemplateType(part, declarationsByQualifiedName, abstractDeclarationIds, visited));
+        return SplitTemplateArguments(inner)
+            .Any(part =>
+                IsAbstractTemplateType(
+                    part,
+                    declarationsByQualifiedName,
+                    abstractDeclarationIds,
+                    visited
+                )
+            );
     }
 
     private static bool HasInaccessibleTemplateArgument(DeclarationRecord declaration) =>
         declaration.Template?.Arguments.Any(argument =>
-            argument.Accessible.HasValue && !argument.Accessible.Value) ?? false;
+            argument.Accessible.HasValue && !argument.Accessible.Value
+        ) ?? false;
 
     // A class template has no layout of its own; the shim only compiles when the argument
     // is spelled by its own name it is written with. An incomplete argument is one the
@@ -3040,11 +3606,14 @@ internal sealed class AbiPlan
             argument.Complete.HasValue
             && !argument.Complete.Value
             && !IsStandardOrThirdPartyType(NormalizeTypeName(argument.Value))
-            && !NormalizeTypeName(argument.Value).Contains('<')) ?? false;
+            && !NormalizeTypeName(argument.Value).Contains('<')
+        )
+        ?? false;
 
     private static bool AreTemplateArgumentsUsable(
         DeclarationRecord declaration,
-        IReadOnlyDictionary<string, DeclarationRecord> declarationsByQualifiedName)
+        IReadOnlyDictionary<string, DeclarationRecord> declarationsByQualifiedName
+    )
     {
         if (declaration.Template is null)
         {
@@ -3064,8 +3633,10 @@ internal sealed class AbiPlan
                     }
                 }
             }
-            else if (string.Equals(argument.Kind, "type", StringComparison.Ordinal)
-                && !IsUsableTemplateType(argument.Value, declarationsByQualifiedName, visited))
+            else if (
+                string.Equals(argument.Kind, "type", StringComparison.Ordinal)
+                && !IsUsableTemplateType(argument.Value, declarationsByQualifiedName, visited)
+            )
             {
                 return false;
             }
@@ -3096,9 +3667,11 @@ internal sealed class AbiPlan
         foreach (var part in System.Text.RegularExpressions.Regex.Split(text, @"[,<>]"))
         {
             var name = NormalizeTypeName(part);
-            if (!string.IsNullOrWhiteSpace(name)
+            if (
+                !string.IsNullOrWhiteSpace(name)
                 && !IsFundamentalTemplateArgument(name)
-                && !IsLiteralTemplateArgument(name))
+                && !IsLiteralTemplateArgument(name)
+            )
             {
                 yield return name;
             }
@@ -3108,7 +3681,8 @@ internal sealed class AbiPlan
     private static bool IsUsableTemplateType(
         string value,
         IReadOnlyDictionary<string, DeclarationRecord> declarationsByQualifiedName,
-        HashSet<string> visited)
+        HashSet<string> visited
+    )
     {
         var type = NormalizeTypeName(value);
         if (string.IsNullOrWhiteSpace(type))
@@ -3132,8 +3706,14 @@ internal sealed class AbiPlan
             {
                 foreach (var argument in declaration.Template.Arguments)
                 {
-                    if (string.Equals(argument.Kind, "type", StringComparison.Ordinal)
-                        && !IsUsableTemplateType(argument.Value, declarationsByQualifiedName, visited))
+                    if (
+                        string.Equals(argument.Kind, "type", StringComparison.Ordinal)
+                        && !IsUsableTemplateType(
+                            argument.Value,
+                            declarationsByQualifiedName,
+                            visited
+                        )
+                    )
                     {
                         return false;
                     }
@@ -3177,24 +3757,27 @@ internal sealed class AbiPlan
     /// Namespace-level comparison operators have no C# operator form, so they surface as
     /// static methods. Other operators stay unprojected.
     /// </summary>
-    private static string? OperatorMethodName(string name) => name switch
-    {
-        "operator==" => "operator_equal",
-        "operator!=" => "operator_not_equal",
-        "operator<" => "operator_less",
-        "operator<=" => "operator_less_equal",
-        "operator>" => "operator_greater",
-        "operator>=" => "operator_greater_equal",
-        _ => null,
-    };
+    private static string? OperatorMethodName(string name) =>
+        name switch
+        {
+            "operator==" => "operator_equal",
+            "operator!=" => "operator_not_equal",
+            "operator<" => "operator_less",
+            "operator<=" => "operator_less_equal",
+            "operator>" => "operator_greater",
+            "operator>=" => "operator_greater_equal",
+            _ => null,
+        };
 
     private static bool IsValidCppQualifiedName(string qualifiedName)
     {
-        if (string.IsNullOrWhiteSpace(qualifiedName)
+        if (
+            string.IsNullOrWhiteSpace(qualifiedName)
             || qualifiedName.Contains("...", StringComparison.Ordinal)
             || qualifiedName.Contains("decltype", StringComparison.Ordinal)
             || qualifiedName.Contains("auto", StringComparison.Ordinal)
-            || qualifiedName.Contains("__attribute", StringComparison.Ordinal))
+            || qualifiedName.Contains("__attribute", StringComparison.Ordinal)
+        )
         {
             return false;
         }
@@ -3222,8 +3805,10 @@ internal sealed class AbiPlan
     private static string? ShortDefaultedResultSpelling(string qualifiedName)
     {
         const string prefix = "Bedrock::Result<";
-        if (!qualifiedName.StartsWith(prefix, StringComparison.Ordinal)
-            || !qualifiedName.EndsWith(">", StringComparison.Ordinal))
+        if (
+            !qualifiedName.StartsWith(prefix, StringComparison.Ordinal)
+            || !qualifiedName.EndsWith(">", StringComparison.Ordinal)
+        )
         {
             return null;
         }
@@ -3310,15 +3895,37 @@ internal sealed class AbiPlan
                 continue;
             }
 
-            if (current is '{' or '}' or '[' or ']' or '"' or '\''
-                or ';' or '=' or '@' or '\\' or '#' or '?' or '!' or '%' or '^'
-                or '|' or '~' or '`')
+            if (
+                current
+                is '{'
+                    or '}'
+                    or '['
+                    or ']'
+                    or '"'
+                    or '\''
+                    or ';'
+                    or '='
+                    or '@'
+                    or '\\'
+                    or '#'
+                    or '?'
+                    or '!'
+                    or '%'
+                    or '^'
+                    or '|'
+                    or '~'
+                    or '`'
+            )
             {
                 return false;
             }
 
-            if (!(char.IsLetterOrDigit(current)
-                  || current is '_' or ':' or ',' or ' ' or '*' or '&' or '-' or '+' or '.'))
+            if (
+                !(
+                    char.IsLetterOrDigit(current)
+                    || current is '_' or ':' or ',' or ' ' or '*' or '&' or '-' or '+' or '.'
+                )
+            )
             {
                 return false;
             }
@@ -3366,7 +3973,9 @@ internal sealed class AbiPlan
     /// one IR, whose ids the names hash, so an entry stays exact for that IR. Each one names
     /// the defect the carrier headers carry.
     /// </summary>
-    private static readonly Dictionary<string, string> UnprojectableShimEntries = new(StringComparer.Ordinal)
+    private static readonly Dictionary<string, string> UnprojectableShimEntries = new(
+        StringComparer.Ordinal
+    )
     {
         // Floor: destructor implicitly deleted because its anonymous union stores a
         // TypedStorage of a non-trivially destructible record.
@@ -3473,14 +4082,22 @@ internal sealed class AbiPlan
         ["hs_method_d10e63cb"] = "can't delete an incomplete type",
         // CommutativeGroup over a record element: the constrained overloads only accept a
         // plain arithmetic element, and the record instantiation converts nothing.
-        ["hs_method_098b2869"] = "the constrained arithmetic overload does not accept a record element",
-        ["hs_method_116e6c8b"] = "the constrained arithmetic overload does not accept a record element",
-        ["hs_method_3cbd3b20"] = "the constrained arithmetic overload does not accept a record element",
-        ["hs_method_b6cf728c"] = "the constrained arithmetic overload does not accept a record element",
-        ["hs_method_2b0711b0"] = "the constrained arithmetic overload does not accept a record element",
-        ["hs_method_86346342"] = "the constrained arithmetic overload does not accept a record element",
-        ["hs_method_36e5525b"] = "the constrained arithmetic overload does not accept a record element",
-        ["hs_method_869bba2d"] = "the constrained arithmetic overload does not accept a record element",
+        ["hs_method_098b2869"] =
+            "the constrained arithmetic overload does not accept a record element",
+        ["hs_method_116e6c8b"] =
+            "the constrained arithmetic overload does not accept a record element",
+        ["hs_method_3cbd3b20"] =
+            "the constrained arithmetic overload does not accept a record element",
+        ["hs_method_b6cf728c"] =
+            "the constrained arithmetic overload does not accept a record element",
+        ["hs_method_2b0711b0"] =
+            "the constrained arithmetic overload does not accept a record element",
+        ["hs_method_86346342"] =
+            "the constrained arithmetic overload does not accept a record element",
+        ["hs_method_36e5525b"] =
+            "the constrained arithmetic overload does not accept a record element",
+        ["hs_method_869bba2d"] =
+            "the constrained arithmetic overload does not accept a record element",
         // The TypedStorage copy constructor copies its payload, and the record the map stores
         // has no usable copy constructor.
         ["hs_destroy_2d080348"] = "the stored map's value type is not copy constructible",
@@ -3537,41 +4154,54 @@ internal sealed class AbiPlan
     /// store something the carrier never completes (an empty deleter struct, a forward
     /// declaration, a deleted copy constructor), so member after member fails the same way.
     /// </summary>
-    private static readonly Dictionary<string, string> UnprojectableClasses = new(StringComparer.Ordinal)
+    private static readonly Dictionary<string, string> UnprojectableClasses = new(
+        StringComparer.Ordinal
+    )
     {
         ["LevelChunkEventManagerProxy"] = "the unique_ptr deleter has no call operator",
         ["br::worldgen::StructureProcessor"] = "can't delete an incomplete type",
         ["BlockDescriptor"] = "the stored vector's element type is not copy constructible",
         ["JigsawStructureParser"] = "the stored vector's element type is only forward-declared",
         // Each map instantiation is its own class, and every accessor of it copies the map.
-        ["ll::TypedStorageImpl<8ULL, 64ULL, std::unordered_map<std::basic_string<char>, ActorDefinitionEvent>>"] =
-            "the stored map's value type is not copy constructible",
-        ["ll::TypedStorageImpl<8ULL, 64ULL, std::unordered_map<std::basic_string<char>, DynamicPropertyDefinition>>"] =
-            "the stored map's value type is not copy constructible",
-        ["ll::TypedStorageImpl<8ULL, 64ULL, std::unordered_map<std::basic_string<char>, SharedTypes::v1_26_20::BlockDefinition::DeprecatedDefinitionEvent>>"] =
-            "the stored map's value type is not copy constructible",
+        [
+            "ll::TypedStorageImpl<8ULL, 64ULL, std::unordered_map<std::basic_string<char>, ActorDefinitionEvent>>"
+        ] = "the stored map's value type is not copy constructible",
+        [
+            "ll::TypedStorageImpl<8ULL, 64ULL, std::unordered_map<std::basic_string<char>, DynamicPropertyDefinition>>"
+        ] = "the stored map's value type is not copy constructible",
+        [
+            "ll::TypedStorageImpl<8ULL, 64ULL, std::unordered_map<std::basic_string<char>, SharedTypes::v1_26_20::BlockDefinition::DeprecatedDefinitionEvent>>"
+        ] = "the stored map's value type is not copy constructible",
         // The same four defects again, on the neighbouring class of each.
         ["LevelChunkEventManager"] = "the unique_ptr deleter has no call operator",
         ["br::worldgen::StructurePools"] = "can't delete an incomplete type",
-        ["BlockDescriptorSerializer::BlockDescriptorProxy"] = "the stored vector's element type is not copy constructible",
-        ["Editor::API::EditorServerBindingsModuleFactory"] = "the stored vector's element type is only forward-declared",
-        ["ll::TypedStorageImpl<8ULL, 64ULL, std::unordered_map<std::basic_string<char>, ScriptPackConfiguration>>"] =
-            "the stored map's value type is not copy constructible",
-        ["ll::TypedStorageImpl<8ULL, 64ULL, std::unordered_map<SharedTypes::v1_21_20::FilterCollectionGroup, SharedTypes::v1_21_20::FilterGroupData>>"] =
-            "the stored map's value type is not copy constructible",
+        ["BlockDescriptorSerializer::BlockDescriptorProxy"] =
+            "the stored vector's element type is not copy constructible",
+        ["Editor::API::EditorServerBindingsModuleFactory"] =
+            "the stored vector's element type is only forward-declared",
+        [
+            "ll::TypedStorageImpl<8ULL, 64ULL, std::unordered_map<std::basic_string<char>, ScriptPackConfiguration>>"
+        ] = "the stored map's value type is not copy constructible",
+        [
+            "ll::TypedStorageImpl<8ULL, 64ULL, std::unordered_map<SharedTypes::v1_21_20::FilterCollectionGroup, SharedTypes::v1_21_20::FilterGroupData>>"
+        ] = "the stored map's value type is not copy constructible",
         ["LevelChunkConstants"] = "the unique_ptr deleter has no call operator",
-        ["ll::TypedStorageImpl<8ULL, 64ULL, std::unordered_map<std::basic_string<char>, ScriptModuleMinecraft::CustomCommandRegistry::PendingRegistrations>>"] =
-            "the stored map's value type is not copy constructible",
+        [
+            "ll::TypedStorageImpl<8ULL, 64ULL, std::unordered_map<std::basic_string<char>, ScriptModuleMinecraft::CustomCommandRegistry::PendingRegistrations>>"
+        ] = "the stored map's value type is not copy constructible",
         // Confirmed by the compiler on the round that removed the above.
         ["br::worldgen::StructureHeightProvider"] = "can't delete an incomplete type",
-        ["dcsctp::TraditionalReassemblyStreams"] = "the stored vector's element type is only forward-declared",
+        ["dcsctp::TraditionalReassemblyStreams"] =
+            "the stored vector's element type is only forward-declared",
         ["BlockComponentFactory"] = "the stored vector's element type is not copy constructible",
         ["LevelChunkBuilderData"] = "the unique_ptr deleter has no call operator",
         ["br::worldgen::StructureCache"] = "can't delete an incomplete type",
         ["Bedrock::UniqueOwnerPointer<PlayerTickManager>"] = "the payload type is not complete",
-        ["dcsctp::InterleavedReassemblyStreams"] = "the stored vector's element type is only forward-declared",
-        ["ll::TypedStorageImpl<8ULL, 64ULL, std::unordered_map<std::basic_string<char>, PackSettingValueAndDefault>>"] =
-            "the stored map's value type is not copy constructible",
+        ["dcsctp::InterleavedReassemblyStreams"] =
+            "the stored vector's element type is only forward-declared",
+        [
+            "ll::TypedStorageImpl<8ULL, 64ULL, std::unordered_map<std::basic_string<char>, PackSettingValueAndDefault>>"
+        ] = "the stored map's value type is not copy constructible",
         ["BlockDefinitionGroup"] = "the stored vector's element type is not copy constructible",
         ["DebuggerStatCollector"] = "the stored vector's element type is not copy constructible",
     };
@@ -3587,16 +4217,28 @@ internal sealed class AbiPlan
     /// never supplies one. A template name, a pointer, and an array are exempt: their
     /// completeness is decided by their arguments or by the callee.
     /// </summary>
-    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, string[]> SourceLineCache = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<
+        string,
+        string[]
+    > SourceLineCache = new(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>
     /// True when the header declares <paramref name="leafName"/> as a function-template
     /// specialization: either the declaration repeats explicit template arguments or the
     /// declaration keyword marks it a template. Such a declaration cannot be called by its
     /// plain name, because nothing in the call supplies or deduces the arguments.
     /// </summary>
-    private static bool RequiresExplicitTemplateArguments(string? nativeRoot, SourceLocation? source, string leafName)
+    private static bool RequiresExplicitTemplateArguments(
+        string? nativeRoot,
+        SourceLocation? source,
+        string leafName
+    )
     {
-        if (string.IsNullOrWhiteSpace(nativeRoot) || source is null || string.IsNullOrWhiteSpace(source.File))
+        if (
+            string.IsNullOrWhiteSpace(nativeRoot)
+            || source is null
+            || string.IsNullOrWhiteSpace(source.File)
+        )
         {
             return false;
         }
@@ -3607,9 +4249,10 @@ internal sealed class AbiPlan
             var path = Path.IsPathRooted(normalized)
                 ? normalized
                 : Path.GetFullPath(Path.Combine(nativeRoot, normalized.TrimStart('/')));
-            var lines = SourceLineCache.GetOrAdd(path, candidate => File.Exists(candidate)
-                ? File.ReadAllLines(candidate)
-                : []);
+            var lines = SourceLineCache.GetOrAdd(
+                path,
+                candidate => File.Exists(candidate) ? File.ReadAllLines(candidate) : []
+            );
 
             var index = source.Line - 1;
             if (index < 0 || index >= lines.Length)
@@ -3619,8 +4262,10 @@ internal sealed class AbiPlan
 
             // An explicit instantiation declaration spells the arguments itself.
             var declaration = lines[index];
-            if (declaration.Contains(leafName + "<", StringComparison.Ordinal)
-                || declaration.Contains(leafName + " <", StringComparison.Ordinal))
+            if (
+                declaration.Contains(leafName + "<", StringComparison.Ordinal)
+                || declaration.Contains(leafName + " <", StringComparison.Ordinal)
+            )
             {
                 // A comparison such as `x < y` cannot match: the name precedes the angle.
                 return true;
@@ -3661,7 +4306,8 @@ internal sealed class AbiPlan
         bool symbolDispatch,
         VariantRegistry variants,
         out AbiFunction function,
-        out string? reason)
+        out string? reason
+    )
     {
         function = null!;
         reason = null;
@@ -3686,7 +4332,8 @@ internal sealed class AbiPlan
         var parameters = new List<AbiParameter>();
         foreach (var parameter in constructor.Signature.Parameters)
         {
-            if (!TryMapParameter(
+            if (
+                !TryMapParameter(
                     declaration.Surface,
                     parameter.Name,
                     parameter.Type,
@@ -3698,21 +4345,26 @@ internal sealed class AbiPlan
                     symbolDispatch,
                     variants,
                     out var abiParameter,
-                    out var parameterReason))
+                    out var parameterReason
+                )
+            )
             {
                 reason = parameterReason;
                 return false;
             }
 
-            if (abiParameter.Kind == AbiKind.StringView
-                && IsNonConstLValueReference(parameter.Type))
+            if (
+                abiParameter.Kind == AbiKind.StringView
+                && IsNonConstLValueReference(parameter.Type)
+            )
             {
                 // The shim would have to bind a temporary string to a mutable reference.
                 reason = "constructors do not accept mutable string references";
                 return false;
             }
 
-            if (abiParameter.Kind == AbiKind.Opaque
+            if (
+                abiParameter.Kind == AbiKind.Opaque
                 && abiParameter.IsReference
                 && !abiParameter.IsConst
                 && !symbolDispatch
@@ -3720,7 +4372,9 @@ internal sealed class AbiPlan
                     declaration,
                     abiParameter,
                     declarationsByQualifiedName,
-                    declarationNames))
+                    declarationNames
+                )
+            )
             {
                 // Copy-like constructors that take a mutable reference can instantiate
                 // unrelated templates (for example AnyFunction(AnyFunction&)).
@@ -3737,12 +4391,16 @@ internal sealed class AbiPlan
         if (ownsBorrowedString)
         {
             var stringParameters = parameters
-                .Select((parameter, index) => (Parameter: parameter, Type: constructor.Signature.Parameters[index].Type))
+                .Select(
+                    (parameter, index) =>
+                        (Parameter: parameter, Type: constructor.Signature.Parameters[index].Type)
+                )
                 .Where(pair => pair.Parameter.Kind == AbiKind.StringView)
                 .ToList();
             if (stringParameters.Count == 0)
             {
-                reason = "the class stores borrowed strings but the constructor has no string parameter";
+                reason =
+                    "the class stores borrowed strings but the constructor has no string parameter";
                 return false;
             }
 
@@ -3750,7 +4408,8 @@ internal sealed class AbiPlan
             {
                 if (!IsSafeBorrowedStringParameter(pair.Type))
                 {
-                    reason = "the class stores borrowed strings and the constructor takes a string by value";
+                    reason =
+                        "the class stores borrowed strings and the constructor takes a string by value";
                     return false;
                 }
             }
@@ -3813,7 +4472,8 @@ internal sealed class AbiPlan
         DeclarationRecord declaration,
         AbiParameter parameter,
         IReadOnlyDictionary<string, DeclarationRecord> declarationsByQualifiedName,
-        IReadOnlyDictionary<string, DeclarationName> declarationNames)
+        IReadOnlyDictionary<string, DeclarationName> declarationNames
+    )
     {
         if (declaration.Template is not null)
         {
@@ -3842,7 +4502,8 @@ internal sealed class AbiPlan
     private static AbiFunction BuildDestroy(
         DeclarationRecord declaration,
         IReadOnlyDictionary<string, DeclarationName> declarationNames,
-        bool borrowed) =>
+        bool borrowed
+    ) =>
         new()
         {
             CppName = "hs_destroy_" + CSharpNaming.ShortHash(declaration.Id),
@@ -3875,20 +4536,27 @@ internal sealed class AbiPlan
         CallableRegistry callables,
         IReadOnlyDictionary<string, List<MemberRecord>> membersByDeclaration,
         out AbiFunction function,
-        out string? reason)
+        out string? reason
+    )
     {
         function = null!;
         reason = null;
         // IntrusiveListOperations<Hook, Traits> calls the hook's own accessors; the carrier's
         // list_standard_operations passes the node type for both, and a node that declares
         // none of them makes every instantiated body ill-formed.
-        if (declaration.Template is not null
-            && declaration.QualifiedName.Contains("IntrusiveListOperations<", StringComparison.Ordinal)
+        if (
+            declaration.Template is not null
+            && declaration.QualifiedName.Contains(
+                "IntrusiveListOperations<",
+                StringComparison.Ordinal
+            )
             && declaration.Template.Arguments.Count == 2
             && string.Equals(
                 NormalizeTypeName(declaration.Template.Arguments[0].Value),
                 NormalizeTypeName(declaration.Template.Arguments[1].Value),
-                StringComparison.Ordinal))
+                StringComparison.Ordinal
+            )
+        )
         {
             reason = "the operations class is instantiated with itself as the hook traits";
             return false;
@@ -3953,28 +4621,37 @@ internal sealed class AbiPlan
         var byValueReturnName = IsPointerOrReferenceType(nativeReturnType)
             ? nativeReturnType
             : NormalizeTypeName(nativeReturnType);
-        if (symbolDispatch
+        if (
+            symbolDispatch
             && method.Kind is "method" or "operator"
             && IsByValueRecordType(byValueReturnName)
-            && symbolByValueReturns.TryGetValue(byValueReturnName, out var byValueDeclaration))
+            && symbolByValueReturns.TryGetValue(byValueReturnName, out var byValueDeclaration)
+        )
         {
             byValueReturn = byValueDeclaration;
-            returnRequiresCopy = symbolByValueCopyRequired.TryGetValue(byValueReturnName, out var requiresCopy)
+            returnRequiresCopy =
+                symbolByValueCopyRequired.TryGetValue(byValueReturnName, out var requiresCopy)
                 && requiresCopy;
             returnTriviallyCopyable = byValueDeclaration.TriviallyCopyable;
             returnKind = AbiKind.Opaque;
             returnOwned = true;
-            returnWrapperType = "global::" + declarationNames[byValueDeclaration.Id].NamespaceName + "."
+            returnWrapperType =
+                "global::"
+                + declarationNames[byValueDeclaration.Id].NamespaceName
+                + "."
                 + declarationNames[byValueDeclaration.Id].ClassName;
         }
-        else if (symbolDispatch
+        else if (
+            symbolDispatch
             && TryParseOptional(nativeReturnType, out var optionalReturnInner)
             && TryResolveSymbolOptionalRecord(
                 optionalReturnInner,
                 symbolOptionalRecords,
                 declarationNames,
                 out var optionalReturnRecord,
-                out var optionalReturnWrapper))
+                out var optionalReturnWrapper
+            )
+        )
         {
             byValueReturn = optionalReturnRecord;
             returnKind = AbiKind.Opaque;
@@ -3986,14 +4663,17 @@ internal sealed class AbiPlan
             returnWrapperType = optionalReturnWrapper;
             nativeReturnType = optionalReturnInner;
         }
-        else if (symbolDispatch
+        else if (
+            symbolDispatch
             && TryParseOptional(nativeReturnType, out var optionalCopyInner)
             && TryResolveSymbolOptionalCopyRecord(
                 optionalCopyInner,
                 symbolByValueReturns,
                 declarationNames,
                 out var optionalCopyRecord,
-                out var optionalCopyWrapper))
+                out var optionalCopyWrapper
+            )
+        )
         {
             // A non-trivially copyable payload is copied out with its copy constructor and
             // the in-place original is destroyed with its destructor.
@@ -4008,7 +4688,8 @@ internal sealed class AbiPlan
             returnWrapperType = optionalCopyWrapper;
             nativeReturnType = optionalCopyInner;
         }
-        else if (!TryMapReturnType(
+        else if (
+            !TryMapReturnType(
                 declaration.Surface,
                 method.Signature.ReturnType,
                 declarationsByQualifiedName,
@@ -4053,7 +4734,9 @@ internal sealed class AbiPlan
                 out returnCallable,
                 out returnGameRefOut,
                 out returnGameRefTypeOut,
-                out var returnReason))
+                out var returnReason
+            )
+        )
         {
             reason = returnReason;
             return false;
@@ -4065,7 +4748,8 @@ internal sealed class AbiPlan
         var parameters = new List<AbiParameter>();
         foreach (var parameter in method.Signature.Parameters)
         {
-            if (!TryMapParameter(
+            if (
+                !TryMapParameter(
                     declaration.Surface,
                     parameter.Name,
                     parameter.Type,
@@ -4077,7 +4761,9 @@ internal sealed class AbiPlan
                     symbolDispatch,
                     variants,
                     out var abiParameter,
-                    out var parameterReason))
+                    out var parameterReason
+                )
+            )
             {
                 reason = parameterReason;
                 return false;
@@ -4181,21 +4867,29 @@ internal sealed class AbiPlan
             // Only a template instance needs the inline route: a non-template inline member is
             // usually exported too, and its header can reach game headers that do not compile
             // on their own (MolangScriptArg's implicit copy assignment is deleted under C++20).
-            InlineBody = symbolDispatch
+            InlineBody =
+                symbolDispatch
                 && declaration.Template is not null
                 && method.Inline
                 && (method.Defined || IsPatternCallable(method))
-                && !HasAlgorithmRequiringCopy(method, declaration, membersByDeclaration, declarationsByQualifiedName),
+                && !HasAlgorithmRequiringCopy(
+                    method,
+                    declaration,
+                    membersByDeclaration,
+                    declarationsByQualifiedName
+                ),
         };
         // A pattern-defined copy assignment assigns the payload in place, so it only compiles
         // where the payload is itself assignable. The IR does not record assignability, so the
         // shim guards the call at compile time instead.
-        if (linkCarrier
+        if (
+            linkCarrier
             && declaration.Template is not null
             && !method.Defined
             && method.PatternDefined
             && method.Name == "operator="
-            && !IsMoveAssignment(method))
+            && !IsMoveAssignment(method)
+        )
         {
             function.TemplateCopyConstruction = true;
             function.TemplateCopyPayload = LastTemplateArgument(function.ClassCppName);
@@ -4214,10 +4908,12 @@ internal sealed class AbiPlan
         AbiFunction getter,
         IReadOnlyDictionary<string, DeclarationName> declarationNames,
         IReadOnlyList<MemberRecord> declarationMembers,
-        out AbiFunction setter)
+        out AbiFunction setter
+    )
     {
         setter = null!;
-        if (getter.Kind != AbiFunctionKind.Method
+        if (
+            getter.Kind != AbiFunctionKind.Method
             || getter.ReturnKind != AbiKind.StringView
             || getter.ReturnOptional
             || getter.Parameters.Count != 0
@@ -4225,23 +4921,25 @@ internal sealed class AbiPlan
             // A static member yields the same string to every caller; there is nothing to
             // assign through the accessor.
             || getter.Static
-            || !declarationNames.ContainsKey(declaration.Id))
+            || !declarationNames.ContainsKey(declaration.Id)
+        )
         {
             return false;
         }
 
         var returnType = method.Signature?.ReturnType;
-        if (returnType is null
+        if (
+            returnType is null
             || !returnType.TrimEnd().EndsWith("&", StringComparison.Ordinal)
-            || returnType.TrimEnd().EndsWith("&&", StringComparison.Ordinal))
+            || returnType.TrimEnd().EndsWith("&&", StringComparison.Ordinal)
+        )
         {
             return false;
         }
 
         var referenced = returnType.TrimEnd()[..^1].Trim();
         // A const reference is read-only, so an assignment could not compile.
-        if (!IsStringType(referenced)
-            || IsConstType(referenced))
+        if (!IsStringType(referenced) || IsConstType(referenced))
         {
             return false;
         }
@@ -4256,9 +4954,12 @@ internal sealed class AbiPlan
         // name it wants. A class that already declares a member with that name keeps its
         // own member and gets `assign` instead.
         var setName = "set" + char.ToUpperInvariant(name[0]) + name[1..];
-        if (declarationMembers.Any(member =>
+        if (
+            declarationMembers.Any(member =>
                 !string.Equals(member.Id, method.Id, StringComparison.Ordinal)
-                && string.Equals(member.Name, setName, StringComparison.Ordinal)))
+                && string.Equals(member.Name, setName, StringComparison.Ordinal)
+            )
+        )
         {
             setName = "assign" + char.ToUpperInvariant(name[0]) + name[1..];
         }
@@ -4337,7 +5038,8 @@ internal sealed class AbiPlan
         out CallableAbiInfo? returnCallable,
         out bool gameRef,
         out string? gameRefType,
-        out string? reason)
+        out string? reason
+    )
     {
         kind = AbiKind.Void;
         nativeType = canonical.Trim();
@@ -4380,7 +5082,10 @@ internal sealed class AbiPlan
 
         if (TryParseExpected(nativeType, out var expectedValueType, out var expectedError))
         {
-            if (!IsStringType(expectedError) && !string.Equals(expectedError, "ll::Error", StringComparison.Ordinal))
+            if (
+                !IsStringType(expectedError)
+                && !string.Equals(expectedError, "ll::Error", StringComparison.Ordinal)
+            )
             {
                 reason = $"expected error type '{expectedError}' is not supported";
                 return false;
@@ -4394,14 +5099,17 @@ internal sealed class AbiPlan
                 return true;
             }
 
-            if (TryParseOptional(expectedValueType, out _)
-                || TryParseOptionalRef(expectedValueType, out _))
+            if (
+                TryParseOptional(expectedValueType, out _)
+                || TryParseOptionalRef(expectedValueType, out _)
+            )
             {
                 reason = $"expected value type '{expectedValueType}' is not supported";
                 return false;
             }
 
-            if (!TryMapReturnType(
+            if (
+                !TryMapReturnType(
                     surface,
                     expectedValueType,
                     declarationsByQualifiedName,
@@ -4446,7 +5154,9 @@ internal sealed class AbiPlan
                     out var nestedCallable,
                     out gameRef,
                     out gameRefType,
-                    out var expectedValueReason))
+                    out var expectedValueReason
+                )
+            )
             {
                 reason = $"expected value type '{expectedValueType}': {expectedValueReason}";
                 return false;
@@ -4480,9 +5190,13 @@ internal sealed class AbiPlan
         }
 
         var mapType = NormalizeTypeName(nativeType);
-        if (!IsPointerType(nativeType) && TryParseUnorderedMap(mapType, out var mapKey, out var mapValue))
+        if (
+            !IsPointerType(nativeType)
+            && TryParseUnorderedMap(mapType, out var mapKey, out var mapValue)
+        )
         {
-            if (!TryMapMapEntryKinds(
+            if (
+                !TryMapMapEntryKinds(
                     surface,
                     mapKey,
                     mapValue,
@@ -4497,7 +5211,9 @@ internal sealed class AbiPlan
                     out var valueOwnership,
                     out var valueNative,
                     out var mapVariant,
-                    out var mapReason))
+                    out var mapReason
+                )
+            )
             {
                 if (IsPointerOrReferenceType(nativeType))
                 {
@@ -4522,7 +5238,10 @@ internal sealed class AbiPlan
         }
 
         var callableType = NormalizeTypeName(nativeType);
-        if (!IsPointerType(nativeType) && callables.TryGet(surface, callableType, out var callableInfo))
+        if (
+            !IsPointerType(nativeType)
+            && callables.TryGet(surface, callableType, out var callableInfo)
+        )
         {
             kind = AbiKind.Opaque;
             nativeType = callableInfo.NativeType;
@@ -4532,10 +5251,15 @@ internal sealed class AbiPlan
             return true;
         }
 
-        if (!IsPointerType(nativeType) && TryParseTimePoint(nativeType, out var timeClock, out var isSystemClock))
+        if (
+            !IsPointerType(nativeType)
+            && TryParseTimePoint(nativeType, out var timeClock, out var isSystemClock)
+        )
         {
             kind = AbiKind.I64;
-            timeConversion = isSystemClock ? TimeConversion.SystemTimePoint : TimeConversion.ClockTimePoint;
+            timeConversion = isSystemClock
+                ? TimeConversion.SystemTimePoint
+                : TimeConversion.ClockTimePoint;
             timeClockType = timeClock;
             return true;
         }
@@ -4571,7 +5295,9 @@ internal sealed class AbiPlan
         }
 
         var variantType = NormalizeTypeName(nativeType);
-        if (!IsPointerType(nativeType) && variants.TryGet(surface, variantType, out var variantInfo))
+        if (
+            !IsPointerType(nativeType) && variants.TryGet(surface, variantType, out var variantInfo)
+        )
         {
             kind = AbiKind.Opaque;
             nativeType = variantType;
@@ -4589,17 +5315,24 @@ internal sealed class AbiPlan
             // typed borrowed wrapper. The native side keeps ownership; the wrapper only aliases it.
             var pointerText = StripTopLevelQualifiers(nativeType);
             var isPointer = pointerText.EndsWith("*", StringComparison.Ordinal);
-            var isLValueReference = pointerText.EndsWith("&", StringComparison.Ordinal)
+            var isLValueReference =
+                pointerText.EndsWith("&", StringComparison.Ordinal)
                 && !pointerText.EndsWith("&&", StringComparison.Ordinal);
             if (isPointer || isLValueReference)
             {
                 var borrowedPointee = StripTopLevelQualifiers(pointerText[..^1].TrimEnd());
-                if (!borrowedPointee.EndsWith("*", StringComparison.Ordinal)
+                if (
+                    !borrowedPointee.EndsWith("*", StringComparison.Ordinal)
                     && !borrowedPointee.EndsWith("&", StringComparison.Ordinal)
-                    && declarationsByQualifiedName.TryGetValue(borrowedPointee, out var borrowedDeclaration)
-                    && declarationNames.TryGetValue(borrowedDeclaration.Id, out var borrowedName))
+                    && declarationsByQualifiedName.TryGetValue(
+                        borrowedPointee,
+                        out var borrowedDeclaration
+                    )
+                    && declarationNames.TryGetValue(borrowedDeclaration.Id, out var borrowedName)
+                )
                 {
-                    wrapperType = "global::" + borrowedName.NamespaceName + "." + borrowedName.ClassName;
+                    wrapperType =
+                        "global::" + borrowedName.NamespaceName + "." + borrowedName.ClassName;
                     nullable = isPointer;
                 }
             }
@@ -4607,7 +5340,11 @@ internal sealed class AbiPlan
             return true;
         }
 
-        var isVector = TryParseVector(nativeType, out var sequenceElement, out var sequenceSpelling);
+        var isVector = TryParseVector(
+            nativeType,
+            out var sequenceElement,
+            out var sequenceSpelling
+        );
         var isSet = !isVector && TryParseUnorderedSet(nativeType, out sequenceElement);
         if (isVector || isSet)
         {
@@ -4627,8 +5364,10 @@ internal sealed class AbiPlan
                 return true;
             }
 
-            if (TryMapEnumUnderlying(sequenceElement, enumUnderlyingByName, out var elementKind)
-                || TryMapFundamental(sequenceElement, out elementKind))
+            if (
+                TryMapEnumUnderlying(sequenceElement, enumUnderlyingByName, out var elementKind)
+                || TryMapFundamental(sequenceElement, out elementKind)
+            )
             {
                 kind = AbiKind.ArrayView;
                 arrayElementKind = elementKind;
@@ -4659,7 +5398,13 @@ internal sealed class AbiPlan
                 return true;
             }
 
-            if (TryParseSharedWrapper(sequenceElement, out var sharedElementWrapper, out var wrappedElement))
+            if (
+                TryParseSharedWrapper(
+                    sequenceElement,
+                    out var sharedElementWrapper,
+                    out var wrappedElement
+                )
+            )
             {
                 kind = AbiKind.ArrayView;
                 arrayElementKind = AbiKind.Shared;
@@ -4670,7 +5415,13 @@ internal sealed class AbiPlan
                 return true;
             }
 
-            if (variants.TryGet(surface, NormalizeTypeName(sequenceElement), out var sequenceVariant))
+            if (
+                variants.TryGet(
+                    surface,
+                    NormalizeTypeName(sequenceElement),
+                    out var sequenceVariant
+                )
+            )
             {
                 var sequenceVariantType = NormalizeTypeName(sequenceElement);
                 kind = AbiKind.ArrayView;
@@ -4684,14 +5435,17 @@ internal sealed class AbiPlan
                 return true;
             }
 
-            if (TryParseUniquePtr(sequenceElement, out var uniqueElement)
+            if (
+                TryParseUniquePtr(sequenceElement, out var uniqueElement)
                 && TryResolveRecordWrapper(
                     uniqueElement,
                     declarationsByQualifiedName,
                     declarationNames,
                     destroyableDeclarationIds,
                     true,
-                    out var uniqueWrapper))
+                    out var uniqueWrapper
+                )
+            )
             {
                 kind = AbiKind.ArrayView;
                 arrayElementKind = AbiKind.Opaque;
@@ -4703,14 +5457,17 @@ internal sealed class AbiPlan
                 return true;
             }
 
-            if (TryParseOptional(sequenceElement, out var optionalElement)
+            if (
+                TryParseOptional(sequenceElement, out var optionalElement)
                 && TryResolveRecordWrapper(
                     optionalElement,
                     declarationsByQualifiedName,
                     declarationNames,
                     destroyableDeclarationIds,
                     false,
-                    out var optionalWrapper))
+                    out var optionalWrapper
+                )
+            )
             {
                 kind = AbiKind.ArrayView;
                 arrayElementKind = AbiKind.Opaque;
@@ -4724,19 +5481,27 @@ internal sealed class AbiPlan
 
             // Symbol dispatch owns record elements through the shim's aligned byte copies, so
             // it does not require a compiled-in destroy function for the element type.
-            var recordWrapper = TryResolveRecordWrapper(
+            var recordWrapper =
+                TryResolveRecordWrapper(
                     sequenceElement,
                     declarationsByQualifiedName,
                     declarationNames,
                     destroyableDeclarationIds,
                     false,
-                    out var resolvedRecordWrapper)
-                ? resolvedRecordWrapper
+                    out var resolvedRecordWrapper
+                )
+                    ? resolvedRecordWrapper
                 : symbolVectorElements is not null
-                    && symbolVectorElements.TryGetValue(sequenceElement, out var symbolVectorElement)
-                    && declarationNames.TryGetValue(symbolVectorElement.Id, out var symbolVectorElementName)
-                        ? "global::" + symbolVectorElementName.NamespaceName + "." + symbolVectorElementName.ClassName
-                        : null;
+                && symbolVectorElements.TryGetValue(sequenceElement, out var symbolVectorElement)
+                && declarationNames.TryGetValue(
+                    symbolVectorElement.Id,
+                    out var symbolVectorElementName
+                )
+                    ? "global::"
+                        + symbolVectorElementName.NamespaceName
+                        + "."
+                        + symbolVectorElementName.ClassName
+                : null;
             if (recordWrapper is not null)
             {
                 kind = AbiKind.ArrayView;
@@ -4749,7 +5514,8 @@ internal sealed class AbiPlan
                 return true;
             }
 
-            reason = $"{(isSet ? "set" : "vector")} return type '{sequenceElement}' is not supported";
+            reason =
+                $"{(isSet ? "set" : "vector")} return type '{sequenceElement}' is not supported";
             return false;
         }
 
@@ -4762,12 +5528,18 @@ internal sealed class AbiPlan
 
             // optional_ref is a borrowed view; use the same typed wrapper path as T*/T&.
             var optionalRefPointee = StripTopLevelQualifiers(optionalRefInner);
-            if (!optionalRefPointee.EndsWith("*", StringComparison.Ordinal)
+            if (
+                !optionalRefPointee.EndsWith("*", StringComparison.Ordinal)
                 && !optionalRefPointee.EndsWith("&", StringComparison.Ordinal)
-                && declarationsByQualifiedName.TryGetValue(optionalRefPointee, out var optionalRefDeclaration)
-                && declarationNames.TryGetValue(optionalRefDeclaration.Id, out var optionalRefName))
+                && declarationsByQualifiedName.TryGetValue(
+                    optionalRefPointee,
+                    out var optionalRefDeclaration
+                )
+                && declarationNames.TryGetValue(optionalRefDeclaration.Id, out var optionalRefName)
+            )
             {
-                wrapperType = "global::" + optionalRefName.NamespaceName + "." + optionalRefName.ClassName;
+                wrapperType =
+                    "global::" + optionalRefName.NamespaceName + "." + optionalRefName.ClassName;
             }
 
             return true;
@@ -4784,8 +5556,10 @@ internal sealed class AbiPlan
                 return true;
             }
 
-            if (TryMapEnumUnderlying(optionalInner, enumUnderlyingByName, out kind)
-                || TryMapFundamental(optionalInner, out kind))
+            if (
+                TryMapEnumUnderlying(optionalInner, enumUnderlyingByName, out kind)
+                || TryMapFundamental(optionalInner, out kind)
+            )
             {
                 nativeType = optionalInner;
                 optional = true;
@@ -4793,13 +5567,17 @@ internal sealed class AbiPlan
                 return true;
             }
 
-            if (TryParseTimePoint(optionalInner, out var optionalClock, out var optionalSystemClock))
+            if (
+                TryParseTimePoint(optionalInner, out var optionalClock, out var optionalSystemClock)
+            )
             {
                 kind = AbiKind.I64;
                 nativeType = optionalInner;
                 optional = true;
                 nullable = true;
-                timeConversion = optionalSystemClock ? TimeConversion.SystemTimePoint : TimeConversion.ClockTimePoint;
+                timeConversion = optionalSystemClock
+                    ? TimeConversion.SystemTimePoint
+                    : TimeConversion.ClockTimePoint;
                 timeClockType = optionalClock;
                 return true;
             }
@@ -4864,14 +5642,19 @@ internal sealed class AbiPlan
                 return false;
             }
 
-            if (!declarationsByQualifiedName.TryGetValue(optionalInner, out var optionalDeclaration))
+            if (
+                !declarationsByQualifiedName.TryGetValue(optionalInner, out var optionalDeclaration)
+            )
             {
-                reason = $"optional return type '{optionalInner}' is not a known bindable declaration";
+                reason =
+                    $"optional return type '{optionalInner}' is not a known bindable declaration";
                 return false;
             }
 
-            if (optionalDeclaration.Abstract
-                || !destroyableDeclarationIds.Contains(optionalDeclaration.Id))
+            if (
+                optionalDeclaration.Abstract
+                || !destroyableDeclarationIds.Contains(optionalDeclaration.Id)
+            )
             {
                 reason = $"optional return type '{optionalInner}' has no accessible destructor";
                 return false;
@@ -4914,8 +5697,14 @@ internal sealed class AbiPlan
             return true;
         }
 
-        if (symbolDispatch
-            && TryParseReferenceWrapper(nativeType, out var referenceWrapper, out var referencePointee))
+        if (
+            symbolDispatch
+            && TryParseReferenceWrapper(
+                nativeType,
+                out var referenceWrapper,
+                out var referencePointee
+            )
+        )
         {
             // OwnerPtr and StackRefResult hold a shared_ptr, and WeakRef holds a weak_ptr.
             // Bedrock::NonOwnerPointer holds a shared_ptr to a control block whose first field
@@ -4956,12 +5745,18 @@ internal sealed class AbiPlan
         {
             if (!declarationsByQualifiedName.TryGetValue(uniquePointee, out var pointeeDeclaration))
             {
-                reason = $"unique_ptr return type '{uniquePointee}' is not a known bindable declaration";
+                reason =
+                    $"unique_ptr return type '{uniquePointee}' is not a known bindable declaration";
                 return false;
             }
 
-            if (!destroyableDeclarationIds.Contains(pointeeDeclaration.Id)
-                && !(symbolDispatch && symbolDestroyableDeclarationIds.Contains(pointeeDeclaration.Id)))
+            if (
+                !destroyableDeclarationIds.Contains(pointeeDeclaration.Id)
+                && !(
+                    symbolDispatch
+                    && symbolDestroyableDeclarationIds.Contains(pointeeDeclaration.Id)
+                )
+            )
             {
                 reason = $"unique_ptr return type '{uniquePointee}' has no accessible destructor";
                 return false;
@@ -4985,8 +5780,10 @@ internal sealed class AbiPlan
         if (symbolDispatch && TryParseSpan(nativeType, out var spanElement))
         {
             var spanElementText = spanElement.Trim();
-            if (spanElementText.StartsWith("gsl::not_null<", StringComparison.Ordinal)
-                && spanElementText.EndsWith(">", StringComparison.Ordinal))
+            if (
+                spanElementText.StartsWith("gsl::not_null<", StringComparison.Ordinal)
+                && spanElementText.EndsWith(">", StringComparison.Ordinal)
+            )
             {
                 var inner = spanElementText["gsl::not_null<".Length..^1].Trim();
                 if (IsPointerType(inner))
@@ -5002,26 +5799,40 @@ internal sealed class AbiPlan
                 arrayElementKind = AbiKind.Opaque;
                 arrayElementNativeType = spanElementText;
             }
-            else if (TryMapEnumUnderlying(spanElementText, enumUnderlyingByName, out var spanScalar)
-                || TryMapFundamental(spanElementText, out spanScalar))
+            else if (
+                TryMapEnumUnderlying(spanElementText, enumUnderlyingByName, out var spanScalar)
+                || TryMapFundamental(spanElementText, out spanScalar)
+            )
             {
                 // Scalars are copied into a managed array right after the call.
                 arrayElementKind = spanScalar;
                 arrayElementNativeType = spanElementText;
             }
-            else if ((TryResolveRecordWrapper(
+            else if (
+                (
+                    TryResolveRecordWrapper(
                         spanElementText,
                         declarationsByQualifiedName,
                         declarationNames,
                         destroyableDeclarationIds,
                         false,
-                        out var resolvedSpanWrapper)
-                    ? resolvedSpanWrapper
+                        out var resolvedSpanWrapper
+                    )
+                        ? resolvedSpanWrapper
                     : symbolVectorElements is not null
-                        && symbolVectorElements.TryGetValue(StripTopLevelQualifiers(spanElementText), out var spanElementRecord)
-                        && declarationNames.TryGetValue(spanElementRecord.Id, out var spanElementName)
-                            ? "global::" + spanElementName.NamespaceName + "." + spanElementName.ClassName
-                            : null) is { } spanRecordWrapper)
+                    && symbolVectorElements.TryGetValue(
+                        StripTopLevelQualifiers(spanElementText),
+                        out var spanElementRecord
+                    )
+                    && declarationNames.TryGetValue(spanElementRecord.Id, out var spanElementName)
+                        ? "global::"
+                            + spanElementName.NamespaceName
+                            + "."
+                            + spanElementName.ClassName
+                    : null
+                ) is
+                { } spanRecordWrapper
+            )
             {
                 // A borrowed span of records is copied element by element so each wrapper
                 // owns its storage.
@@ -5063,7 +5874,8 @@ internal sealed class AbiPlan
 
         if (!linkCarrier)
         {
-            reason = $"by-value return type '{canonical}' requires --link-carrier or --virtual-dispatch";
+            reason =
+                $"by-value return type '{canonical}' requires --link-carrier or --virtual-dispatch";
             return false;
         }
 
@@ -5106,14 +5918,20 @@ internal sealed class AbiPlan
     /// qualifiers so it can be used as a lookup key; <paramref name="elementSpelling"/> keeps
     /// them, because a pointer element has to be spelled with its pointee's const to convert.
     /// </summary>
-    private static bool TryParseVector(string canonical, out string element, out string elementSpelling)
+    private static bool TryParseVector(
+        string canonical,
+        out string element,
+        out string elementSpelling
+    )
     {
         element = "";
         elementSpelling = "";
         var text = NormalizeTypeName(canonical);
         const string prefix = "std::vector<";
-        if (!text.StartsWith(prefix, StringComparison.Ordinal)
-            || !text.EndsWith(">", StringComparison.Ordinal))
+        if (
+            !text.StartsWith(prefix, StringComparison.Ordinal)
+            || !text.EndsWith(">", StringComparison.Ordinal)
+        )
         {
             return false;
         }
@@ -5121,10 +5939,15 @@ internal sealed class AbiPlan
         var arguments = SplitTemplateArguments(text[prefix.Length..^1].Trim()).ToList();
         // The symbol frontend spells the default allocator explicitly; the header frontend
         // omits it. A custom allocator is a different type and must not be reinterpreted.
-        if (arguments.Count is not (1 or 2)
-            || (arguments.Count == 2
-                && !arguments[1].Replace(" ", "", StringComparison.Ordinal)
-                    .StartsWith("std::allocator<", StringComparison.Ordinal)))
+        if (
+            arguments.Count is not (1 or 2)
+            || (
+                arguments.Count == 2
+                && !arguments[1]
+                    .Replace(" ", "", StringComparison.Ordinal)
+                    .StartsWith("std::allocator<", StringComparison.Ordinal)
+            )
+        )
         {
             return false;
         }
@@ -5142,8 +5965,10 @@ internal sealed class AbiPlan
         alternatives = [];
         var text = NormalizeTypeName(canonical);
         const string prefix = "std::variant<";
-        if (!text.StartsWith(prefix, StringComparison.Ordinal)
-            || !text.EndsWith(">", StringComparison.Ordinal))
+        if (
+            !text.StartsWith(prefix, StringComparison.Ordinal)
+            || !text.EndsWith(">", StringComparison.Ordinal)
+        )
         {
             return false;
         }
@@ -5162,23 +5987,24 @@ internal sealed class AbiPlan
         return alternatives.Count > 0;
     }
 
-    private static string VariantScalarName(AbiKind kind) => kind switch
-    {
-        AbiKind.Bool => "Bool",
-        AbiKind.I8 => "SByte",
-        AbiKind.U8 => "Byte",
-        AbiKind.I16 => "Int16",
-        AbiKind.U16 => "UInt16",
-        AbiKind.I32 => "Int32",
-        AbiKind.U32 => "UInt32",
-        AbiKind.I64 => "Int64",
-        AbiKind.U64 => "UInt64",
-        AbiKind.USize => "NUInt",
-        AbiKind.ISize => "NInt",
-        AbiKind.F32 => "Single",
-        AbiKind.F64 => "Double",
-        _ => "Value",
-    };
+    private static string VariantScalarName(AbiKind kind) =>
+        kind switch
+        {
+            AbiKind.Bool => "Bool",
+            AbiKind.I8 => "SByte",
+            AbiKind.U8 => "Byte",
+            AbiKind.I16 => "Int16",
+            AbiKind.U16 => "UInt16",
+            AbiKind.I32 => "Int32",
+            AbiKind.U32 => "UInt32",
+            AbiKind.I64 => "Int64",
+            AbiKind.U64 => "UInt64",
+            AbiKind.USize => "NUInt",
+            AbiKind.ISize => "NInt",
+            AbiKind.F32 => "Single",
+            AbiKind.F64 => "Double",
+            _ => "Value",
+        };
 
     private static string VariantPointerName(string nativeType)
     {
@@ -5193,23 +6019,33 @@ internal sealed class AbiPlan
 
     private static CallableRegistry BuildCallableRegistry(
         IReadOnlyList<IrRecord> records,
-        IReadOnlyDictionary<string, string> enumUnderlyingByName)
+        IReadOnlyDictionary<string, string> enumUnderlyingByName
+    )
     {
-        var surfaceByDeclaration = records.OfType<DeclarationRecord>()
-            .ToDictionary(declaration => declaration.Id, declaration => declaration.Surface, StringComparer.Ordinal);
+        var surfaceByDeclaration = records
+            .OfType<DeclarationRecord>()
+            .ToDictionary(
+                declaration => declaration.Id,
+                declaration => declaration.Surface,
+                StringComparer.Ordinal
+            );
         var registry = new CallableRegistry();
         foreach (var member in records.OfType<MemberRecord>())
         {
-            if (member.Signature is null
+            if (
+                member.Signature is null
                 || IsPointerOrReferenceType(member.Signature.ReturnType)
-                || !surfaceByDeclaration.TryGetValue(member.DeclarationId, out var surface))
+                || !surfaceByDeclaration.TryGetValue(member.DeclarationId, out var surface)
+            )
             {
                 continue;
             }
 
             var callableType = NormalizeTypeName(member.Signature.ReturnType);
-            if (!callableType.StartsWith("std::function<", StringComparison.Ordinal)
-                || registry.TryGet(surface, callableType, out _))
+            if (
+                !callableType.StartsWith("std::function<", StringComparison.Ordinal)
+                || registry.TryGet(surface, callableType, out _)
+            )
             {
                 continue;
             }
@@ -5219,13 +6055,15 @@ internal sealed class AbiPlan
                 continue;
             }
 
-            registry.Add(new CallableAbiInfo
-            {
-                NativeType = callableType,
-                Surface = surface,
-                ClassName = "Function_" + CSharpNaming.ShortHash(callableType),
-                Signature = signature,
-            });
+            registry.Add(
+                new CallableAbiInfo
+                {
+                    NativeType = callableType,
+                    Surface = surface,
+                    ClassName = "Function_" + CSharpNaming.ShortHash(callableType),
+                    Signature = signature,
+                }
+            );
         }
 
         return registry;
@@ -5284,12 +6122,19 @@ internal sealed class AbiPlan
         var name = "arg" + index.ToString(System.Globalization.CultureInfo.InvariantCulture);
         if (argument.Kind != AbiKind.Opaque)
         {
-            return new AbiParameter { Name = name, Kind = argument.Kind, NativeType = argument.NativeType };
+            return new AbiParameter
+            {
+                Name = name,
+                Kind = argument.Kind,
+                NativeType = argument.NativeType,
+            };
         }
 
-        if (!argument.IsPointer
+        if (
+            !argument.IsPointer
             && !argument.IsReference
-            && IsByValueRecordType(argument.NativeType))
+            && IsByValueRecordType(argument.NativeType)
+        )
         {
             var recordType = NormalizeTypeName(argument.NativeType);
             return new AbiParameter
@@ -5317,7 +6162,8 @@ internal sealed class AbiPlan
     private static HashSet<string> CollectMemberlessVariantAlternatives(
         IReadOnlyList<IrRecord> records,
         IReadOnlyDictionary<string, List<MemberRecord>> membersByDeclaration,
-        IReadOnlyDictionary<string, DeclarationRecord> declarationsByQualifiedName)
+        IReadOnlyDictionary<string, DeclarationRecord> declarationsByQualifiedName
+    )
     {
         var result = new HashSet<string>(StringComparer.Ordinal);
         foreach (var member in records.OfType<MemberRecord>())
@@ -5346,11 +6192,13 @@ internal sealed class AbiPlan
             {
                 foreach (var alternative in alternatives)
                 {
-                    if (!declarationsByQualifiedName.TryGetValue(alternative, out var declaration)
+                    if (
+                        !declarationsByQualifiedName.TryGetValue(alternative, out var declaration)
                         || declaration.Access != "public"
                         || declaration.Abstract
                         || !declaration.CopyConstructible
-                        || membersByDeclaration.ContainsKey(declaration.Id))
+                        || membersByDeclaration.ContainsKey(declaration.Id)
+                    )
                     {
                         continue;
                     }
@@ -5368,10 +6216,12 @@ internal sealed class AbiPlan
                 return;
             }
 
-            if (TryParseOptional(normalized, out var inner)
+            if (
+                TryParseOptional(normalized, out var inner)
                 || TryParseOptionalRef(normalized, out inner)
                 || TryParseExpected(normalized, out inner, out _)
-                || TryParseVector(normalized, out inner))
+                || TryParseVector(normalized, out inner)
+            )
             {
                 Consider(inner);
             }
@@ -5384,10 +6234,16 @@ internal sealed class AbiPlan
         IReadOnlyDictionary<string, DeclarationName> declarationNames,
         IReadOnlySet<string> destroyableDeclarationIds,
         IReadOnlyDictionary<string, string> enumUnderlyingByName,
-        bool allowOwnedByValue)
+        bool allowOwnedByValue
+    )
     {
-        var surfaceByDeclaration = records.OfType<DeclarationRecord>()
-            .ToDictionary(declaration => declaration.Id, declaration => declaration.Surface, StringComparer.Ordinal);
+        var surfaceByDeclaration = records
+            .OfType<DeclarationRecord>()
+            .ToDictionary(
+                declaration => declaration.Id,
+                declaration => declaration.Surface,
+                StringComparer.Ordinal
+            );
         var registry = new VariantRegistry();
         foreach (var member in records.OfType<MemberRecord>())
         {
@@ -5429,10 +6285,12 @@ internal sealed class AbiPlan
                 return;
             }
 
-            if (TryParseOptional(normalized, out var inner)
+            if (
+                TryParseOptional(normalized, out var inner)
                 || TryParseOptionalRef(normalized, out inner)
                 || TryParseExpected(normalized, out inner, out _)
-                || TryParseVector(normalized, out inner))
+                || TryParseVector(normalized, out inner)
+            )
             {
                 Consider(surface, inner);
             }
@@ -5440,8 +6298,10 @@ internal sealed class AbiPlan
 
         void Register(string surface, string nativeType)
         {
-            if (registry.TryGet(surface, nativeType, out _)
-                || !TryParseVariant(nativeType, out var alternativeTypes))
+            if (
+                registry.TryGet(surface, nativeType, out _)
+                || !TryParseVariant(nativeType, out var alternativeTypes)
+            )
             {
                 return;
             }
@@ -5465,28 +6325,38 @@ internal sealed class AbiPlan
                     kind = VariantAlternativeKind.String;
                     baseName = "String";
                 }
-                else if (TryMapEnumUnderlying(alternativeType, enumUnderlyingByName, out scalarKind)
-                    || TryMapFundamental(alternativeType, out scalarKind))
+                else if (
+                    TryMapEnumUnderlying(alternativeType, enumUnderlyingByName, out scalarKind)
+                    || TryMapFundamental(alternativeType, out scalarKind)
+                )
                 {
                     kind = VariantAlternativeKind.Scalar;
                     baseName = VariantScalarName(scalarKind);
                 }
-                else if (IsPointerType(alternativeType)
-                    && !alternativeType.Contains('(', StringComparison.Ordinal))
+                else if (
+                    IsPointerType(alternativeType)
+                    && !alternativeType.Contains('(', StringComparison.Ordinal)
+                )
                 {
                     kind = VariantAlternativeKind.Pointer;
                     baseName = VariantPointerName(alternativeType);
                 }
-                else if (allowOwnedByValue
+                else if (
+                    allowOwnedByValue
                     && declarationsByQualifiedName.TryGetValue(alternativeType, out var declaration)
                     && declaration.Access == "public"
                     && !declaration.Abstract
                     && declaration.CopyConstructible
                     && destroyableDeclarationIds.Contains(declaration.Id)
-                    && declarationNames.TryGetValue(declaration.Id, out var alternativeName))
+                    && declarationNames.TryGetValue(declaration.Id, out var alternativeName)
+                )
                 {
                     kind = VariantAlternativeKind.Record;
-                    wrapperType = "global::" + alternativeName.NamespaceName + "." + alternativeName.ClassName;
+                    wrapperType =
+                        "global::"
+                        + alternativeName.NamespaceName
+                        + "."
+                        + alternativeName.ClassName;
                     baseName = TypeNames.Sanitize(TypeNames.NativeName(alternativeType));
                 }
                 else
@@ -5502,24 +6372,28 @@ internal sealed class AbiPlan
                     suffix++;
                 }
 
-                alternatives.Add(new VariantAlternative
-                {
-                    Index = alternatives.Count,
-                    NativeType = alternativeType,
-                    Kind = kind,
-                    ScalarKind = scalarKind,
-                    WrapperType = wrapperType,
-                    ManagedName = managedName,
-                });
+                alternatives.Add(
+                    new VariantAlternative
+                    {
+                        Index = alternatives.Count,
+                        NativeType = alternativeType,
+                        Kind = kind,
+                        ScalarKind = scalarKind,
+                        WrapperType = wrapperType,
+                        ManagedName = managedName,
+                    }
+                );
             }
 
-            registry.Add(new VariantAbiInfo
-            {
-                NativeType = nativeType,
-                Surface = surface,
-                ClassName = "Variant_" + CSharpNaming.ShortHash(nativeType),
-                Alternatives = alternatives,
-            });
+            registry.Add(
+                new VariantAbiInfo
+                {
+                    NativeType = nativeType,
+                    Surface = surface,
+                    ClassName = "Variant_" + CSharpNaming.ShortHash(nativeType),
+                    Alternatives = alternatives,
+                }
+            );
         }
     }
 
@@ -5536,41 +6410,49 @@ internal sealed class AbiPlan
             switch (alternative.Kind)
             {
                 case VariantAlternativeKind.String:
-                    parameters.Add(new AbiParameter
-                    {
-                        Name = "value",
-                        Kind = AbiKind.StringView,
-                        NativeType = alternative.NativeType,
-                    });
+                    parameters.Add(
+                        new AbiParameter
+                        {
+                            Name = "value",
+                            Kind = AbiKind.StringView,
+                            NativeType = alternative.NativeType,
+                        }
+                    );
                     break;
                 case VariantAlternativeKind.Record:
-                    parameters.Add(new AbiParameter
-                    {
-                        Name = "value",
-                        Kind = AbiKind.Opaque,
-                        NativeType = alternative.NativeType,
-                        NativePointee = alternative.NativeType,
-                        IsReference = true,
-                        IsConst = true,
-                        WrapperType = alternative.WrapperType,
-                    });
+                    parameters.Add(
+                        new AbiParameter
+                        {
+                            Name = "value",
+                            Kind = AbiKind.Opaque,
+                            NativeType = alternative.NativeType,
+                            NativePointee = alternative.NativeType,
+                            IsReference = true,
+                            IsConst = true,
+                            WrapperType = alternative.WrapperType,
+                        }
+                    );
                     break;
                 case VariantAlternativeKind.Pointer:
-                    parameters.Add(new AbiParameter
-                    {
-                        Name = "value",
-                        Kind = AbiKind.Opaque,
-                        NativeType = alternative.NativeType,
-                        NativePointee = alternative.NativeType,
-                    });
+                    parameters.Add(
+                        new AbiParameter
+                        {
+                            Name = "value",
+                            Kind = AbiKind.Opaque,
+                            NativeType = alternative.NativeType,
+                            NativePointee = alternative.NativeType,
+                        }
+                    );
                     break;
                 case VariantAlternativeKind.Scalar:
-                    parameters.Add(new AbiParameter
-                    {
-                        Name = "value",
-                        Kind = alternative.ScalarKind,
-                        NativeType = alternative.NativeType,
-                    });
+                    parameters.Add(
+                        new AbiParameter
+                        {
+                            Name = "value",
+                            Kind = alternative.ScalarKind,
+                            NativeType = alternative.NativeType,
+                        }
+                    );
                     break;
             }
 
@@ -5664,16 +6546,20 @@ internal sealed class AbiPlan
         return functions;
     }
 
-    private static bool TryParseExpected(string canonical, out string valueType, out string errorType)
+    private static bool TryParseExpected(
+        string canonical,
+        out string valueType,
+        out string errorType
+    )
     {
         valueType = "";
         errorType = "";
         var text = NormalizeTypeName(canonical);
-        var prefix = text.StartsWith("nonstd::expected_lite::expected<", StringComparison.Ordinal)
-            ? "nonstd::expected_lite::expected<"
-            : text.StartsWith("nonstd::expected<", StringComparison.Ordinal)
-                ? "nonstd::expected<"
-                : null;
+        var prefix =
+            text.StartsWith("nonstd::expected_lite::expected<", StringComparison.Ordinal)
+                ? "nonstd::expected_lite::expected<"
+            : text.StartsWith("nonstd::expected<", StringComparison.Ordinal) ? "nonstd::expected<"
+            : null;
         if (prefix is null || !text.EndsWith(">", StringComparison.Ordinal))
         {
             return false;
@@ -5695,8 +6581,10 @@ internal sealed class AbiPlan
         inner = "";
         var text = NormalizeTypeName(canonical);
         const string prefix = "optional_ref<";
-        if (!text.StartsWith(prefix, StringComparison.Ordinal)
-            || !text.EndsWith(">", StringComparison.Ordinal))
+        if (
+            !text.StartsWith(prefix, StringComparison.Ordinal)
+            || !text.EndsWith(">", StringComparison.Ordinal)
+        )
         {
             return false;
         }
@@ -5716,8 +6604,10 @@ internal sealed class AbiPlan
         inner = "";
         var text = NormalizeTypeName(canonical);
         const string prefix = "std::optional<";
-        if (!text.StartsWith(prefix, StringComparison.Ordinal)
-            || !text.EndsWith(">", StringComparison.Ordinal))
+        if (
+            !text.StartsWith(prefix, StringComparison.Ordinal)
+            || !text.EndsWith(">", StringComparison.Ordinal)
+        )
         {
             return false;
         }
@@ -5732,14 +6622,20 @@ internal sealed class AbiPlan
         return inner.Length > 0;
     }
 
-    private static bool TryParseTimePoint(string canonical, out string clockType, out bool isSystemClock)
+    private static bool TryParseTimePoint(
+        string canonical,
+        out string clockType,
+        out bool isSystemClock
+    )
     {
         clockType = "";
         isSystemClock = false;
         var text = NormalizeTypeName(canonical);
         const string prefix = "std::chrono::time_point<";
-        if (!text.StartsWith(prefix, StringComparison.Ordinal)
-            || !text.EndsWith(">", StringComparison.Ordinal))
+        if (
+            !text.StartsWith(prefix, StringComparison.Ordinal)
+            || !text.EndsWith(">", StringComparison.Ordinal)
+        )
         {
             return false;
         }
@@ -5751,7 +6647,11 @@ internal sealed class AbiPlan
         }
 
         clockType = StripTopLevelQualifiers(arguments[0].Trim());
-        isSystemClock = string.Equals(clockType, "std::chrono::system_clock", StringComparison.Ordinal);
+        isSystemClock = string.Equals(
+            clockType,
+            "std::chrono::system_clock",
+            StringComparison.Ordinal
+        );
         return clockType.Length > 0;
     }
 
@@ -5760,8 +6660,10 @@ internal sealed class AbiPlan
         durationType = "";
         var text = NormalizeTypeName(canonical);
         const string prefix = "std::chrono::duration<";
-        if (!text.StartsWith(prefix, StringComparison.Ordinal)
-            || !text.EndsWith(">", StringComparison.Ordinal))
+        if (
+            !text.StartsWith(prefix, StringComparison.Ordinal)
+            || !text.EndsWith(">", StringComparison.Ordinal)
+        )
         {
             return false;
         }
@@ -5775,8 +6677,10 @@ internal sealed class AbiPlan
         category = "";
         var text = NormalizeTypeName(canonical);
         const string prefix = "Bedrock::typeid_t<";
-        if (!text.StartsWith(prefix, StringComparison.Ordinal)
-            || !text.EndsWith(">", StringComparison.Ordinal))
+        if (
+            !text.StartsWith(prefix, StringComparison.Ordinal)
+            || !text.EndsWith(">", StringComparison.Ordinal)
+        )
         {
             return false;
         }
@@ -5792,10 +6696,18 @@ internal sealed class AbiPlan
     }
 
     private static bool IsStrongOrdering(string canonical) =>
-        string.Equals(NormalizeTypeName(canonical), "std::strong_ordering", StringComparison.Ordinal);
+        string.Equals(
+            NormalizeTypeName(canonical),
+            "std::strong_ordering",
+            StringComparison.Ordinal
+        );
 
     private static bool IsFilesystemPath(string canonical) =>
-        string.Equals(NormalizeTypeName(canonical), "std::filesystem::path", StringComparison.Ordinal);
+        string.Equals(
+            NormalizeTypeName(canonical),
+            "std::filesystem::path",
+            StringComparison.Ordinal
+        );
 
     private static string CSharpMapValueTypeKind(AbiKind kind) =>
         kind == AbiKind.StringView ? "string" : CSharpMapKeyType(kind);
@@ -5805,7 +6717,8 @@ internal sealed class AbiPlan
         string second,
         IReadOnlyDictionary<string, string> enumUnderlyingByName,
         out AbiKind keyKind,
-        out AbiKind valueKind)
+        out AbiKind valueKind
+    )
     {
         keyKind = AbiKind.Void;
         valueKind = AbiKind.Void;
@@ -5816,7 +6729,8 @@ internal sealed class AbiPlan
     private static bool TryMapMapScalarKind(
         string type,
         IReadOnlyDictionary<string, string> enumUnderlyingByName,
-        out AbiKind kind)
+        out AbiKind kind
+    )
     {
         if (IsStringViewType(type) || IsStringType(type))
         {
@@ -5824,8 +6738,10 @@ internal sealed class AbiPlan
             return true;
         }
 
-        if (TryMapEnumUnderlying(type, enumUnderlyingByName, out kind)
-            || TryMapFundamental(type, out kind))
+        if (
+            TryMapEnumUnderlying(type, enumUnderlyingByName, out kind)
+            || TryMapFundamental(type, out kind)
+        )
         {
             return true;
         }
@@ -5846,8 +6762,10 @@ internal sealed class AbiPlan
         second = "";
         var text = NormalizeTypeName(canonical);
         const string prefix = "std::pair<";
-        if (!text.StartsWith(prefix, StringComparison.Ordinal)
-            || !text.EndsWith(">", StringComparison.Ordinal))
+        if (
+            !text.StartsWith(prefix, StringComparison.Ordinal)
+            || !text.EndsWith(">", StringComparison.Ordinal)
+        )
         {
             return false;
         }
@@ -5878,7 +6796,8 @@ internal sealed class AbiPlan
         out ArrayElementOwnership valueOwnership,
         out string? valueNative,
         out VariantAbiInfo? valueVariant,
-        out string? reason)
+        out string? reason
+    )
     {
         keyKind = AbiKind.Void;
         valueKind = AbiKind.Void;
@@ -5892,8 +6811,10 @@ internal sealed class AbiPlan
         {
             keyKind = AbiKind.StringView;
         }
-        else if (!TryMapEnumUnderlying(mapKey, enumUnderlyingByName, out keyKind)
-            && !TryMapFundamental(mapKey, out keyKind))
+        else if (
+            !TryMapEnumUnderlying(mapKey, enumUnderlyingByName, out keyKind)
+            && !TryMapFundamental(mapKey, out keyKind)
+        )
         {
             if (!IsPointerType(mapKey))
             {
@@ -5908,10 +6829,10 @@ internal sealed class AbiPlan
         {
             valueKind = AbiKind.StringView;
         }
-        else if (TryMapEnumUnderlying(mapValue, enumUnderlyingByName, out valueKind)
-            || TryMapFundamental(mapValue, out valueKind))
-        {
-        }
+        else if (
+            TryMapEnumUnderlying(mapValue, enumUnderlyingByName, out valueKind)
+            || TryMapFundamental(mapValue, out valueKind)
+        ) { }
         else if (IsPointerType(mapValue))
         {
             valueKind = AbiKind.Opaque;
@@ -5924,13 +6845,16 @@ internal sealed class AbiPlan
             valueNative = NormalizeTypeName(mapValue);
             valueVariant = mapValueVariant;
         }
-        else if (TryResolveRecordWrapper(
+        else if (
+            TryResolveRecordWrapper(
                 mapValue,
                 declarationsByQualifiedName,
                 declarationNames,
                 destroyableDeclarationIds,
                 false,
-                out var mapRecordWrapper))
+                out var mapRecordWrapper
+            )
+        )
         {
             valueKind = AbiKind.Opaque;
             valueOwnership = ArrayElementOwnership.RecordCopy;
@@ -5952,8 +6876,10 @@ internal sealed class AbiPlan
         value = "";
         var text = NormalizeTypeName(canonical);
         const string prefix = "std::unordered_map<";
-        if (!text.StartsWith(prefix, StringComparison.Ordinal)
-            || !text.EndsWith(">", StringComparison.Ordinal))
+        if (
+            !text.StartsWith(prefix, StringComparison.Ordinal)
+            || !text.EndsWith(">", StringComparison.Ordinal)
+        )
         {
             return false;
         }
@@ -5974,8 +6900,10 @@ internal sealed class AbiPlan
         element = "";
         var text = NormalizeTypeName(canonical);
         const string prefix = "std::unordered_set<";
-        if (!text.StartsWith(prefix, StringComparison.Ordinal)
-            || !text.EndsWith(">", StringComparison.Ordinal))
+        if (
+            !text.StartsWith(prefix, StringComparison.Ordinal)
+            || !text.EndsWith(">", StringComparison.Ordinal)
+        )
         {
             return false;
         }
@@ -5993,15 +6921,22 @@ internal sealed class AbiPlan
     private static bool TryParseReferenceWrapper(
         string canonical,
         out SharedWrapperKind wrapper,
-        out string pointee)
+        out string pointee
+    )
     {
         wrapper = SharedWrapperKind.None;
         pointee = "";
         var text = NormalizeTypeName(canonical);
-        if (text.StartsWith("gsl::not_null<", StringComparison.Ordinal)
-            && text.EndsWith(">", StringComparison.Ordinal))
+        if (
+            text.StartsWith("gsl::not_null<", StringComparison.Ordinal)
+            && text.EndsWith(">", StringComparison.Ordinal)
+        )
         {
-            return TryParseReferenceWrapper(text["gsl::not_null<".Length..^1].Trim(), out wrapper, out pointee);
+            return TryParseReferenceWrapper(
+                text["gsl::not_null<".Length..^1].Trim(),
+                out wrapper,
+                out pointee
+            );
         }
 
         (string Prefix, SharedWrapperKind Kind)[] prefixes =
@@ -6014,8 +6949,10 @@ internal sealed class AbiPlan
         ];
         foreach (var (prefix, kind) in prefixes)
         {
-            if (!text.StartsWith(prefix, StringComparison.Ordinal)
-                || !text.EndsWith(">", StringComparison.Ordinal))
+            if (
+                !text.StartsWith(prefix, StringComparison.Ordinal)
+                || !text.EndsWith(">", StringComparison.Ordinal)
+            )
             {
                 continue;
             }
@@ -6045,7 +6982,8 @@ internal sealed class AbiPlan
     private static bool TryParseSharedWrapper(
         string canonical,
         out SharedWrapperKind wrapper,
-        out string pointee)
+        out string pointee
+    )
     {
         wrapper = SharedWrapperKind.None;
         pointee = "";
@@ -6088,8 +7026,10 @@ internal sealed class AbiPlan
         pointee = "";
         var text = NormalizeTypeName(canonical);
         const string prefix = "std::shared_ptr<";
-        if (!text.StartsWith(prefix, StringComparison.Ordinal)
-            || !text.EndsWith(">", StringComparison.Ordinal))
+        if (
+            !text.StartsWith(prefix, StringComparison.Ordinal)
+            || !text.EndsWith(">", StringComparison.Ordinal)
+        )
         {
             return false;
         }
@@ -6114,9 +7054,11 @@ internal sealed class AbiPlan
         stringType = "";
         var text = NormalizeTypeName(canonical);
         const string prefix = "Core::PathBuffer<";
-        if (!text.StartsWith(prefix, StringComparison.Ordinal)
+        if (
+            !text.StartsWith(prefix, StringComparison.Ordinal)
             || !text.EndsWith(">", StringComparison.Ordinal)
-            || IsPointerOrReferenceType(canonical))
+            || IsPointerOrReferenceType(canonical)
+        )
         {
             return false;
         }
@@ -6136,8 +7078,10 @@ internal sealed class AbiPlan
         pointee = "";
         var text = NormalizeTypeName(canonical);
         const string prefix = "std::weak_ptr<";
-        if (!text.StartsWith(prefix, StringComparison.Ordinal)
-            || !text.EndsWith(">", StringComparison.Ordinal))
+        if (
+            !text.StartsWith(prefix, StringComparison.Ordinal)
+            || !text.EndsWith(">", StringComparison.Ordinal)
+        )
         {
             return false;
         }
@@ -6157,8 +7101,10 @@ internal sealed class AbiPlan
         element = "";
         var text = NormalizeTypeName(canonical);
         const string prefix = "gsl::span<";
-        if (!text.StartsWith(prefix, StringComparison.Ordinal)
-            || !text.EndsWith(">", StringComparison.Ordinal))
+        if (
+            !text.StartsWith(prefix, StringComparison.Ordinal)
+            || !text.EndsWith(">", StringComparison.Ordinal)
+        )
         {
             return false;
         }
@@ -6169,14 +7115,19 @@ internal sealed class AbiPlan
             return false;
         }
 
-        if (arguments.Count == 2 && !string.Equals(arguments[1].Trim(), "-1", StringComparison.Ordinal))
+        if (
+            arguments.Count == 2
+            && !string.Equals(arguments[1].Trim(), "-1", StringComparison.Ordinal)
+        )
         {
             return false;
         }
 
         element = arguments[0].Trim();
-        if (element.StartsWith("gsl::not_null<", StringComparison.Ordinal)
-            && element.EndsWith(">", StringComparison.Ordinal))
+        if (
+            element.StartsWith("gsl::not_null<", StringComparison.Ordinal)
+            && element.EndsWith(">", StringComparison.Ordinal)
+        )
         {
             element = element["gsl::not_null<".Length..^1].Trim();
         }
@@ -6189,15 +7140,15 @@ internal sealed class AbiPlan
         bits = 0;
         var text = canonical.Trim();
         const string prefix = "std::bitset<";
-        if (!text.StartsWith(prefix, StringComparison.Ordinal)
-            || !text.EndsWith(">", StringComparison.Ordinal))
+        if (
+            !text.StartsWith(prefix, StringComparison.Ordinal)
+            || !text.EndsWith(">", StringComparison.Ordinal)
+        )
         {
             return false;
         }
 
-        return int.TryParse(text[prefix.Length..^1].Trim(), out bits)
-            && bits > 0
-            && bits <= 64;
+        return int.TryParse(text[prefix.Length..^1].Trim(), out bits) && bits > 0 && bits <= 64;
     }
 
     private static bool TryParseUniquePtr(string canonical, out string pointee)
@@ -6205,8 +7156,10 @@ internal sealed class AbiPlan
         pointee = "";
         var text = NormalizeTypeName(canonical);
         const string prefix = "std::unique_ptr<";
-        if (!text.StartsWith(prefix, StringComparison.Ordinal)
-            || !text.EndsWith(">", StringComparison.Ordinal))
+        if (
+            !text.StartsWith(prefix, StringComparison.Ordinal)
+            || !text.EndsWith(">", StringComparison.Ordinal)
+        )
         {
             return false;
         }
@@ -6217,10 +7170,13 @@ internal sealed class AbiPlan
         {
             // The symbol stream spells the default deleter explicitly.
             var expected = "std::default_delete<" + arguments[0].Trim() + ">";
-            if (!string.Equals(
+            if (
+                !string.Equals(
                     CompactTemplateName(NormalizeTypeName(arguments[1].Trim())),
                     CompactTemplateName(expected),
-                    StringComparison.Ordinal))
+                    StringComparison.Ordinal
+                )
+            )
             {
                 return false;
             }
@@ -6246,7 +7202,8 @@ internal sealed class AbiPlan
         VariantRegistry variants,
         out AbiFunction getter,
         out AbiFunction? setter,
-        out string? reason)
+        out string? reason
+    )
     {
         getter = null!;
         setter = null;
@@ -6274,19 +7231,35 @@ internal sealed class AbiPlan
         {
             kind = AbiKind.StringView;
         }
-        else if (TryParseBitset(StripTopLevelQualifiers(text).TrimEnd().TrimEnd('&', ' '), out bitsetBits))
+        else if (
+            TryParseBitset(
+                StripTopLevelQualifiers(text).TrimEnd().TrimEnd('&', ' '),
+                out bitsetBits
+            )
+        )
         {
             // std::bitset is bit-packed; the member is aliased as the integer its storage
             // holds, matching what the shim reads and writes.
-            kind = bitsetBits <= 8 ? AbiKind.U8
+            kind =
+                bitsetBits <= 8 ? AbiKind.U8
                 : bitsetBits <= 16 ? AbiKind.U16
                 : bitsetBits <= 32 ? AbiKind.U32
                 : AbiKind.U64;
         }
-        else if (!TryMapEnumUnderlying(text, enumUnderlyingByName, out kind)
-            && !TryMapFundamental(text, out kind))
+        else if (
+            !TryMapEnumUnderlying(text, enumUnderlyingByName, out kind)
+            && !TryMapFundamental(text, out kind)
+        )
         {
-            if (!TryMapOpaque(text, declarationsByQualifiedName, declarationNames, out var pointee, out var wrapperType))
+            if (
+                !TryMapOpaque(
+                    text,
+                    declarationsByQualifiedName,
+                    declarationNames,
+                    out var pointee,
+                    out var wrapperType
+                )
+            )
             {
                 if (!IsByValueRecordType(text) && !IsArrayType(text))
                 {
@@ -6295,7 +7268,11 @@ internal sealed class AbiPlan
                 }
 
                 pointee = StripTopLevelQualifiers(text);
-                wrapperType = LookupWrapperType(text, declarationsByQualifiedName, declarationNames);
+                wrapperType = LookupWrapperType(
+                    text,
+                    declarationsByQualifiedName,
+                    declarationNames
+                );
                 // The value type cannot be projected, so the getter exposes the storage
                 // address and a setter would have to guess the write spelling.
                 addressOnly = true;
@@ -6326,18 +7303,22 @@ internal sealed class AbiPlan
             BitsetBits = bitsetBits,
         };
 
-        if (addressOnly || kind is AbiKind.StringView
+        if (
+            addressOnly
+            || kind is AbiKind.StringView
             || type.Const
             || IsConstType(text)
             || IsArrayType(text)
             || type.Kind == "reference"
-            || IsReferenceType(text))
+            || IsReferenceType(text)
+        )
         {
             // A reference field cannot be assigned through the wrapper.
             return true;
         }
 
-        if (!TryMapParameter(
+        if (
+            !TryMapParameter(
                 declaration.Surface,
                 name,
                 text,
@@ -6349,26 +7330,32 @@ internal sealed class AbiPlan
                 symbolDispatch: false,
                 variants,
                 out var valueParameter,
-                out _))
+                out _
+            )
+        )
         {
             return true;
         }
 
-        if (valueParameter.Kind == AbiKind.Callback
+        if (
+            valueParameter.Kind == AbiKind.Callback
             || valueParameter.Kind == AbiKind.Shared
             || valueParameter.IsOptional
             || valueParameter.IsVector
-            || valueParameter.IsMap)
+            || valueParameter.IsMap
+        )
         {
             // Callback and optional fields are readable as opaque views; a setter would need
             // the hidden presence flag to be threaded through the field ABI.
             return true;
         }
 
-        if (!linkCarrier
+        if (
+            !linkCarrier
             && !IsPointerType(text)
             && !IsReferenceType(text)
-            && IsByValueRecordType(text))
+            && IsByValueRecordType(text)
+        )
         {
             // Copy assignment of a record field may call out-of-line native members.
             return true;
@@ -6393,7 +7380,11 @@ internal sealed class AbiPlan
         return true;
     }
 
-    private static bool TryParseSpanLike(string canonical, out string element, out VectorParameterKind kind)
+    private static bool TryParseSpanLike(
+        string canonical,
+        out string element,
+        out VectorParameterKind kind
+    )
     {
         element = "";
         kind = VectorParameterKind.Span;
@@ -6405,9 +7396,10 @@ internal sealed class AbiPlan
             {
                 prefix = candidate;
                 // A buffer_span stores {begin, end}, not {size, data}.
-                kind = candidate == "gsl::span<"
-                    ? VectorParameterKind.Span
-                    : VectorParameterKind.InitializerList;
+                kind =
+                    candidate == "gsl::span<"
+                        ? VectorParameterKind.Span
+                        : VectorParameterKind.InitializerList;
                 break;
             }
         }
@@ -6461,7 +7453,8 @@ internal sealed class AbiPlan
         bool symbolDispatch,
         VariantRegistry variants,
         out AbiParameter parameter,
-        out string? reason)
+        out string? reason
+    )
     {
         parameter = null!;
         reason = null;
@@ -6546,8 +7539,10 @@ internal sealed class AbiPlan
         // gsl::not_null<T*> is a single-pointer struct with a defaulted copy constructor, so
         // it crosses the ABI exactly like T*. Only the pointer form unwraps; not_null of an
         // owning wrapper keeps that wrapper's ABI, which no plain pointer can stand in for.
-        if (text.StartsWith("gsl::not_null<", StringComparison.Ordinal)
-            && text.EndsWith(">", StringComparison.Ordinal))
+        if (
+            text.StartsWith("gsl::not_null<", StringComparison.Ordinal)
+            && text.EndsWith(">", StringComparison.Ordinal)
+        )
         {
             var notNullInner = text["gsl::not_null<".Length..^1].Trim();
             if (IsPointerType(notNullInner))
@@ -6585,8 +7580,10 @@ internal sealed class AbiPlan
             return true;
         }
 
-        if (!IsPointerType(text)
-            && TryParseReferenceWrapper(text, out var parameterWrapper, out var parameterPointee))
+        if (
+            !IsPointerType(text)
+            && TryParseReferenceWrapper(text, out var parameterWrapper, out var parameterPointee)
+        )
         {
             // OwnerPtr, StackRefResult, WeakRef and Bedrock::NonOwnerPointer all carry a
             // shared control block, so a parameter crosses the ABI as a shared handle just
@@ -6608,11 +7605,17 @@ internal sealed class AbiPlan
             return true;
         }
 
-        if (!IsPointerType(text)
+        if (
+            !IsPointerType(text)
             && !(IsReferenceType(text) && !IsRValueReference(text))
-            && TryParseUniquePtr(text, out var uniquePointee))
+            && TryParseUniquePtr(text, out var uniquePointee)
+        )
         {
-            var uniqueWrapper = LookupWrapperType(uniquePointee, declarationsByQualifiedName, declarationNames);
+            var uniqueWrapper = LookupWrapperType(
+                uniquePointee,
+                declarationsByQualifiedName,
+                declarationNames
+            );
             if (uniqueWrapper is null)
             {
                 reason = $"unique_ptr parameter pointee '{uniquePointee}' has no generated wrapper";
@@ -6634,7 +7637,8 @@ internal sealed class AbiPlan
         var mapType = NormalizeTypeName(text);
         if (TryParseUnorderedMap(mapType, out var mapKey, out var mapValue))
         {
-            if (!TryMapMapEntryKinds(
+            if (
+                !TryMapMapEntryKinds(
                     surface,
                     mapKey,
                     mapValue,
@@ -6649,7 +7653,9 @@ internal sealed class AbiPlan
                     out var mapValueOwnership,
                     out var mapValueNative,
                     out var mapVariant,
-                    out var mapReason))
+                    out var mapReason
+                )
+            )
             {
                 reason = mapReason;
                 return false;
@@ -6680,8 +7686,10 @@ internal sealed class AbiPlan
         if (symbolDispatch && TryParseSpanLike(text, out var spanElement, out var spanKind))
         {
             var spanElementText = spanElement.Trim();
-            if (spanElementText.StartsWith("gsl::not_null<", StringComparison.Ordinal)
-                && spanElementText.EndsWith(">", StringComparison.Ordinal))
+            if (
+                spanElementText.StartsWith("gsl::not_null<", StringComparison.Ordinal)
+                && spanElementText.EndsWith(">", StringComparison.Ordinal)
+            )
             {
                 var inner = spanElementText["gsl::not_null<".Length..^1].Trim();
                 if (IsPointerType(inner))
@@ -6705,8 +7713,10 @@ internal sealed class AbiPlan
                 return true;
             }
 
-            if (TryMapEnumUnderlying(spanElementText, enumUnderlyingByName, out var spanScalar)
-                || TryMapFundamental(spanElementText, out spanScalar))
+            if (
+                TryMapEnumUnderlying(spanElementText, enumUnderlyingByName, out var spanScalar)
+                || TryMapFundamental(spanElementText, out spanScalar)
+            )
             {
                 parameter = new AbiParameter
                 {
@@ -6743,7 +7753,10 @@ internal sealed class AbiPlan
 
         // A pointer to a vector is an out-parameter the callee fills; it crosses the ABI as a
         // plain pointer, not as a rebuilt container.
-        if (!IsPointerType(text) && TryParseVector(text, out var vectorElement, out var vectorSpelling))
+        if (
+            !IsPointerType(text)
+            && TryParseVector(text, out var vectorElement, out var vectorSpelling)
+        )
         {
             if (IsStringViewType(vectorElement) || IsStringType(vectorElement))
             {
@@ -6761,8 +7774,10 @@ internal sealed class AbiPlan
                 return true;
             }
 
-            if (TryMapEnumUnderlying(vectorElement, enumUnderlyingByName, out var vectorKind)
-                || TryMapFundamental(vectorElement, out vectorKind))
+            if (
+                TryMapEnumUnderlying(vectorElement, enumUnderlyingByName, out var vectorKind)
+                || TryMapFundamental(vectorElement, out vectorKind)
+            )
             {
                 parameter = new AbiParameter
                 {
@@ -6818,12 +7833,15 @@ internal sealed class AbiPlan
                 return true;
             }
 
-            if (TryParseOptional(vectorElement, out var optionalVectorRecord)
+            if (
+                TryParseOptional(vectorElement, out var optionalVectorRecord)
                 && TryResolveInputRecordWrapper(
                     optionalVectorRecord,
                     declarationsByQualifiedName,
                     declarationNames,
-                    out var optionalVectorWrapper))
+                    out var optionalVectorWrapper
+                )
+            )
             {
                 parameter = new AbiParameter
                 {
@@ -6842,17 +7860,26 @@ internal sealed class AbiPlan
                 return true;
             }
 
-            if (TryResolveInputRecordWrapper(
+            if (
+                TryResolveInputRecordWrapper(
                     vectorElement,
                     declarationsByQualifiedName,
                     declarationNames,
-                    out var vectorRecordWrapper))
+                    out var vectorRecordWrapper
+                )
+            )
             {
                 // The shim rebuilds the vector element by element, so an element the carrier
                 // declares non-copyable — or never declares at all — cannot be passed.
-                if (!declarationsByQualifiedName.TryGetValue(vectorElement, out var vectorElementDeclaration))
+                if (
+                    !declarationsByQualifiedName.TryGetValue(
+                        vectorElement,
+                        out var vectorElementDeclaration
+                    )
+                )
                 {
-                    reason = $"vector element type '{vectorElement}' is not declared by the surface";
+                    reason =
+                        $"vector element type '{vectorElement}' is not declared by the surface";
                     return false;
                 }
 
@@ -6879,8 +7906,16 @@ internal sealed class AbiPlan
                 return true;
             }
 
-            if (TryParsePair(vectorElement, out var pairFirst, out var pairSecond)
-                && TryMapPairElementKinds(pairFirst, pairSecond, enumUnderlyingByName, out var pairKeyKind, out var pairValueKind))
+            if (
+                TryParsePair(vectorElement, out var pairFirst, out var pairSecond)
+                && TryMapPairElementKinds(
+                    pairFirst,
+                    pairSecond,
+                    enumUnderlyingByName,
+                    out var pairKeyKind,
+                    out var pairValueKind
+                )
+            )
             {
                 parameter = new AbiParameter
                 {
@@ -6892,7 +7927,8 @@ internal sealed class AbiPlan
                     IsVector = true,
                     VectorElementKind = AbiKind.Opaque,
                     VectorElementType = vectorElement,
-                    VectorElementWrapperType = $"global::System.Collections.Generic.KeyValuePair<{CSharpMapKeyType(pairKeyKind)}, {CSharpMapValueTypeKind(pairValueKind)}>",
+                    VectorElementWrapperType =
+                        $"global::System.Collections.Generic.KeyValuePair<{CSharpMapKeyType(pairKeyKind)}, {CSharpMapValueTypeKind(pairValueKind)}>",
                     VectorElementOwnership = ArrayElementOwnership.PairCopy,
                     VectorPairKeyKind = pairKeyKind,
                     VectorPairValueKind = pairValueKind,
@@ -6917,7 +7953,11 @@ internal sealed class AbiPlan
                 IsOptional = true,
                 IsOptionalRef = true,
                 OptionalRefInnerType = optionalRefInner,
-                WrapperType = LookupWrapperType(optionalRefInner, declarationsByQualifiedName, declarationNames),
+                WrapperType = LookupWrapperType(
+                    optionalRefInner,
+                    declarationsByQualifiedName,
+                    declarationNames
+                ),
             };
             return true;
         }
@@ -6940,8 +7980,10 @@ internal sealed class AbiPlan
                 return true;
             }
 
-            if (TryMapEnumUnderlying(optionalInner, enumUnderlyingByName, out var optionalKind)
-                || TryMapFundamental(optionalInner, out optionalKind))
+            if (
+                TryMapEnumUnderlying(optionalInner, enumUnderlyingByName, out var optionalKind)
+                || TryMapFundamental(optionalInner, out optionalKind)
+            )
             {
                 parameter = new AbiParameter
                 {
@@ -6956,7 +7998,9 @@ internal sealed class AbiPlan
                 return true;
             }
 
-            if (TryParseTimePoint(optionalInner, out var optionalClock, out var optionalSystemClock))
+            if (
+                TryParseTimePoint(optionalInner, out var optionalClock, out var optionalSystemClock)
+            )
             {
                 parameter = new AbiParameter
                 {
@@ -6967,7 +8011,9 @@ internal sealed class AbiPlan
                     IsReference = IsReferenceType(text),
                     IsConst = IsConstType(text),
                     OptionalInnerType = optionalInner,
-                    TimeConversion = optionalSystemClock ? TimeConversion.SystemTimePoint : TimeConversion.ClockTimePoint,
+                    TimeConversion = optionalSystemClock
+                        ? TimeConversion.SystemTimePoint
+                        : TimeConversion.ClockTimePoint,
                     TimeClockType = optionalClock,
                 };
                 return true;
@@ -7064,12 +8110,23 @@ internal sealed class AbiPlan
                 return false;
             }
 
-            if ((!declarationsByQualifiedName.TryGetValue(optionalInner, out var optionalDeclaration)
-                    && !declarationsByQualifiedName.TryGetValue(CompactTemplateName(optionalInner), out optionalDeclaration))
+            if (
+                (
+                    !declarationsByQualifiedName.TryGetValue(
+                        optionalInner,
+                        out var optionalDeclaration
+                    )
+                    && !declarationsByQualifiedName.TryGetValue(
+                        CompactTemplateName(optionalInner),
+                        out optionalDeclaration
+                    )
+                )
                 || optionalDeclaration.Abstract
-                || !optionalDeclaration.CopyConstructible)
+                || !optionalDeclaration.CopyConstructible
+            )
             {
-                reason = $"optional record parameter '{optionalInner}' is abstract or not copy-constructible";
+                reason =
+                    $"optional record parameter '{optionalInner}' is abstract or not copy-constructible";
                 return false;
             }
 
@@ -7084,7 +8141,11 @@ internal sealed class AbiPlan
                 IsConst = IsConstType(text),
                 OptionalInnerType = optionalInner,
                 IsOptionalRecord = true,
-                WrapperType = LookupWrapperType(optionalInner, declarationsByQualifiedName, declarationNames),
+                WrapperType = LookupWrapperType(
+                    optionalInner,
+                    declarationsByQualifiedName,
+                    declarationNames
+                ),
             };
             return true;
         }
@@ -7109,7 +8170,14 @@ internal sealed class AbiPlan
             return true;
         }
 
-        if (TryParseStdFunction(text, enumUnderlyingByName, out var callback, out var callbackReason))
+        if (
+            TryParseStdFunction(
+                text,
+                enumUnderlyingByName,
+                out var callback,
+                out var callbackReason
+            )
+        )
         {
             parameter = new AbiParameter
             {
@@ -7127,8 +8195,10 @@ internal sealed class AbiPlan
             return false;
         }
 
-        if (TryMapEnumUnderlying(text, enumUnderlyingByName, out var kind)
-            || TryMapFundamental(text, out kind))
+        if (
+            TryMapEnumUnderlying(text, enumUnderlyingByName, out var kind)
+            || TryMapFundamental(text, out kind)
+        )
         {
             parameter = new AbiParameter
             {
@@ -7139,8 +8209,10 @@ internal sealed class AbiPlan
             return true;
         }
 
-        if (!IsPointerType(text)
-            && TryParseTimePoint(text, out var parameterClock, out var parameterSystemClock))
+        if (
+            !IsPointerType(text)
+            && TryParseTimePoint(text, out var parameterClock, out var parameterSystemClock)
+        )
         {
             if (IsNonConstLValueReference(text))
             {
@@ -7153,14 +8225,15 @@ internal sealed class AbiPlan
                 Name = name,
                 Kind = AbiKind.I64,
                 NativeType = text,
-                TimeConversion = parameterSystemClock ? TimeConversion.SystemTimePoint : TimeConversion.ClockTimePoint,
+                TimeConversion = parameterSystemClock
+                    ? TimeConversion.SystemTimePoint
+                    : TimeConversion.ClockTimePoint,
                 TimeClockType = parameterClock,
             };
             return true;
         }
 
-        if (!IsPointerType(text)
-            && TryParseDuration(text, out var parameterDuration))
+        if (!IsPointerType(text) && TryParseDuration(text, out var parameterDuration))
         {
             if (IsNonConstLValueReference(text))
             {
@@ -7238,7 +8311,8 @@ internal sealed class AbiPlan
             parameter = new AbiParameter
             {
                 Name = name,
-                Kind = bitsetBits <= 8 ? AbiKind.U8
+                Kind =
+                    bitsetBits <= 8 ? AbiKind.U8
                     : bitsetBits <= 16 ? AbiKind.U16
                     : bitsetBits <= 32 ? AbiKind.U32
                     : AbiKind.U64,
@@ -7249,7 +8323,15 @@ internal sealed class AbiPlan
             return true;
         }
 
-        if (TryMapOpaque(text, declarationsByQualifiedName, declarationNames, out var pointee, out var wrapperType))
+        if (
+            TryMapOpaque(
+                text,
+                declarationsByQualifiedName,
+                declarationNames,
+                out var pointee,
+                out var wrapperType
+            )
+        )
         {
             parameter = new AbiParameter
             {
@@ -7270,7 +8352,8 @@ internal sealed class AbiPlan
             var byValueName = StripTopLevelQualifiers(text);
             if (!declarationsByQualifiedName.TryGetValue(byValueName, out var byValueDeclaration))
             {
-                reason = $"by-value record parameter '{byValueName}' is not a known bindable declaration";
+                reason =
+                    $"by-value record parameter '{byValueName}' is not a known bindable declaration";
                 return false;
             }
 
@@ -7298,14 +8381,19 @@ internal sealed class AbiPlan
                 ByValueTriviallyDestructible = byValueDeclaration.TriviallyDestructible,
                 IsReference = true,
                 IsConst = true,
-                WrapperType = LookupWrapperType(text, declarationsByQualifiedName, declarationNames),
+                WrapperType = LookupWrapperType(
+                    text,
+                    declarationsByQualifiedName,
+                    declarationNames
+                ),
             };
             return true;
         }
 
         if (!linkCarrier && IsByValueRecordType(text))
         {
-            reason = $"by-value record parameter '{text}' requires --link-carrier or --virtual-dispatch";
+            reason =
+                $"by-value record parameter '{text}' requires --link-carrier or --virtual-dispatch";
             return false;
         }
 
@@ -7317,14 +8405,17 @@ internal sealed class AbiPlan
         string nativeType,
         IReadOnlyDictionary<string, DeclarationRecord> declarationsByQualifiedName,
         IReadOnlyDictionary<string, DeclarationName> declarationNames,
-        out string wrapperType)
+        out string wrapperType
+    )
     {
         wrapperType = "";
-        if (!declarationsByQualifiedName.TryGetValue(nativeType, out var declaration)
+        if (
+            !declarationsByQualifiedName.TryGetValue(nativeType, out var declaration)
             || declaration.Access != "public"
             || declaration.Abstract
             || !declaration.CopyConstructible
-            || !declarationNames.TryGetValue(declaration.Id, out var declarationName))
+            || !declarationNames.TryGetValue(declaration.Id, out var declarationName)
+        )
         {
             return false;
         }
@@ -7339,15 +8430,18 @@ internal sealed class AbiPlan
         IReadOnlyDictionary<string, DeclarationName> declarationNames,
         IReadOnlySet<string> destroyableDeclarationIds,
         bool allowAbstract,
-        out string wrapperType)
+        out string wrapperType
+    )
     {
         wrapperType = "";
-        if (!declarationsByQualifiedName.TryGetValue(nativeType, out var declaration)
+        if (
+            !declarationsByQualifiedName.TryGetValue(nativeType, out var declaration)
             || declaration.Access != "public"
             || (!allowAbstract && declaration.Abstract)
             || (!allowAbstract && !declaration.CopyConstructible)
             || !destroyableDeclarationIds.Contains(declaration.Id)
-            || !declarationNames.TryGetValue(declaration.Id, out var declarationName))
+            || !declarationNames.TryGetValue(declaration.Id, out var declarationName)
+        )
         {
             return false;
         }
@@ -7359,18 +8453,23 @@ internal sealed class AbiPlan
     private static string? LookupWrapperType(
         string text,
         IReadOnlyDictionary<string, DeclarationRecord> declarationsByQualifiedName,
-        IReadOnlyDictionary<string, DeclarationName> declarationNames)
+        IReadOnlyDictionary<string, DeclarationName> declarationNames
+    )
     {
         var name = StripTopLevelQualifiers(text);
-        while (name.EndsWith("&", StringComparison.Ordinal) || name.EndsWith("*", StringComparison.Ordinal))
+        while (
+            name.EndsWith("&", StringComparison.Ordinal)
+            || name.EndsWith("*", StringComparison.Ordinal)
+        )
         {
             name = StripTopLevelQualifiers(name[..^1].TrimEnd());
         }
 
-        return declarationsByQualifiedName.TryGetValue(name, out var declaration)
+        return
+            declarationsByQualifiedName.TryGetValue(name, out var declaration)
             && declarationNames.TryGetValue(declaration.Id, out var declarationName)
-                ? "global::" + declarationName.NamespaceName + "." + declarationName.ClassName
-                : null;
+            ? "global::" + declarationName.NamespaceName + "." + declarationName.ClassName
+            : null;
     }
 
     private static bool TryMapOpaque(
@@ -7378,7 +8477,8 @@ internal sealed class AbiPlan
         IReadOnlyDictionary<string, DeclarationRecord> declarationsByQualifiedName,
         IReadOnlyDictionary<string, DeclarationName> declarationNames,
         out string? pointee,
-        out string? wrapperType)
+        out string? wrapperType
+    )
     {
         pointee = null;
         wrapperType = null;
@@ -7403,10 +8503,12 @@ internal sealed class AbiPlan
         {
             var suffixLength = isRValueReference ? 2 : 1;
             var wrapperPointee = StripTopLevelQualifiers(core[..^suffixLength].TrimEnd());
-            if (!wrapperPointee.EndsWith("*", StringComparison.Ordinal)
+            if (
+                !wrapperPointee.EndsWith("*", StringComparison.Ordinal)
                 && !wrapperPointee.EndsWith("&", StringComparison.Ordinal)
                 && declarationsByQualifiedName.TryGetValue(wrapperPointee, out var declaration)
-                && declarationNames.TryGetValue(declaration.Id, out var name))
+                && declarationNames.TryGetValue(declaration.Id, out var name)
+            )
             {
                 wrapperType = "global::" + name.NamespaceName + "." + name.ClassName;
             }
@@ -7418,14 +8520,17 @@ internal sealed class AbiPlan
     private static bool IsCallbackTypeName(string text)
     {
         var core = NormalizeTypeName(text);
-        return CallbackTypePrefixes.Any(prefix => core.StartsWith(prefix, StringComparison.Ordinal));
+        return CallbackTypePrefixes.Any(prefix =>
+            core.StartsWith(prefix, StringComparison.Ordinal)
+        );
     }
 
     private static bool TryParseStdFunction(
         string canonical,
         IReadOnlyDictionary<string, string> enumUnderlyingByName,
         out AbiCallback callback,
-        out string? reason)
+        out string? reason
+    )
     {
         callback = null!;
         reason = null;
@@ -7438,7 +8543,9 @@ internal sealed class AbiPlan
 
         var core = NormalizeTypeName(text);
         var prefix = CallbackTypePrefixes.FirstOrDefault(candidate =>
-            core.StartsWith(candidate, StringComparison.Ordinal) && core.EndsWith(">", StringComparison.Ordinal));
+            core.StartsWith(candidate, StringComparison.Ordinal)
+            && core.EndsWith(">", StringComparison.Ordinal)
+        );
         if (prefix is null)
         {
             reason = $"callback type '{canonical}' is not supported";
@@ -7477,8 +8584,10 @@ internal sealed class AbiPlan
         {
             returnKind = AbiKind.Void;
         }
-        else if (!TryMapEnumUnderlying(returnType, enumUnderlyingByName, out returnKind)
-            && !TryMapFundamental(returnType, out returnKind))
+        else if (
+            !TryMapEnumUnderlying(returnType, enumUnderlyingByName, out returnKind)
+            && !TryMapFundamental(returnType, out returnKind)
+        )
         {
             // String, pointer, reference, and record results need a richer callback ABI.
             reason = $"callback return type '{returnType}' is not supported";
@@ -7498,11 +8607,14 @@ internal sealed class AbiPlan
         {
             foreach (var argumentText in SplitTemplateArguments(argumentsText))
             {
-                if (!TryMapCallbackArgument(
+                if (
+                    !TryMapCallbackArgument(
                         argumentText.Trim(),
                         enumUnderlyingByName,
                         out var argument,
-                        out var argumentReason))
+                        out var argumentReason
+                    )
+                )
                 {
                     reason = argumentReason;
                     return false;
@@ -7526,7 +8638,8 @@ internal sealed class AbiPlan
         string canonical,
         IReadOnlyDictionary<string, string> enumUnderlyingByName,
         out AbiCallbackArgument argument,
-        out string? reason)
+        out string? reason
+    )
     {
         argument = null!;
         reason = null;
@@ -7543,8 +8656,10 @@ internal sealed class AbiPlan
             return true;
         }
 
-        if (TryMapEnumUnderlying(text, enumUnderlyingByName, out var kind)
-            || TryMapFundamental(text, out kind))
+        if (
+            TryMapEnumUnderlying(text, enumUnderlyingByName, out var kind)
+            || TryMapFundamental(text, out kind)
+        )
         {
             argument = new AbiCallbackArgument { NativeType = text, Kind = kind };
             return true;
@@ -7559,8 +8674,10 @@ internal sealed class AbiPlan
                 return true;
             }
 
-            if (TryMapEnumUnderlying(inner, enumUnderlyingByName, out var referenceKind)
-                || TryMapFundamental(inner, out referenceKind))
+            if (
+                TryMapEnumUnderlying(inner, enumUnderlyingByName, out var referenceKind)
+                || TryMapFundamental(inner, out referenceKind)
+            )
             {
                 argument = new AbiCallbackArgument { NativeType = text, Kind = referenceKind };
                 return true;
@@ -7591,8 +8708,7 @@ internal sealed class AbiPlan
             return true;
         }
 
-        if (!IsByValueRecordType(text)
-            || IsCallbackTypeName(text))
+        if (!IsByValueRecordType(text) || IsCallbackTypeName(text))
         {
             reason = $"callback parameter type '{text}' is not supported";
             return false;
@@ -7605,7 +8721,8 @@ internal sealed class AbiPlan
     private static bool TryMapEnumUnderlying(
         string canonical,
         IReadOnlyDictionary<string, string> enumUnderlyingByName,
-        out AbiKind kind)
+        out AbiKind kind
+    )
     {
         kind = AbiKind.Void;
         var text = canonical.Trim();
@@ -7643,12 +8760,15 @@ internal sealed class AbiPlan
             "bool" => AbiKind.Bool,
             "char" or "signed char" or "int8_t" => AbiKind.I8,
             "unsigned char" or "uint8_t" or "char8_t" => AbiKind.U8,
-            "short" or "short int" or "signed short" or "signed short int" or "int16_t" => AbiKind.I16,
+            "short" or "short int" or "signed short" or "signed short int" or "int16_t" =>
+                AbiKind.I16,
             "unsigned short" or "unsigned short int" or "uint16_t" => AbiKind.U16,
             "int" or "signed" or "signed int" or "int32_t" => AbiKind.I32,
             "unsigned" or "unsigned int" or "uint32_t" => AbiKind.U32,
-            "long long" or "long long int" or "signed long long" or "int64_t" or "__int64" => AbiKind.I64,
-            "unsigned long long" or "unsigned long long int" or "uint64_t" or "unsigned __int64" => AbiKind.U64,
+            "long long" or "long long int" or "signed long long" or "int64_t" or "__int64" =>
+                AbiKind.I64,
+            "unsigned long long" or "unsigned long long int" or "uint64_t" or "unsigned __int64" =>
+                AbiKind.U64,
             "size_t" or "std::size_t" => AbiKind.USize,
             "ptrdiff_t" or "std::ptrdiff_t" => AbiKind.ISize,
             "float" => AbiKind.F32,
@@ -7700,7 +8820,9 @@ internal sealed class AbiPlan
     /// type is only forward-declared where it is used, so callers cannot rely on them.
     /// </summary>
     internal static bool IsPathBufferType(string canonical) =>
-        NormalizeTypeName(canonical).TrimStart().StartsWith("Core::PathBuffer<", StringComparison.Ordinal);
+        NormalizeTypeName(canonical)
+            .TrimStart()
+            .StartsWith("Core::PathBuffer<", StringComparison.Ordinal);
 
     internal static bool IsRValueReference(string canonical) =>
         StripTopLevelQualifiers(canonical).EndsWith("&&", StringComparison.Ordinal);
@@ -7731,11 +8853,13 @@ internal sealed class AbiPlan
                     continue;
             }
 
-            if (depth == 0
+            if (
+                depth == 0
                 && text[index] == ':'
                 && text[index + 1] == ':'
                 && text[index + 2] == '*'
-                && text[index + 3] == ')')
+                && text[index + 3] == ')'
+            )
             {
                 return true;
             }
@@ -7750,7 +8874,8 @@ internal sealed class AbiPlan
     private static bool IsByValueRecordType(string canonical)
     {
         var text = StripTopLevelQualifiers(canonical);
-        if (text.Length == 0
+        if (
+            text.Length == 0
             || string.Equals(text, "void", StringComparison.Ordinal)
             || text.Contains('(', StringComparison.Ordinal)
             || text.Contains(')', StringComparison.Ordinal)
@@ -7759,7 +8884,8 @@ internal sealed class AbiPlan
             || text.Contains("...", StringComparison.Ordinal)
             || text.StartsWith("decltype", StringComparison.Ordinal)
             || text.EndsWith("*", StringComparison.Ordinal)
-            || text.EndsWith("&", StringComparison.Ordinal))
+            || text.EndsWith("&", StringComparison.Ordinal)
+        )
         {
             return false;
         }
@@ -7770,8 +8896,10 @@ internal sealed class AbiPlan
     private static bool IsNonConstLValueReference(string canonical)
     {
         var text = canonical.Trim();
-        if (!text.EndsWith("&", StringComparison.Ordinal)
-            || text.EndsWith("&&", StringComparison.Ordinal))
+        if (
+            !text.EndsWith("&", StringComparison.Ordinal)
+            || text.EndsWith("&&", StringComparison.Ordinal)
+        )
         {
             return false;
         }
@@ -7806,10 +8934,12 @@ internal sealed class AbiPlan
                 continue;
             }
 
-            if (depth != 0
+            if (
+                depth != 0
                 || character != 'c'
                 || index + 5 > text.Length
-                || !text.AsSpan(index, 5).SequenceEqual("const"))
+                || !text.AsSpan(index, 5).SequenceEqual("const")
+            )
             {
                 continue;
             }
@@ -7833,7 +8963,10 @@ internal sealed class AbiPlan
     private static string ExtractPointee(string canonical)
     {
         var text = StripTopLevelQualifiers(canonical);
-        while (text.EndsWith("&", StringComparison.Ordinal) || text.EndsWith("*", StringComparison.Ordinal))
+        while (
+            text.EndsWith("&", StringComparison.Ordinal)
+            || text.EndsWith("*", StringComparison.Ordinal)
+        )
         {
             text = StripTopLevelQualifiers(text[..^1].TrimEnd());
         }
@@ -7878,7 +9011,13 @@ internal sealed class AbiPlan
                 : parameter.Name;
             // A parameter whose name matches its own type shadows it in the shim body, where
             // the argument is cast to that type.
-            if (string.Equals(baseName, TypeLeafName(parameter.NativeType), StringComparison.Ordinal))
+            if (
+                string.Equals(
+                    baseName,
+                    TypeLeafName(parameter.NativeType),
+                    StringComparison.Ordinal
+                )
+            )
             {
                 baseName += "Value";
             }
@@ -7887,7 +9026,8 @@ internal sealed class AbiPlan
             var counter = 1;
             while (!used.Add(name))
             {
-                name = baseName + counter.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                name =
+                    baseName + counter.ToString(System.Globalization.CultureInfo.InvariantCulture);
                 counter++;
             }
 
@@ -7898,7 +9038,10 @@ internal sealed class AbiPlan
     private static string TypeLeafName(string nativeType)
     {
         var text = StripTopLevelQualifiers(nativeType);
-        while (text.EndsWith("*", StringComparison.Ordinal) || text.EndsWith("&", StringComparison.Ordinal))
+        while (
+            text.EndsWith("*", StringComparison.Ordinal)
+            || text.EndsWith("&", StringComparison.Ordinal)
+        )
         {
             text = StripTopLevelQualifiers(text[..^1].TrimEnd());
         }
@@ -7913,7 +9056,8 @@ internal sealed class AbiPlan
     /// </summary>
     private static void ApplySignatureQualifiers(
         List<AbiParameter> parameters,
-        IReadOnlyList<ParameterInfo> signatureParameters)
+        IReadOnlyList<ParameterInfo> signatureParameters
+    )
     {
         for (var index = 0; index < parameters.Count && index < signatureParameters.Count; index++)
         {
@@ -7928,7 +9072,10 @@ internal sealed class AbiPlan
         }
     }
 
-    private static bool IsInlineBodyConstructor(DeclarationRecord declaration, MemberRecord constructor) =>
+    private static bool IsInlineBodyConstructor(
+        DeclarationRecord declaration,
+        MemberRecord constructor
+    ) =>
         declaration.Template is not null
         && constructor.Inline
         && (constructor.Defined || IsPatternCallable(constructor))
@@ -7943,7 +9090,10 @@ internal sealed class AbiPlan
     private static bool IsPatternCallable(MemberRecord member) =>
         member.PatternDefined
         && !member.PatternTemplate
-        && (member.Kind == "destructor" || (member.Signature is not null && member.Signature.Parameters.Count == 0));
+        && (
+            member.Kind == "destructor"
+            || (member.Signature is not null && member.Signature.Parameters.Count == 0)
+        );
 
     /// <summary>
     /// <c>std::pop_heap</c> and <c>std::make_heap</c> copy elements, and so does
@@ -7956,7 +9106,8 @@ internal sealed class AbiPlan
         MemberRecord method,
         DeclarationRecord declaration,
         IReadOnlyDictionary<string, List<MemberRecord>> membersByDeclaration,
-        IReadOnlyDictionary<string, DeclarationRecord> declarationsByQualifiedName)
+        IReadOnlyDictionary<string, DeclarationRecord> declarationsByQualifiedName
+    )
     {
         if (method.Kind is not ("method" or "operator"))
         {
@@ -7971,17 +9122,25 @@ internal sealed class AbiPlan
         foreach (var member in members.Where(member => member.Kind == "field"))
         {
             var canonical = member.Type?.Canonical ?? "";
-            if (!canonical.Contains("vector<", StringComparison.Ordinal)
-                && !canonical.Contains("deque<", StringComparison.Ordinal))
+            if (
+                !canonical.Contains("vector<", StringComparison.Ordinal)
+                && !canonical.Contains("deque<", StringComparison.Ordinal)
+            )
             {
                 continue;
             }
 
-            foreach (var part in SplitTemplateArguments(canonical[(canonical.IndexOf('<') + 1)..canonical.LastIndexOf('>')]))
+            foreach (
+                var part in SplitTemplateArguments(
+                    canonical[(canonical.IndexOf('<') + 1)..canonical.LastIndexOf('>')]
+                )
+            )
             {
                 var element = NormalizeTypeName(part);
-                if (declarationsByQualifiedName.TryGetValue(element, out var elementDeclaration)
-                    && !elementDeclaration.CopyConstructible)
+                if (
+                    declarationsByQualifiedName.TryGetValue(element, out var elementDeclaration)
+                    && !elementDeclaration.CopyConstructible
+                )
                 {
                     return true;
                 }
@@ -8037,7 +9196,8 @@ internal sealed class AbiPlan
                 continue;
             }
 
-            var separates = spelling[index] == ','
+            var separates =
+                spelling[index] == ','
                 || (spelling[index] == ' ' && index > 0 && spelling[index - 1] == ',');
             if (!separates || depth != 1)
             {
@@ -8090,7 +9250,8 @@ internal sealed class AbiPlan
         int depth,
         IReadOnlyDictionary<string, List<BaseInfo>> basesByDeclaration,
         IReadOnlyDictionary<string, List<MemberRecord>> membersByDeclaration,
-        Dictionary<string, (MemberRecord Field, long BitOffset)> fields)
+        Dictionary<string, (MemberRecord Field, long BitOffset)> fields
+    )
     {
         if (depth > 8 || !basesByDeclaration.TryGetValue(ownerId, out var bases))
         {
@@ -8107,10 +9268,13 @@ internal sealed class AbiPlan
             var baseOffsetBits = offsetBits + baseInfo.Offset * 8;
             if (membersByDeclaration.TryGetValue(baseInfo.DeclarationId, out var baseMembers))
             {
-                foreach (var field in baseMembers.Where(member =>
-                             member.Kind == "field"
-                             && member.Access == "public"
-                             && !string.IsNullOrWhiteSpace(member.Name)))
+                foreach (
+                    var field in baseMembers.Where(member =>
+                        member.Kind == "field"
+                        && member.Access == "public"
+                        && !string.IsNullOrWhiteSpace(member.Name)
+                    )
+                )
                 {
                     fields.TryAdd(field.Id, (field, baseOffsetBits + (field.BitOffset ?? 0)));
                 }
@@ -8123,7 +9287,8 @@ internal sealed class AbiPlan
                 depth + 1,
                 basesByDeclaration,
                 membersByDeclaration,
-                fields);
+                fields
+            );
             path.Remove(baseInfo.DeclarationId);
         }
     }
@@ -8138,7 +9303,8 @@ internal sealed class AbiPlan
         IReadOnlyDictionary<string, string> enumUnderlyingByName,
         out AbiFunction getter,
         out AbiFunction? setter,
-        out string? reason)
+        out string? reason
+    )
     {
         getter = null!;
         setter = null;
@@ -8171,13 +9337,15 @@ internal sealed class AbiPlan
             AbiKind staticKind;
             string? staticWrapperType = null;
             var staticFallback = false;
-            if (TryMapEnumUnderlying(staticCanonical, enumUnderlyingByName, out staticKind)
-                || TryMapFundamental(staticCanonical, out staticKind))
-            {
-            }
-            else if (IsStringViewType(field.Type.Canonical)
+            if (
+                TryMapEnumUnderlying(staticCanonical, enumUnderlyingByName, out staticKind)
+                || TryMapFundamental(staticCanonical, out staticKind)
+            ) { }
+            else if (
+                IsStringViewType(field.Type.Canonical)
                 || IsStringType(field.Type.Canonical)
-                || string.Equals(staticCanonical, "char[]", StringComparison.Ordinal))
+                || string.Equals(staticCanonical, "char[]", StringComparison.Ordinal)
+            )
             {
                 staticKind = AbiKind.StringView;
             }
@@ -8185,11 +9353,16 @@ internal sealed class AbiPlan
             {
                 staticKind = AbiKind.Opaque;
             }
-            else if (publicDeclarationsByQualifiedName.TryGetValue(staticCanonical, out var staticDeclaration)
-                && declarationNames.TryGetValue(staticDeclaration.Id, out var staticName))
+            else if (
+                publicDeclarationsByQualifiedName.TryGetValue(
+                    staticCanonical,
+                    out var staticDeclaration
+                ) && declarationNames.TryGetValue(staticDeclaration.Id, out var staticName)
+            )
             {
                 staticKind = AbiKind.Opaque;
-                staticWrapperType = "global::" + staticName.NamespaceName + "." + staticName.ClassName;
+                staticWrapperType =
+                    "global::" + staticName.NamespaceName + "." + staticName.ClassName;
             }
             else
             {
@@ -8236,15 +9409,21 @@ internal sealed class AbiPlan
         AbiKind kind;
         var fallback = false;
         var bitsetBits = 0;
-        if (TryMapEnumUnderlying(canonical, enumUnderlyingByName, out kind)
-            || TryMapFundamental(canonical, out kind))
-        {
-        }
-        else if (TryParseBitset(StripTopLevelQualifiers(canonical).TrimEnd().TrimEnd('&', ' '), out bitsetBits))
+        if (
+            TryMapEnumUnderlying(canonical, enumUnderlyingByName, out kind)
+            || TryMapFundamental(canonical, out kind)
+        ) { }
+        else if (
+            TryParseBitset(
+                StripTopLevelQualifiers(canonical).TrimEnd().TrimEnd('&', ' '),
+                out bitsetBits
+            )
+        )
         {
             // std::bitset is bit-packed; a byte-aligned field aliases the storage as an
             // integer of its size, which is what the shim reads and writes.
-            kind = bitsetBits <= 8 ? AbiKind.U8
+            kind =
+                bitsetBits <= 8 ? AbiKind.U8
                 : bitsetBits <= 16 ? AbiKind.U16
                 : bitsetBits <= 32 ? AbiKind.U32
                 : AbiKind.U64;
@@ -8332,48 +9511,67 @@ internal sealed class AbiPlan
         IReadOnlyDictionary<string, DeclarationRecord> symbolByValueReturns,
         IReadOnlyDictionary<string, DeclarationRecord> symbolVectorElements,
         IReadOnlyDictionary<string, DeclarationRecord> symbolOptionalRecords,
-        out string? reason)
+        out string? reason
+    )
     {
         reason = null;
-        if (function.VariantInfo is not null
+        if (
+            function.VariantInfo is not null
             || function.CallableInfo is not null
             || function.VariantOp != VariantOp.None
-            || function.CallableOp != CallableOp.None)
+            || function.CallableOp != CallableOp.None
+        )
         {
             reason = "variants and callable wrappers are not supported by symbol dispatch";
             return false;
         }
 
-        var ownedRecordReturn = function.ReturnOwned
+        var ownedRecordReturn =
+            function.ReturnOwned
             && function.ReturnKind == AbiKind.Opaque
             && !IsSingleLevelPointerOrReference(function.NativeReturnType);
-        var optionalRefReturn = function.ReturnOptional
+        var optionalRefReturn =
+            function.ReturnOptional
             && function.ReturnKind == AbiKind.Opaque
             && !function.ReturnOwned;
-        var optionalValueReturn = function.ReturnOptional
+        var optionalValueReturn =
+            function.ReturnOptional
             && !optionalRefReturn
-            && (function.ReturnKind == AbiKind.StringView
+            && (
+                function.ReturnKind == AbiKind.StringView
                 || IsSymbolScalarKind(function.ReturnKind)
-                || function.ReturnOptionalRecord);
-        if (function.ReturnExpected
+                || function.ReturnOptionalRecord
+            );
+        if (
+            function.ReturnExpected
             || (function.ReturnOptional && !optionalRefReturn && !optionalValueReturn)
             || (function.ReturnOwned && !ownedRecordReturn && !function.ReturnUniquePtr)
-            || function.SharedWrapper is not (SharedWrapperKind.None or SharedWrapperKind.SharedPtr
-                or SharedWrapperKind.WeakPtr or SharedWrapperKind.NonOwnerPtr)
+            || function.SharedWrapper
+                is not (
+                    SharedWrapperKind.None
+                    or SharedWrapperKind.SharedPtr
+                    or SharedWrapperKind.WeakPtr
+                    or SharedWrapperKind.NonOwnerPtr
+                )
             || function.TimeConversion != TimeConversion.None
             || function.SpecialValue != SpecialValueKind.None
             || function.MapKeyKind != AbiKind.Void
-            || function.MapValueKind != AbiKind.Void)
+            || function.MapValueKind != AbiKind.Void
+        )
         {
             reason = "the return type needs a generated C++ type";
             return false;
         }
 
-        if (function.ReturnArray && !IsSymbolVectorElementSupported(
+        if (
+            function.ReturnArray
+            && !IsSymbolVectorElementSupported(
                 function.ArrayElementKind,
                 function.ArrayElementOwnership,
                 function.ArrayElementNativeType,
-                symbolVectorElements))
+                symbolVectorElements
+            )
+        )
         {
             reason = "the vector element type is not supported by symbol dispatch";
             return false;
@@ -8400,9 +9598,11 @@ internal sealed class AbiPlan
             case AbiKind.Shared:
                 break;
             case AbiKind.Opaque:
-                if (!ownedRecordReturn
+                if (
+                    !ownedRecordReturn
                     && !optionalRefReturn
-                    && !IsSingleLevelPointerOrReference(function.NativeReturnType))
+                    && !IsSingleLevelPointerOrReference(function.NativeReturnType)
+                )
                 {
                     reason = "by-value record returns are not supported by symbol dispatch";
                     return false;
@@ -8423,24 +9623,32 @@ internal sealed class AbiPlan
             }
 
             var optionalRefParameter = parameter.IsOptionalRef && parameter.Kind == AbiKind.Opaque;
-            var optionalRecordParameter = parameter.IsOptional
+            var optionalRecordParameter =
+                parameter.IsOptional
                 && !optionalRefParameter
                 && parameter.IsOptionalRecord
                 && parameter.OptionalInnerType is { } optionalInner
-                && symbolOptionalRecords.ContainsKey(CompactTemplateName(StripTopLevelQualifiers(optionalInner)));
-            var optionalValueParameter = parameter.IsOptional
+                && symbolOptionalRecords.ContainsKey(
+                    CompactTemplateName(StripTopLevelQualifiers(optionalInner))
+                );
+            var optionalValueParameter =
+                parameter.IsOptional
                 && !optionalRefParameter
-                && (parameter.Kind == AbiKind.StringView
+                && (
+                    parameter.Kind == AbiKind.StringView
                     || IsSymbolScalarKind(parameter.Kind)
-                    || optionalRecordParameter);
-            if ((parameter.IsOptional && !optionalRefParameter && !optionalValueParameter)
+                    || optionalRecordParameter
+                );
+            if (
+                (parameter.IsOptional && !optionalRefParameter && !optionalValueParameter)
                 || (parameter.IsOptionalRef && !optionalRefParameter)
                 || parameter.IsUniquePtrParam
                 || parameter.IsMap
                 || parameter.VariantInfo is not null
                 || parameter.Callback is not null
                 || parameter.TimeConversion != TimeConversion.None
-                || parameter.SpecialValue != SpecialValueKind.None)
+                || parameter.SpecialValue != SpecialValueKind.None
+            )
             {
                 reason = "the parameter needs a generated C++ type";
                 return false;
@@ -8457,19 +9665,24 @@ internal sealed class AbiPlan
                 // the shim's local vector would then be destroyed twice. References and
                 // pointers stay owned by the shim for the duration of the call. A span or an
                 // initializer_list owns nothing, so by-value is exactly what the callee takes.
-                if (parameter.VectorKind == VectorParameterKind.Vector
+                if (
+                    parameter.VectorKind == VectorParameterKind.Vector
                     && !IsReferenceType(parameter.NativeType)
-                    && !IsPointerType(parameter.NativeType))
+                    && !IsPointerType(parameter.NativeType)
+                )
                 {
                     reason = "by-value vector parameters are not supported by symbol dispatch";
                     return false;
                 }
 
-                if (!IsSymbolVectorElementSupported(
+                if (
+                    !IsSymbolVectorElementSupported(
                         parameter.VectorElementKind,
                         parameter.VectorElementOwnership,
                         parameter.VectorElementNativeType,
-                        symbolVectorElements))
+                        symbolVectorElements
+                    )
+                )
                 {
                     reason = "the vector element type is not supported by symbol dispatch";
                     return false;
@@ -8497,7 +9710,10 @@ internal sealed class AbiPlan
                 case AbiKind.Placeholder:
                     break;
                 case AbiKind.StringView:
-                    if (!IsStringType(parameter.NativeType) && !IsStringViewType(parameter.NativeType))
+                    if (
+                        !IsStringType(parameter.NativeType)
+                        && !IsStringViewType(parameter.NativeType)
+                    )
                     {
                         reason = "only std::string and std::string_view parameters are supported";
                         return false;
@@ -8512,8 +9728,13 @@ internal sealed class AbiPlan
 
                     if (parameter.IsByValueRecord)
                     {
-                        if (parameter.NativePointee is null
-                            || !symbolByValueReturns.TryGetValue(parameter.NativePointee, out var byValueRecord))
+                        if (
+                            parameter.NativePointee is null
+                            || !symbolByValueReturns.TryGetValue(
+                                parameter.NativePointee,
+                                out var byValueRecord
+                            )
+                        )
                         {
                             reason = "the by-value record parameter has no eligible layout";
                             return false;
@@ -8522,7 +9743,9 @@ internal sealed class AbiPlan
                         // The callee destroys non-trivial by-value parameters. A byte copy of
                         // an owning record would then release the same resources as the source,
                         // so those parameters are copied through the record's copy constructor.
-                        if (!byValueRecord.TriviallyDestructible && !byValueRecord.CopyConstructible)
+                        if (
+                            !byValueRecord.TriviallyDestructible && !byValueRecord.CopyConstructible
+                        )
                         {
                             reason = "by-value record parameter is not copy-constructible";
                             return false;
@@ -8552,7 +9775,8 @@ internal sealed class AbiPlan
         IReadOnlyDictionary<string, DeclarationRecord> symbolOptionalRecords,
         IReadOnlyDictionary<string, DeclarationName> declarationNames,
         out DeclarationRecord record,
-        out string wrapperType)
+        out string wrapperType
+    )
     {
         record = null!;
         wrapperType = "";
@@ -8582,7 +9806,8 @@ internal sealed class AbiPlan
         IReadOnlyDictionary<string, DeclarationRecord> symbolByValueReturns,
         IReadOnlyDictionary<string, DeclarationName> declarationNames,
         out DeclarationRecord record,
-        out string wrapperType)
+        out string wrapperType
+    )
     {
         record = null!;
         wrapperType = "";
@@ -8602,17 +9827,28 @@ internal sealed class AbiPlan
         return true;
     }
 
-    internal static bool IsSymbolScalarKind(AbiKind kind) => kind is
-        AbiKind.Bool or AbiKind.I8 or AbiKind.U8
-        or AbiKind.I16 or AbiKind.U16 or AbiKind.I32 or AbiKind.U32
-        or AbiKind.I64 or AbiKind.U64 or AbiKind.USize or AbiKind.ISize
-        or AbiKind.F32 or AbiKind.F64;
+    internal static bool IsSymbolScalarKind(AbiKind kind) =>
+        kind
+            is AbiKind.Bool
+                or AbiKind.I8
+                or AbiKind.U8
+                or AbiKind.I16
+                or AbiKind.U16
+                or AbiKind.I32
+                or AbiKind.U32
+                or AbiKind.I64
+                or AbiKind.U64
+                or AbiKind.USize
+                or AbiKind.ISize
+                or AbiKind.F32
+                or AbiKind.F64;
 
     private static bool IsSymbolVectorElementSupported(
         AbiKind elementKind,
         ArrayElementOwnership ownership,
         string? elementNativeType,
-        IReadOnlyDictionary<string, DeclarationRecord> symbolVectorElements)
+        IReadOnlyDictionary<string, DeclarationRecord> symbolVectorElements
+    )
     {
         switch (elementKind)
         {

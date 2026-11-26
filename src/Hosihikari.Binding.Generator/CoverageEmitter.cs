@@ -10,19 +10,23 @@ internal static class CoverageEmitter
         IReadOnlyList<IrRecord> records,
         string outputDirectory,
         string manifestHash,
-        AbiPlan plan)
+        AbiPlan plan
+    )
     {
-        var declarations = records.OfType<DeclarationRecord>()
+        var declarations = records
+            .OfType<DeclarationRecord>()
             .OrderBy(declaration => declaration.Id, StringComparer.Ordinal)
             .ToList();
-        var members = records.OfType<MemberRecord>()
+        var members = records
+            .OfType<MemberRecord>()
             .GroupBy(member => (member.DeclarationId, member.Configuration))
             .ToDictionary(
                 group => group.Key,
-                group => group.OrderBy(member => member.Id, StringComparer.Ordinal).ToList());
+                group => group.OrderBy(member => member.Id, StringComparer.Ordinal).ToList()
+            );
 
-        var configurations = manifest.Configurations
-            .OrderBy(configuration => configuration.Id, StringComparer.Ordinal)
+        var configurations = manifest
+            .Configurations.OrderBy(configuration => configuration.Id, StringComparer.Ordinal)
             .ToList();
 
         var entries = new List<CoverageEntry>();
@@ -32,23 +36,33 @@ internal static class CoverageEmitter
             var declarationHasShim = plan.FunctionsByDeclaration.ContainsKey(declaration.Id);
             foreach (var configuration in configurations)
             {
-                entries.Add(new CoverageEntry
-                {
-                    Id = declaration.Id,
-                    Parent = null,
-                    Surface = declaration.Surface,
-                    Configuration = configuration.Id,
-                    Kind = declaration.Kind,
-                    QualifiedName = declaration.QualifiedName,
-                    Status = isTemplate ? CoverageStatus.Excluded : CoverageStatus.Bound,
-                    Emitters = isTemplate
-                        ? []
-                        : declarationHasShim ? ["interop", "shim"] : ["interop"],
-                    Reason = isTemplate ? CoverageReason.TemplateDeclaration : (CoverageReason?)null,
-                    Source = declaration.Source,
-                });
+                entries.Add(
+                    new CoverageEntry
+                    {
+                        Id = declaration.Id,
+                        Parent = null,
+                        Surface = declaration.Surface,
+                        Configuration = configuration.Id,
+                        Kind = declaration.Kind,
+                        QualifiedName = declaration.QualifiedName,
+                        Status = isTemplate ? CoverageStatus.Excluded : CoverageStatus.Bound,
+                        Emitters =
+                            isTemplate ? []
+                            : declarationHasShim ? ["interop", "shim"]
+                            : ["interop"],
+                        Reason = isTemplate
+                            ? CoverageReason.TemplateDeclaration
+                            : (CoverageReason?)null,
+                        Source = declaration.Source,
+                    }
+                );
 
-                if (!members.TryGetValue((declaration.Id, configuration.Id), out var declarationMembers))
+                if (
+                    !members.TryGetValue(
+                        (declaration.Id, configuration.Id),
+                        out var declarationMembers
+                    )
+                )
                 {
                     continue;
                 }
@@ -60,29 +74,38 @@ internal static class CoverageEmitter
                     // not part of the public surface.
                     var isSynthetic = member.Id.Contains("@support:", StringComparison.Ordinal);
                     var excluded = isTemplate || isPrivate || isSynthetic;
-                    var memberHasShim = !excluded
-                        && (plan.HasMemberFunction(member.Id)
-                            || (member.Kind == "destructor"
-                                && plan.DestroyByDeclaration.ContainsKey(declaration.Id)));
-                    CoverageReason? reason = isTemplate
-                        ? CoverageReason.TemplateDeclaration
+                    var memberHasShim =
+                        !excluded
+                        && (
+                            plan.HasMemberFunction(member.Id)
+                            || (
+                                member.Kind == "destructor"
+                                && plan.DestroyByDeclaration.ContainsKey(declaration.Id)
+                            )
+                        );
+                    CoverageReason? reason =
+                        isTemplate ? CoverageReason.TemplateDeclaration
                         : isPrivate ? CoverageReason.Private
-                        : isSynthetic ? CoverageReason.NotPublic : null;
-                    entries.Add(new CoverageEntry
-                    {
-                        Id = member.Id,
-                        Parent = declaration.Id,
-                        Surface = declaration.Surface,
-                        Configuration = configuration.Id,
-                        Kind = member.Kind,
-                        QualifiedName = declaration.QualifiedName + "::" + member.Name,
-                        Status = excluded ? CoverageStatus.Excluded : CoverageStatus.Bound,
-                        Emitters = excluded
-                            ? []
-                            : memberHasShim ? ["interop", "shim"] : ["interop"],
-                        Reason = reason,
-                        Source = declaration.Source,
-                    });
+                        : isSynthetic ? CoverageReason.NotPublic
+                        : null;
+                    entries.Add(
+                        new CoverageEntry
+                        {
+                            Id = member.Id,
+                            Parent = declaration.Id,
+                            Surface = declaration.Surface,
+                            Configuration = configuration.Id,
+                            Kind = member.Kind,
+                            QualifiedName = declaration.QualifiedName + "::" + member.Name,
+                            Status = excluded ? CoverageStatus.Excluded : CoverageStatus.Bound,
+                            Emitters =
+                                excluded ? []
+                                : memberHasShim ? ["interop", "shim"]
+                                : ["interop"],
+                            Reason = reason,
+                            Source = declaration.Source,
+                        }
+                    );
                 }
             }
         }
@@ -119,7 +142,8 @@ internal static class CoverageEmitter
         if (!validation.IsValid)
         {
             throw new InvalidOperationException(
-                "Emitted coverage failed validation: " + string.Join(" | ", validation.Errors));
+                "Emitted coverage failed validation: " + string.Join(" | ", validation.Errors)
+            );
         }
     }
 

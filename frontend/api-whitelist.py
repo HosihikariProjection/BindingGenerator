@@ -56,9 +56,12 @@ def parse_file(path, root, rows):
     re_namespace = re.compile(r"^\s*namespace\s+([A-Za-z_][\w:]*)\s*\{")
     re_type = re.compile(
         r"^\s*(?:template\s*<.*>\s*)?"
-        r"(class|struct|enum\s+class|enum\s+struct|enum|union)\s+(\w+)\b")
+        r"(class|struct|enum\s+class|enum\s+struct|enum|union)\s+(\w+)\b"
+    )
     # A few declarations put an inline specifier before the marker.
-    re_marker = re.compile(r"^\s*(?:static\s+|virtual\s+|inline\s+)*(%s)\b" % "|".join(MARKERS))
+    re_marker = re.compile(
+        r"^\s*(?:static\s+|virtual\s+|inline\s+)*(%s)\b" % "|".join(MARKERS)
+    )
 
     frames = []
     pending = None
@@ -83,9 +86,17 @@ def parse_file(path, root, rows):
                 marker = re_marker.match(line)
                 if marker:
                     status, _ = MARKERS[marker.group(1)]
-                    rows.append((status, marker.group(1), scope_of(frames),
-                                 relative, line_number, stripped,
-                                 bool(any(client_guards))))
+                    rows.append(
+                        (
+                            status,
+                            marker.group(1),
+                            scope_of(frames),
+                            relative,
+                            line_number,
+                            stripped,
+                            bool(any(client_guards)),
+                        )
+                    )
 
                 namespace = re_namespace.match(body)
                 if namespace:
@@ -109,11 +120,17 @@ def parse_file(path, root, rows):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--root", required=True,
-                        help="LeviLamina checkout containing the generated mc/ headers")
+    parser.add_argument(
+        "--root",
+        required=True,
+        help="LeviLamina checkout containing the generated mc/ headers",
+    )
     parser.add_argument("--output", required=True)
-    parser.add_argument("--sources", default="src/mc,src-server/mc",
-                        help="comma separated header roots, server overlay last")
+    parser.add_argument(
+        "--sources",
+        default="src/mc,src-server/mc",
+        help="comma separated header roots, server overlay last",
+    )
     args = parser.parse_args()
 
     roots = [entry.strip() for entry in args.sources.split(",") if entry.strip()]
@@ -140,25 +157,38 @@ def main():
         scope_file.setdefault(scope, relative)
 
     os.makedirs(args.output, exist_ok=True)
-    with open(os.path.join(args.output, "mcapi-whitelist.tsv"), "w",
-              encoding="utf-8", newline="") as stream:
+    with open(
+        os.path.join(args.output, "mcapi-whitelist.tsv"),
+        "w",
+        encoding="utf-8",
+        newline="",
+    ) as stream:
         stream.write("status\tmarker\tscope\tfile\tline\tdecl\tclient_only\n")
         for row in rows:
             stream.write("\t".join(str(value) for value in row) + "\n")
 
-    with open(os.path.join(args.output, "mcapi-scopes.tsv"), "w",
-              encoding="utf-8", newline="") as stream:
+    with open(
+        os.path.join(args.output, "mcapi-scopes.tsv"), "w", encoding="utf-8", newline=""
+    ) as stream:
         stream.write("scope\tusable\tdeprecated\tshare\tfile\n")
         for scope in sorted(usable, key=lambda key: (-usable[key], key)):
             usable_count = usable[scope]
             deprecated_count = deprecated.get(scope, 0)
             share = usable_count / (usable_count + deprecated_count)
-            stream.write(f"{scope}\t{usable_count}\t{deprecated_count}\t"
-                         f"{share:.4f}\t{scope_file.get(scope, '')}\n")
+            stream.write(
+                f"{scope}\t{usable_count}\t{deprecated_count}\t"
+                f"{share:.4f}\t{scope_file.get(scope, '')}\n"
+            )
 
-    total_usable = sum(value for (status, _), value in totals.items() if status == "usable")
-    total_deprecated = sum(value for (status, _), value in totals.items() if status == "deprecated")
-    print(f"usable {total_usable} / deprecated {total_deprecated} / total {total_usable + total_deprecated}")
+    total_usable = sum(
+        value for (status, _), value in totals.items() if status == "usable"
+    )
+    total_deprecated = sum(
+        value for (status, _), value in totals.items() if status == "deprecated"
+    )
+    print(
+        f"usable {total_usable} / deprecated {total_deprecated} / total {total_usable + total_deprecated}"
+    )
     for (status, marker), value in sorted(totals.items()):
         print(f"  {status:10s} {marker:7s} {value}")
     print(f"scopes with usable markers {len(usable)}; files {len(files_with_usable)}")

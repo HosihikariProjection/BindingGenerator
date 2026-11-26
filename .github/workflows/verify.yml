@@ -29,11 +29,24 @@ jobs:
 
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '10.0.x'
+          dotnet-version: "10.0.x"
 
       - name: Version
         working-directory: Binding.Generator
         run: dotnet run --project src/Hosihikari.Binding.Generator/Hosihikari.Binding.Generator.csproj -c Release -- version
+
+      - name: Formatting
+        working-directory: Binding.Generator
+        run: |
+          dotnet format Hosihikari.Binding.Generator.slnx --verify-no-changes
+          pip install --quiet clang-format==19.1.7
+          clang-format --Werror --dry-run --style=file \
+            frontend/src/main.cpp frontend/symbols/main.cpp \
+            tests/bds-smoke/plugin/main.cpp \
+            tests/fixtures/real-shim/native/carrier.cpp \
+            tests/fixtures/real-shim/native/include/demo/Counter.h \
+            tests/fixtures/real-shim/native/include/demo/LinkedCounter.h \
+            tests/symbol-dispatch/fixture.cpp tests/symbol-dispatch/linux-fixture.cpp
 
       - name: Validate fixture IR
         working-directory: Binding.Generator
@@ -157,7 +170,7 @@ jobs:
 
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '10.0.x'
+          dotnet-version: "10.0.x"
 
       - name: Cache LLVM
         id: llvm-cache

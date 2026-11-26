@@ -37,10 +37,10 @@ dotnet run --project ../src/Hosihikari.Binding.Generator/Hosihikari.Binding.Gene
 
 ## Current slice
 
-| Class | Windows methods | Linux methods | Merged | Windows vtable slots | Linux vtable slots |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| `Actor` | 635 | 823 | 634 | 153 | 151 |
-| `BlockPos` | 14 | 15 | 12 | 0 | 0 |
+| Class      | Windows methods | Linux methods | Merged | Windows vtable slots | Linux vtable slots |
+| ---------- | --------------: | ------------: | -----: | -------------------: | -----------------: |
+| `Actor`    |             635 |           823 |    634 |                  153 |                151 |
+| `BlockPos` |              14 |            15 |     12 |                    0 |                  0 |
 
 Linux includes local/inline functions that the Windows publics omit, which explains most Linux-only entries. The two vtable sizes differ by one slot; stores the per-configuration index rather than assuming a shared layout.
 
@@ -61,7 +61,11 @@ Linux includes local/inline functions that the Windows publics omit, which expla
           "parameters": ["Actor*", "bool"],
           "virtual": true,
           "win-x64-server": { "symbol": "?...", "rva": "0x...", "vtableIndex": 12 },
-          "linux-x64-server": { "symbol": "_ZNK5Actor9canAttack...", "address": "0x...", "vtableIndex": 12 }
+          "linux-x64-server": {
+            "symbol": "_ZNK5Actor9canAttack...",
+            "address": "0x...",
+            "vtableIndex": 12
+          }
         }
       ]
     }

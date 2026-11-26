@@ -2,8 +2,10 @@
 
 #include <functional>
 
-namespace demo {
-class LinkedCounter {
+namespace demo
+{
+class LinkedCounter
+{
 public:
     explicit LinkedCounter(int value);
     ~LinkedCounter();

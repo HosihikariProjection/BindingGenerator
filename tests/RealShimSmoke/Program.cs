@@ -18,7 +18,9 @@ if (counter.value != 7 || counter.get() != 7)
 using var linked = LinkedCounter.Create(42);
 if (linked.value() != 42)
 {
-    throw new InvalidOperationException("Out-of-line LinkedCounter calls returned an unexpected value.");
+    throw new InvalidOperationException(
+        "Out-of-line LinkedCounter calls returned an unexpected value."
+    );
 }
 
 Console.WriteLine("Real BindingShim smoke test passed.");

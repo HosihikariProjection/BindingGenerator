@@ -5,7 +5,8 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <InteropDirectory Condition="'$(InteropDirectory)' == ''">$(MSBuildThisFileDirectory)..\..\artifacts\symbol-fixture\dispatch\interop</InteropDirectory>
+    <InteropDirectory Condition="'$(InteropDirectory)' == ''"
+      >$(MSBuildThisFileDirectory)..\..\artifacts\symbol-fixture\dispatch\interop</InteropDirectory>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="$(InteropDirectory)/**/*.cs" />

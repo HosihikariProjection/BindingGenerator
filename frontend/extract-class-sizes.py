@@ -71,14 +71,14 @@ def text_section(executable):
     with open(executable, "rb") as stream:
         data = stream.read()
     pe = struct.unpack_from("<I", data, 0x3C)[0]
-    if data[pe:pe + 4] != b"PE\0\0":
+    if data[pe : pe + 4] != b"PE\0\0":
         raise SystemExit("not a PE image")
     sections = struct.unpack_from("<H", data, pe + 6)[0]
     optional = struct.unpack_from("<H", data, pe + 20)[0]
     table = {}
     for index in range(sections):
         offset = pe + 24 + optional + index * 40
-        name = data[offset:offset + 8].rstrip(b"\0").decode(errors="replace")
+        name = data[offset : offset + 8].rstrip(b"\0").decode(errors="replace")
         vsize, va, rawsize, rawptr = struct.unpack_from("<IIII", data, offset + 8)
         table[index + 1] = (va, rawptr, vsize)
     return data, table
@@ -97,21 +97,31 @@ def destructor_sizes(executable, entries, delete_call=SIZED_DELETE_CALL):
         start = raw + offset
         address = 0x140000000 + offset + va
         # A folded thunk is a lone jump: follow it once before reading the body.
-        body = data[start:start + 800]
+        body = data[start : start + 800]
         instructions = list(disassembler.disasm_lite(body, address))
-        if instructions and instructions[0][2] == "jmp" and instructions[0][3].startswith("0x"):
+        if (
+            instructions
+            and instructions[0][2] == "jmp"
+            and instructions[0][3].startswith("0x")
+        ):
             target = int(instructions[0][3], 16) - 0x140000000
             for va2, raw2, vsize2 in sections.values():
                 if va2 <= target < va2 + vsize2:
                     start = raw2 + target - va2
-                    instructions = list(disassembler.disasm_lite(data[start:start + 800], target + 0x140000000))
+                    instructions = list(
+                        disassembler.disasm_lite(
+                            data[start : start + 800], target + 0x140000000
+                        )
+                    )
                     break
         last = None
         size = None
         for _, _, mnemonic, operands in instructions:
             if mnemonic == "mov":
                 destination, _, source = operands.partition(", ")
-                if destination.strip() in ("edx", "rdx") and source.strip().startswith("0x"):
+                if destination.strip() in ("edx", "rdx") and source.strip().startswith(
+                    "0x"
+                ):
                     last = int(source.strip(), 16)
             elif mnemonic == "call":
                 if operands.strip() == delete_call and last:
@@ -162,19 +172,30 @@ def main():
     parser.add_argument(
         "--llvm-root",
         default=os.environ.get(
-            "HOSIHIKARI_LLVM", os.path.join(os.environ.get("LOCALAPPDATA", ""), "Temp", "hosihikari-llvm",
-                                            "clang+llvm-23.1.0-x86_64-pc-windows-msvc")),
+            "HOSIHIKARI_LLVM",
+            os.path.join(
+                os.environ.get("LOCALAPPDATA", ""),
+                "Temp",
+                "hosihikari-llvm",
+                "clang+llvm-23.1.0-x86_64-pc-windows-msvc",
+            ),
+        ),
     )
     parser.add_argument("--publics-cache", default="")
-    parser.add_argument("--delete-target", default=SIZED_DELETE_CALL,
-                        help="Address of the sized operator delete in this carrier build.")
+    parser.add_argument(
+        "--delete-target",
+        default=SIZED_DELETE_CALL,
+        help="Address of the sized operator delete in this carrier build.",
+    )
     args = parser.parse_args()
 
     publics = read_publics(args.pdb, args.llvm_root, args.publics_cache)
     entries = list(deleting_destructors(publics))
     sizes = destructor_sizes(args.exe, entries, args.delete_target)
     if not sizes:
-        raise SystemExit(f"no deleting destructor calls {args.delete_target}; pass --delete-target")
+        raise SystemExit(
+            f"no deleting destructor calls {args.delete_target}; pass --delete-target"
+        )
     classes = demangle(list(sizes), args.llvm_root)
 
     by_class = {}
@@ -183,8 +204,12 @@ def main():
         if name:
             by_class.setdefault(name, set()).add(size)
     # Two different sizes for one name means the mapping caught something else.
-    conflicts = {name: sorted(values) for name, values in by_class.items() if len(values) > 1}
-    resolved = {name: values.pop() for name, values in by_class.items() if len(values) == 1}
+    conflicts = {
+        name: sorted(values) for name, values in by_class.items() if len(values) > 1
+    }
+    resolved = {
+        name: values.pop() for name, values in by_class.items() if len(values) == 1
+    }
 
     os.makedirs(os.path.dirname(os.path.abspath(args.output)), exist_ok=True)
     with open(args.output, "w", encoding="utf-8", newline="\n") as stream:

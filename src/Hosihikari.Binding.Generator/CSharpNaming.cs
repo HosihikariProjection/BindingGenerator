@@ -2,13 +2,18 @@ using Hosihikari.Binding.Ir;
 
 namespace Hosihikari.Binding.Generator;
 
-internal readonly record struct DeclarationName(string NamespaceName, string NamespacePath, string ClassName);
+internal readonly record struct DeclarationName(
+    string NamespaceName,
+    string NamespacePath,
+    string ClassName
+);
 
 internal static class CSharpNaming
 {
     public static Dictionary<string, DeclarationName> BuildDeclarationNames(
         IReadOnlyList<DeclarationRecord> declarations,
-        IReadOnlyCollection<string>? extraClassNames = null)
+        IReadOnlyCollection<string>? extraClassNames = null
+    )
     {
         var classNames = declarations
             .Select(declaration => declaration.QualifiedName)
@@ -30,11 +35,15 @@ internal static class CSharpNaming
                     Class: LimitName(
                         TypeNames.Sanitize(TypeNames.NativeName(declaration.QualifiedName)),
                         declaration.Id,
-                        96));
+                        96
+                    )
+                );
             })
             .ToList();
 
-        foreach (var group in candidates.GroupBy(candidate => (candidate.NamespaceName, candidate.Class)))
+        foreach (
+            var group in candidates.GroupBy(candidate => (candidate.NamespaceName, candidate.Class))
+        )
         {
             var duplicate = group.Count() > 1;
             foreach (var candidate in group)
@@ -45,7 +54,8 @@ internal static class CSharpNaming
                 result[candidate.Declaration.Id] = new DeclarationName(
                     candidate.NamespaceName,
                     candidate.NamespacePath,
-                    className);
+                    className
+                );
             }
         }
 
@@ -66,7 +76,8 @@ internal static class CSharpNaming
 
     private static (string NamespaceName, string NamespacePath) BuildNamespace(
         DeclarationRecord declaration,
-        HashSet<string> classNames)
+        HashSet<string> classNames
+    )
     {
         var parts = TypeNames.SplitQualifiedName(declaration.QualifiedName);
         var segments = new List<string>();
@@ -89,8 +100,10 @@ internal static class CSharpNaming
             segments.Add(segment);
         }
 
-        var baseName = $"Hosihikari.Binding.{TypeNames.SurfaceNamespace(declaration.Surface)}.Interop";
-        var namespaceName = segments.Count == 0 ? baseName : baseName + "." + string.Join(".", segments);
+        var baseName =
+            $"Hosihikari.Binding.{TypeNames.SurfaceNamespace(declaration.Surface)}.Interop";
+        var namespaceName =
+            segments.Count == 0 ? baseName : baseName + "." + string.Join(".", segments);
         return (namespaceName, string.Join(".", segments));
     }
 }

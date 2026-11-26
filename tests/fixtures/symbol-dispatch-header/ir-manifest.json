@@ -1,41 +1,41 @@
 {
- "schema": "hosihikari.bindings.ir/1",
- "irVersion": "1.5.1",
- "frontend": {
-  "name": "symbol-dispatch-fixture-header",
-  "version": "0.1.0",
-  "llvm": "n/a"
- },
- "configurations": [
-  {
-   "id": "win-x64-server",
-   "os": "windows",
-   "arch": "x64",
-   "target": "server",
-   "defines": [],
-   "definesHash": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-  }
- ],
- "shards": [
-  {
-   "surface": "bedrock",
-   "configuration": "win-x64-server",
-   "module": "bedrock",
-   "path": "win-x64-server.jsonl",
-   "sha256": "sha256:b97b162794fadc33d5d4b92ce34501da45746c3ac8111a9b48b4f4a1bcd835ec",
-   "sha256Compressed": "sha256:b97b162794fadc33d5d4b92ce34501da45746c3ac8111a9b48b4f4a1bcd835ec",
-   "records": 7
-  }
- ],
- "diagnostics": {
-  "errors": 0,
-  "warnings": 0,
-  "shardsWithErrors": []
- },
- "counts": {
-  "declarations": 3,
-  "variants": 3,
-  "members": 3
- },
- "sources": []
+  "schema": "hosihikari.bindings.ir/1",
+  "irVersion": "1.5.1",
+  "frontend": {
+    "name": "symbol-dispatch-fixture-header",
+    "version": "0.1.0",
+    "llvm": "n/a"
+  },
+  "configurations": [
+    {
+      "id": "win-x64-server",
+      "os": "windows",
+      "arch": "x64",
+      "target": "server",
+      "defines": [],
+      "definesHash": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "shards": [
+    {
+      "surface": "bedrock",
+      "configuration": "win-x64-server",
+      "module": "bedrock",
+      "path": "win-x64-server.jsonl",
+      "sha256": "sha256:b97b162794fadc33d5d4b92ce34501da45746c3ac8111a9b48b4f4a1bcd835ec",
+      "sha256Compressed": "sha256:b97b162794fadc33d5d4b92ce34501da45746c3ac8111a9b48b4f4a1bcd835ec",
+      "records": 7
+    }
+  ],
+  "diagnostics": {
+    "errors": 0,
+    "warnings": 0,
+    "shardsWithErrors": []
+  },
+  "counts": {
+    "declarations": 3,
+    "variants": 3,
+    "members": 3
+  },
+  "sources": []
 }
