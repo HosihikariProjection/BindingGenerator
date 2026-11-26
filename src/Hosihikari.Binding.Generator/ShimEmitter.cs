@@ -660,6 +660,19 @@ internal static partial class ShimEmitter
         source.Add("    return std::weak_ptr<T>(hs_shared_from_handle<T>(handle));");
         source.Add("}");
         source.Add("");
+        // `ListenerBase` stores a `weak_ptr<Mod>`, but the only handle a caller can offer
+        // during component start-up comes from `NativeMod::current()` and therefore carries a
+        // `NativeMod` tag. The two name the same object (single inheritance, no virtual base),
+        // so accept whichever tag arrived instead of demanding one spelling at every call site.
+        var needsModHelper = NeedsModWeakHelper(functions);
+        if (needsModHelper)
+        {
+            foreach (var line in ModWeakHelper())
+            {
+                source.Add(line);
+            }
+        }
+
         // Emit the non-owner helper only when a projected function actually takes one. The
         // Endstone surface has no Bedrock namespace at all, and a carrier-free fixture (the
         // real-shim test) has no Bedrock headers either, so naming the type unconditionally
@@ -2179,6 +2192,39 @@ internal static partial class ShimEmitter
         yield return "    return hs_target;";
     }
 
+    /// <summary>
+    /// True when some projected parameter is a <c>weak_ptr&lt;ll::mod::Mod&gt;</c>. The carrier
+    /// only ever hands out <c>NativeMod</c>-tagged handles for that slot, so the surface needs
+    /// the tag-tolerant overload to exist at all.
+    /// </summary>
+    private static bool NeedsModWeakHelper(IReadOnlyList<AbiFunction> functions) =>
+        functions
+            .SelectMany(function => function.Parameters)
+            .Any(parameter =>
+                parameter.IsWeakPtr
+                && string.Equals(parameter.NativePointee?.Trim(), "ll::mod::Mod", StringComparison.Ordinal)
+            );
+
+    /// <summary>
+    /// The tag-tolerant weak reference for the module slot. <c>ListenerBase</c> stores a
+    /// <c>weak_ptr&lt;Mod&gt;</c> while the handle a caller can offer comes from
+    /// <c>NativeMod::current()</c> and carries a <c>NativeMod</c> tag; the two name the same
+    /// object (single inheritance, no virtual base), so either tag is accepted.
+    /// </summary>
+    private static IEnumerable<string> ModWeakHelper()
+    {
+        yield return "[[maybe_unused]] std::weak_ptr<ll::mod::Mod> hs_weak_mod_from_handle(HosihikariSharedHandle handle)";
+        yield return "{";
+        yield return "    if (handle.holder == nullptr) { return {}; }";
+        yield return "    if (static_cast<hs_shared_holder_base*>(handle.holder)->hs_type() == hs_type_tag<ll::mod::Mod>())";
+        yield return "    {";
+        yield return "        return hs_weak_from_handle<ll::mod::Mod>(handle);";
+        yield return "    }";
+        yield return "    return hs_weak_from_handle<ll::mod::NativeMod>(handle);";
+        yield return "}";
+        yield return "";
+    }
+
     private static IEnumerable<string> EmitDirectorCreate(AbiFunction function)
     {
         var constructorCount = function.DirectorConstructorParameterCount;
@@ -3175,9 +3221,15 @@ internal static partial class ShimEmitter
                 var helper =
                     parameter.NativeType.Contains("NonOwnerPointer", StringComparison.Ordinal)
                         ? "hs_non_owner_from_handle"
-                    : parameter.IsWeakPtr ? "hs_weak_from_handle"
+                    : parameter.IsWeakPtr
+                        ? string.Equals(pointee.Trim(), "ll::mod::Mod", StringComparison.Ordinal)
+                            ? "hs_weak_mod_from_handle"
+                            : "hs_weak_from_handle"
                     : "hs_shared_from_handle";
-                return $"{helper}<{pointee}>({name})";
+                // The mod overload is not a template, so it takes no pointee argument.
+                return helper == "hs_weak_mod_from_handle"
+                    ? $"{helper}({name})"
+                    : $"{helper}<{pointee}>({name})";
             }
 
             case AbiKind.Opaque:
@@ -4681,6 +4733,12 @@ internal static partial class ShimEmitter
         source.Add("    return std::weak_ptr<T>(hs_shared_from_handle<T>(handle));");
         source.Add("}");
         source.Add("");
+
+        // A symbol surface keeps every helper, so the mod overload follows the same rule.
+        foreach (var line in ModWeakHelper())
+        {
+            source.Add(line);
+        }
 
         source.Add("template <class T>");
         source.Add("[[maybe_unused]] void hs_release_game_ref_handle(void* holder)");
