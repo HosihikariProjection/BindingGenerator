@@ -1703,7 +1703,9 @@ int main(int argc, char** argv) {
 
     llvm::json::Object Manifest;
     Manifest["schema"] = "hosihikari.bindings.ir/1";
-    Manifest["irVersion"] = "1.7.0";
+    // Bump alongside IrSchema.Version: the two are separate copies of one fact and drift
+    // silently, which then shows up as a provenance file naming the wrong IR version.
+    Manifest["irVersion"] = "1.8.0";
 
     llvm::json::Object Frontend;
     Frontend["name"] = "libtooling";
