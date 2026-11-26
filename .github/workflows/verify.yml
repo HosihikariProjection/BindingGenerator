@@ -38,7 +38,7 @@ jobs:
       - name: Formatting
         working-directory: Binding.Generator
         run: |
-          dotnet format Hosihikari.Binding.Generator.slnx --verify-no-changes
+          dotnet format Hosihikari.Binding.Generator.slnx --verify-no-changes --include src tests
           pip install --quiet clang-format==19.1.7
           clang-format --Werror --dry-run --style=file \
             frontend/src/main.cpp frontend/symbols/main.cpp \
