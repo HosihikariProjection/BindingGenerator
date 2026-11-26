@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using System.Text.RegularExpressions;
 using Hosihikari.Binding.Ir;
 
 namespace Hosihikari.Binding.Generator;
@@ -65,6 +66,15 @@ internal static partial class ShimEmitter
                 var functions = plan.FunctionsForSurface(surface)
                     .OrderBy(function => function.Index)
                     .ToList();
+                // A guarded copy call has to be a function template: `if constexpr` discards
+                // the untaken branch only in a template, and discarding it is the whole point
+                // of the guard. The payload becomes the template argument and the name the
+                // table entry uses.
+                foreach (var function in functions.Where(function => function.TemplateCopyConstruction))
+                {
+                    function.CppTemplateArgument = function.TemplateCopyPayload ?? function.ClassCppName;
+                }
+
                 if (functions.Count == 0)
                 {
                     continue;
@@ -139,6 +149,35 @@ internal static partial class ShimEmitter
 
         Write(directory, header, source);
     }
+
+    /// <summary>
+    /// The names a refusal is looked up under, outermost first: the payload spelling itself
+    /// and every named class nested inside it. A storage spelled
+    /// <c>OwnerPtr&lt;EntityContext&gt;</c> reports copyable on the wrapper while the copy
+    /// reaches <c>EntityContext</c>, and a container or <c>optional</c> around an incomplete
+    /// element answers the same way, so the inner names have to be asked about too —?but the
+    /// spelling itself has to stay whole, because the guard's <c>P</c> is bound to it and its
+    /// completeness is what the first test judges. An argument carrying its elaborated form
+    /// (<c>class Experiments</c>) is reduced to the name.
+    /// </summary>
+    private static IEnumerable<string> RefusalNames(string payload)
+    {
+        var bare = payload.TrimStart(':');
+        if (bare.Length > 0)
+        {
+            yield return bare;
+        }
+
+        foreach (var part in TemplateArguments(bare).SelectMany(AllArguments))
+        {
+            var nested = part.TrimStart(':');
+            if (nested.Length > 0 && !AbiPlan.IsLiteralTemplateArgument(nested))
+            {
+                yield return nested;
+            }
+        }
+    }
+
 
     private static void EmitSurface(
         string outputDirectory,
@@ -269,7 +308,7 @@ internal static partial class ShimEmitter
             // The generated bodies forward-declare what their storage uses, so a field's
             // own header has to precede the header that stores it; alphabetical order alone
             // leaves the destructor instantiated over an incomplete type.
-            var includes = BuildIncludes(includeFunctions, declarations).ToList();
+            var includes = BuildIncludes(includeFunctions, declarations, manifest, surface).ToList();
             includes = HoistCompletionHeaders(includes, manifest, surface)
                 .Concat(includes)
                 .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -430,6 +469,22 @@ internal static partial class ShimEmitter
         source.Add("using hosihikari::abi::setLastError;");
         source.Add("using hosihikari::abi::clearLastError;");
         source.Add("thread_local std::string g_stringResult;");
+        source.Add("");
+        source.Add("// `requires { sizeof(T); }` only degrades to false in a template context; a");
+        source.Add("// partial specialization is what makes it one. A non-type template argument");
+        source.Add("// (an enumerator, a constant) is handled by the auto form.");
+        source.Add("template <auto V, class = void>");
+        source.Add("struct hs_is_complete_value : std::false_type {};");
+        source.Add("template <auto V>");
+        source.Add("struct hs_is_complete_value<V, std::void_t<decltype(sizeof(V))>> : std::true_type {};");
+        source.Add("template <class T, class = void>");
+        source.Add("struct hs_is_complete : std::false_type {};");
+        source.Add("template <class T>");
+        source.Add("struct hs_is_complete<T, std::void_t<decltype(sizeof(T))>> : std::true_type {};");
+        source.Add("template <class T>");
+        source.Add("inline constexpr bool hs_is_complete_v = hs_is_complete<T>::value;");
+        source.Add("template <auto V>");
+        source.Add("inline constexpr bool hs_is_complete_value_v = hs_is_complete_value<V>::value;");
         source.Add("");
         source.Add("template <class T, class U>");
         source.Add("[[maybe_unused]] std::vector<T> hs_make_vector(U const* data, std::size_t count)");
@@ -662,7 +717,7 @@ internal static partial class ShimEmitter
             index =>
             {
                 var builder = new System.Text.StringBuilder();
-                foreach (var line in EmitFunction(functions[index], llAllocator))
+                foreach (var line in EmitFunction(functions[index], llAllocator, manifest))
                 {
                     builder.Append(line).Append('\n');
                 }
@@ -682,7 +737,7 @@ internal static partial class ShimEmitter
         source.Add("    static_cast<std::uint32_t>(sizeof(HosihikariBindingTableV1)),");
         foreach (var function in functions)
         {
-            source.Add($"    &{function.CppName},");
+            source.Add($"    &{function.CppName}{function.DefinitionSuffix},");
         }
 
         source.Add("};");
@@ -784,7 +839,9 @@ internal static partial class ShimEmitter
 
     private static IEnumerable<string> BuildIncludes(
         IReadOnlyList<AbiFunction> functions,
-        IReadOnlyDictionary<string, DeclarationRecord> declarations)
+        IReadOnlyDictionary<string, DeclarationRecord> declarations,
+        IrManifest manifest,
+        string surface)
     {
         var declarationsByQualifiedName = declarations.Values
             .GroupBy(declaration => declaration.QualifiedName, StringComparer.Ordinal)
@@ -875,6 +932,25 @@ internal static partial class ShimEmitter
             .Select(NormalizeInclude)
             .Distinct(StringComparer.Ordinal)
             .ToList();
+        // A type the IR only ever mentions (a field of a projection, never a declaration of
+        // its own) cannot be reached through the declaration walk above. Derived bodies still
+        // instantiate its destructor, so the header that names the type by file is added when
+        // the carrier tree has one.
+        foreach (var name in declarations.Values
+                     .Where(declaration => string.Equals(declaration.Surface, surface, StringComparison.Ordinal))
+                     .SelectMany(declaration => declaration.Template?.Arguments ?? [])
+                     .SelectMany(argument => AbiPlan.PackArgumentParts(argument.Value))
+                     .SelectMany(AbiPlan.TypeMentions)
+                     .Where(mentioned => !declarationsByQualifiedName.ContainsKey(mentioned))
+                     .Distinct(StringComparer.Ordinal))
+        {
+            // The index is keyed by file name, so the namespace has to come off first.
+            if (FindHeaderByName(manifest, surface, name[(name.LastIndexOf("::", StringComparison.Ordinal) + 2)..]) is { } header)
+            {
+                normalized.Add(NormalizeInclude(header));
+            }
+        }
+
         // OwnerPtr, StackRefResult and WeakRef derive from a GameRefs<T> nested type, so a
         // template argument spelled with one needs the EntityContext specialization before
         // the base can form, even though no member names OwnerPtr's own header.
@@ -1392,7 +1468,10 @@ internal static partial class ShimEmitter
 
     }
 
-    private static IEnumerable<string> EmitFunction(AbiFunction function, bool llAllocator)
+    private static IEnumerable<string> EmitFunction(
+        AbiFunction function,
+        bool llAllocator,
+        IrManifest manifest)
     {
         var returnType = AbiPlan.CppType(function.ReturnKind);
         for (var index = 0; index < function.Parameters.Count; index++)
@@ -1503,6 +1582,11 @@ internal static partial class ShimEmitter
             parameters.Add("bool* hs_hasValue");
         }
 
+        if (function.CppTemplateArgument is not null)
+        {
+            yield return "template <class P>";
+        }
+
         yield return $"static {returnType} {function.CppName}({string.Join(", ", parameters)}) try";
         yield return "{";
         // The error slot is thread local and sticky, so a call that succeeds must not let the
@@ -1584,29 +1668,18 @@ internal static partial class ShimEmitter
 
                 if (function.TemplateCopyConstruction)
                 {
-                    // Reaching this shim already means the projection exists; where the payload
-                    // cannot be copied the call would not compile, so answer null at run time.
-                    var probeType = string.IsNullOrWhiteSpace(function.TemplateCopyPayload)
-                        ? function.ClassCppName
-                        : function.TemplateCopyPayload;
-                    // A payload that is not copy constructible (std::atomic, std::mutex, an
-                    // intrusive hook) fails inside the storage's own copy constructor. A
-                    // standard container only reports itself copy-constructible: vector's copy
-                    // constructor is declared whatever the element is and only fails once it is
-                    // instantiated, which no requires-expression reaches, so unique_ptr — the
-                    // element that actually rules it out — is tested by name.
-                    var copyable = !probeType.Contains("unique_ptr", StringComparison.Ordinal);
-                    yield return copyable
-                        ? $"    if constexpr (!::std::is_copy_constructible_v<{probeType}>)"
-                        : "    if constexpr (true)";
-                    yield return "    {";
-                    yield return $"        setLastError(\"the payload of this template is not copy constructible\");";
-                    yield return "        return nullptr;";
-                    yield return "    }";
-                    yield return "    else";
-                    yield return "    {";
-                    yield return $"        return new {function.ClassCppName}({string.Join(", ", BuildNativeArguments(function))});";
-                    yield return "    }";
+                    foreach (var line in EmitTemplateCopyGuard(
+                        function,
+                        copyAssign: false,
+                        $"new {function.ClassCppName}({string.Join(", ", BuildNativeArguments(function))})",
+                        "the payload of this template is not copy constructible",
+                        function.TemplateCopyPayload ?? "",
+                        manifest,
+                        function.Surface))
+                    {
+                        yield return line;
+                    }
+
                     break;
                 }
 
@@ -1783,6 +1856,23 @@ internal static partial class ShimEmitter
                         ? $"{memberCall}.assign({string.Join(", ", BuildNativeArguments(function))})"
                         : $"{memberCall} = std::basic_string<char>({string.Join(", ", BuildNativeArguments(function))})"
                     : $"{memberCall}({string.Join(", ", BuildNativeArguments(function))})";
+                if (function.TemplateCopyConstruction)
+                {
+                    foreach (var line in EmitTemplateCopyGuard(
+                        function,
+                        copyAssign: true,
+                        call,
+                        "the payload of this template is not copy assignable",
+                        function.TemplateCopyPayload ?? "",
+                        manifest,
+                        function.Surface))
+                    {
+                        yield return line;
+                    }
+
+                    break;
+                }
+
                 foreach (var line in EmitCallResult(function, call))
                 {
                     yield return line;
@@ -2201,10 +2291,367 @@ internal static partial class ShimEmitter
         _ => "return 0;",
     };
 
+    /// <summary>
+    /// The element type of a single-argument <c>std::vector&lt;T&gt;</c> or
+    /// <c>std::list&lt;T&gt;</c> spelling, or null for anything else. Only the exactly known
+    /// allocator-less form is unwrapped; a spelling with an allocator argument falls back to
+    /// the whole type.
+    /// </summary>
+    private static string? ContainerElement(string spelling)
+    {
+        foreach (var container in (ReadOnlySpan<string>)["std::vector<", "std::list<"])
+        {
+            if (!spelling.StartsWith(container, StringComparison.Ordinal)
+                || !spelling.EndsWith('>'))
+            {
+                continue;
+            }
+
+            var inner = spelling[container.Length..^1];
+            // A second argument is an allocator or comparator; keep the element only.
+            var depth = 0;
+            for (var index = 0; index < inner.Length; index++)
+            {
+                depth += inner[index] switch { '<' => 1, '>' => -1, _ => 0 };
+                if (depth == 0 && inner[index] == ',')
+                {
+                    var element = inner[..index].Trim();
+                    return element.Length > 0 ? element : null;
+                }
+            }
+
+            return inner.Trim() is { Length: > 0 } whole ? whole : null;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// The template arguments of a specialization spelling, or an empty list for anything
+    /// else. Only top-level arguments are returned; a nested spelling stays whole inside its
+    /// argument.
+    /// </summary>
+    private static List<string> TemplateArguments(string spelling)
+    {
+        var arguments = new List<string>();
+        var start = spelling.IndexOf('<');
+        if (start < 0 || !spelling.EndsWith('>'))
+        {
+            return arguments;
+        }
+
+        var depth = 0;
+        // A function type inside the argument list carries its own parentheses, which nest
+        // commas the same way angle brackets do.
+        var parens = 0;
+        var from = start + 1;
+        for (var index = start; index < spelling.Length; index++)
+        {
+            switch (spelling[index])
+            {
+                case '<':
+                    depth++;
+                    break;
+                case '>':
+                    depth--;
+                    break;
+                case '(' when depth == 1:
+                    parens++;
+                    break;
+                case ')' when depth == 1:
+                    parens--;
+                    break;
+                case ',' when depth == 1 && parens == 0:
+                    var argument = spelling[from..index].Trim();
+                    if (argument.Length > 0)
+                    {
+                        arguments.Add(argument);
+                    }
+
+                    from = index + 1;
+                    break;
+            }
+        }
+
+        var last = spelling[from..^1].Trim();
+        if (last.Length > 0)
+        {
+            arguments.Add(last);
+        }
+
+        return arguments;
+    }
+
+    /// <summary>
+    /// One spelling and every class argument nested inside it, innermost first. A wrapper
+    /// such as <c>Bedrock::UniqueOwnerPointer&lt;X&gt;</c> is only complete when <c>X</c>
+    /// is, and instantiating the wrapper is itself what fails on an incomplete argument, so
+    /// the leaves have to be tested before the spellings that name them.
+    /// </summary>
+    private static IEnumerable<string> AllArguments(string spelling)
+    {
+        var nested = new List<string>();
+        var start = spelling.IndexOf('<');
+        if (start >= 0)
+        {
+            foreach (var argument in TemplateArguments(spelling[start..]))
+            {
+                nested.AddRange(AllArguments(argument));
+            }
+        }
+
+        foreach (var leaf in nested)
+        {
+            yield return leaf;
+        }
+
+        yield return spelling;
+    }
+
+    /// <summary>
+    /// A test that is true when the argument is an incomplete type. A literal is a non-type
+    /// argument and always complete, so it goes through the value form of the trait.
+    /// </summary>
+    private static string CompletenessTest(string argument) =>
+        argument.All(character => char.IsAsciiDigit(character) || character is 'U' or 'L' or 'u' or 'l')
+            ? $"!hs_is_complete_value_v<{argument}>"
+            : $"!hs_is_complete_v<{argument}>";
+
+    /// <summary>
+    /// True when the class declares a member, or inherits a base, of a type in
+    /// <see cref="UnassignablePayloads"/>. That class's implicit copy assignment assigns the
+    /// member in turn, so it calls the same unexported symbol the trait claimed was there.
+    /// </summary>
+    /// <remarks>
+    /// The carrier tree is the only place the relation is written down; neither the IR (which
+    /// has no base records and drops the payload classes entirely) nor a trait reaches it. A
+    /// header is found by file name, so a class whose own header is missing simply answers
+    /// false —?the same as today. Only direct members and bases one step deep count: a payload
+    /// that merely mentions the type (in a return type, say) copies nothing.
+    /// </remarks>
+    private static bool StoresUnassignable(IrManifest manifest, string surface, string qualifiedName)
+    {
+        var text = PayloadHeaderText(manifest, surface, qualifiedName);        if (text is null)
+        {
+            return false;
+        }
+
+        var bare = qualifiedName[(qualifiedName.LastIndexOf("::", StringComparison.Ordinal) + 2)..];
+        foreach (var baseName in Regex.Matches(text, @"class\s+" + Regex.Escape(bare) + @"\s*:\s*public\s+::?([\w:]+)")
+                     .Select(match => match.Groups[1].Value))
+        {
+            if (UnassignablePayloads.Contains(baseName.TrimStart(':'))
+                || StoresUnassignable(manifest, surface, baseName.TrimStart(':')))
+            {
+                return true;
+            }
+        }
+
+        // `TypedStorage<size, align, T>` is the only by-value member form the carrier uses; a
+        // pointer member copies its address and never reaches the class.
+        return Regex.Matches(text, @"TypedStorage<\s*\d+\s*,\s*\d+\s*,\s*(?:::)?([\w:]+)\s*>")
+            .Select(match => match.Groups[1].Value)
+            .Any(member => UnassignablePayloads.Contains(member));
+    }
+
+    private static string? PayloadHeaderText(IrManifest manifest, string surface, string qualifiedName)
+    {
+        // The payload is named as a specialization (`OwnerPtr<EntityContext>`); the header is
+        // the one for the class itself.
+        var bare = qualifiedName[(qualifiedName.LastIndexOf("::", StringComparison.Ordinal) + 2)..];
+        var angle = bare.IndexOf('<');
+        if (angle >= 0)
+        {
+            bare = bare[..angle];
+        }
+
+        // A nested spelling (`Bedrock::PubSub::Detail::X`) is indexed by its own name.
+        var simple = bare[(bare.LastIndexOf(':') + 1)..];
+        return FindHeaderByName(manifest, surface, simple) is { } header
+            ? ReadHeaderText(header)
+            : null;
+    }
+
     private static string SelfCast(AbiFunction function) =>
         function.SelfConst
             ? $"static_cast<{function.ClassCppName} const*>({SelfParameter})"
             : $"static_cast<{function.ClassCppName}*>({SelfParameter})";
+
+    /// <summary>
+    /// Payloads whose copy is ill-formed however the traits report it. Each stores something
+    /// incompletely copyable behind a member —?a <c>vector&lt;unique_ptr&lt;forward-declared&gt;&gt;</c>
+    /// or a <c>flat_map</c> of one —?so the class itself answers copy-constructible and
+    /// copy-assignable, and only the storage wrapper that copies it fails, one alias layer
+    /// deeper than any trait reaches. Named rather than probed for that reason. Confirmed by
+    /// the compiler: <c>BlockEventManager</c>'s <c>IBlockEventExecutor</c> and
+    /// <c>BlockComponentStorage</c>'s <c>ComponentBase</c> are forward declarations, and
+    /// <c>MolangVariableMap</c> holds the same shape.
+    /// </summary>
+    private static readonly HashSet<string> UncopyablePayloads = new(StringComparer.Ordinal)
+    {
+        "BlockEvents::BlockEventManager",
+        "MolangVariableMap",
+        "BlockComponentStorage",
+        // Derives the above and copies its base's member.
+        "NetEaseBlockComponentStorage",
+    };
+
+    /// <summary>
+    /// Payloads whose copy constructor compiles but whose copy assignment does not link: the
+    /// carrier declares <c>operator=</c> on the class (often <c>MCNAPI</c>, marked deprecated)
+    /// without exporting it, and the storage wrapper's implicit assignment calls straight into
+    /// the missing symbol. The trait reports both operations from the declaration, so this only
+    /// shows up at link time. Every entry here is one <c>lld-link: undefined symbol</c> on a
+    /// build of the surface.
+    /// </summary>
+    /// <remarks>
+    /// The symbol goes missing at the first class that assigns one of these, which is not the
+    /// class itself but anything holding it as a member or inheriting from it —?so the test
+    /// follows members and bases one class deeper (see <see cref="StoresUnassignable"/>). That
+    /// is resolved from the carrier tree, since neither the IR nor a trait records it.
+    /// </remarks>
+    private static readonly HashSet<string> UnassignablePayloads = new(StringComparer.Ordinal)
+    {
+        "ActorDefinitionPtr",
+        "BaseContainerMenu",
+        "BaseGameVersion",
+        "Bedrock::PubSub::Subscription",
+        "CommandRegistry::LexicalToken",
+        "Container",
+        "EduSharedUriResource",
+        "EntityContext",
+        "ExperimentStorage",
+        "FurnaceOptions",
+        "GameRules",
+        "InventoryTransactionManager",
+        "ItemInstance",
+        "LevelSettings",
+        "MinecraftAccountPermissions",
+        "NetworkIdentifier",
+        "PlayerAuthenticationInfo",
+        "PuvLoadData::LoadResultWithTiming",
+        "ServerGraphicsSettings",
+        "Stopwatch",
+        // Each stores one of the above by value (ItemInstance, EntityContext) or derives it
+        // (then copies the base), so its own implicit assignment reaches the same symbol.
+        "Experiments",
+        "InventoryMenu",
+        "ItemGroup",
+        "PlayerUIContainer",
+    };
+
+    /// <summary>
+    /// Wraps a pattern-defined template copy call in a compile-time guard. The projection
+    /// exists whether or not the payload supports the operation —?the IR does not record
+    /// copyability —?so an unsupported payload answers an error at run time instead of
+    /// failing the build.
+    /// </summary>
+    private static IEnumerable<string> EmitTemplateCopyGuard(
+        AbiFunction function,
+        bool copyAssign,
+        string call,
+        string reason,
+        string payload,
+        IrManifest manifest,
+        string surface)
+    {
+        var probeType = string.IsNullOrWhiteSpace(payload)
+            ? function.ClassCppName
+            : payload;
+        // A standard container only reports itself copyable: vector's copy constructor and
+        // copy assignment are declared whatever the element is and only fail once
+        // instantiated, which no requires-expression reaches —?not even for an incomplete
+        // element. So the guard judges what would have to be copied: a container payload by
+        // its element, every other payload directly, and in both cases only once the
+        // template arguments are complete. A unique_ptr never assigns whatever the pointee.
+        var element = ContainerElement(probeType);
+        var probe = element ?? probeType;
+        // Neither trait reaches inside a template: every standard container and wrapper
+        // declares its copy member whatever the argument is, and a carrier type that declares
+        // one out of line is reported copyable even when the carrier never exports it. Where
+        // the payload is such a compound (or holds a unique_ptr, which never copies) the
+        // answer is not trustworthy, so the call is refused instead of risking the build —?        // and equally where the payload or any class nested inside it is one of the named ones
+        // whose copy is known to fail deeper than the trait.
+        // A unique_ptr never copies, and a container of them reports itself copyable anyway, so
+        // the test has to look past the container to the element —?checking it only where the
+        // payload has no element would let `vector<unique_ptr<T>>` through. Completeness is no
+        // substitute: by the time the ordering is right the element is complete and the trait
+        // still answers true.
+        var names = RefusalNames(probeType).ToList();
+        var bare = probe.TrimStart(':');
+        var refused = (copyAssign
+                ? names.Where(name => UncopyablePayloads.Contains(name)
+                    || UnassignablePayloads.Contains(name)
+                    || StoresUnassignable(manifest, surface, name))
+                : names.Where(UncopyablePayloads.Contains))
+            .Any()
+            || probe.Contains("unique_ptr", StringComparison.Ordinal)
+            || (element is not null
+                ? !AbiPlan.IsFundamentalTemplateArgument(element)
+                : probe.Contains("std::optional", StringComparison.Ordinal)
+                    || probe.Contains("std::vector", StringComparison.Ordinal)
+                    || probe.Contains("flat_map", StringComparison.Ordinal));
+        // `if constexpr` is no help here: the condition does not depend on anything that is
+        // still open at the call, so the untaken branch is instantiated as well —?a literal
+        // `true` does not shield `vector<unique_ptr<T>>::operator=` in the least. What the
+        // generator can decide is therefore decided here, and only a payload whose copyability
+        // the traits do report keeps a call.
+        if (refused)
+        {
+            // A payload that compiles and only fails to link gets its own wording; the caller's
+            // reason would blame an operation the class actually declares.
+            var refusal = copyAssign && !UncopyablePayloads.Contains(bare) && UnassignablePayloads.Contains(bare)
+                ? "the carrier does not export the payload's copy assignment"
+                : reason;
+            yield return $"    setLastError(\"{refusal}\");";
+            yield return $"    {DefaultReturn(function.ReturnKind)}";
+            yield break;
+        }
+
+        var trait = copyAssign ? "is_copy_assignable_v" : "is_copy_constructible_v";
+        var unsupported = $"!::std::{trait}<P>";
+        // The condition has to mention `P`, otherwise it is not dependent and the compiler
+        // instantiates both branches anyway.
+        var incomplete = TemplateArguments(probeType)
+            .SelectMany(AllArguments)
+            // A function type is always complete but has no `sizeof`.
+            .Where(argument => !argument.StartsWith("void (", StringComparison.Ordinal))
+            .Distinct()
+            .Select(CompletenessTest)
+            .ToList();
+        if (element is not null)
+        {
+            incomplete.Add($"!hs_is_complete_v<{element}>");
+        }
+
+        // Last: `sizeof` of the payload itself needs every argument complete already.
+        incomplete.Add("!hs_is_complete_v<P>");
+
+        // A condition written with `&&` or `||` is still evaluated whole, so the trait would
+        // be instantiated for an incomplete argument. Each test therefore gets its own nested
+        // branch: the outer ones only ask whether an argument is complete, which a
+        // requires-expression answers without instantiating anything, and the trait is only
+        // reached once every argument above it has passed.
+        var indent = "    ";
+        foreach (var test in incomplete.Concat([unsupported]))
+        {
+            yield return $"{indent}if constexpr ({test})";
+            yield return $"{indent}{{";
+            yield return $"{indent}    setLastError(\"{reason}\");";
+            yield return $"{indent}    {DefaultReturn(function.ReturnKind)}";
+            yield return $"{indent}}}";
+            yield return $"{indent}else";
+            indent += "    ";
+        }
+
+        yield return $"{indent}{{";
+        foreach (var line in EmitCallResult(function, call))
+        {
+            yield return indent + line;
+        }
+
+        yield return $"{indent}}}";
+    }
 
     private static string FieldTarget(AbiFunction function)
     {
@@ -2851,13 +3298,36 @@ internal static partial class ShimEmitter
 
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, string?> HeaderTextCache = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>Resolves an included path to a file, with or without the <c>src</c> root.</summary>
+    /// <remarks>
+    /// <see cref="NormalizeInclude"/> drops the <c>src/</c> prefix a header is spelled with, so
+    /// the plain join misses every file under it. The carrier tree holds both spellings, so both
+    /// have to be tried or these scans silently find nothing.
+    /// </remarks>
+    private static string? ResolveIncludedFile(IrManifest manifest, string surface, string include)
+    {
+        var relative = NormalizeInclude(include).Replace('/', Path.DirectorySeparatorChar);
+        foreach (var pin in manifest.Sources.Where(pin => string.Equals(pin.Surface, surface, StringComparison.Ordinal)))
+        {
+            var direct = Path.Combine(pin.Path, relative);
+            if (File.Exists(direct))
+            {
+                return direct;
+            }
+
+            var nested = Path.Combine(pin.Path, "src", relative);
+            if (File.Exists(nested))
+            {
+                return nested;
+            }
+        }
+
+        return null;
+    }
+
     private static IEnumerable<string> ForwardDeclaredStorageTypes(IrManifest manifest, string surface, string include)
     {
-        var relative = NormalizeInclude(include);
-        var file = manifest.Sources
-            .Where(pin => string.Equals(pin.Surface, surface, StringComparison.Ordinal))
-            .Select(pin => Path.Combine(pin.Path, relative.Replace('/', Path.DirectorySeparatorChar)))
-            .FirstOrDefault(File.Exists);
+        var file = ResolveIncludedFile(manifest, surface, include);
         if (file is null)
         {
             yield break;
@@ -2869,8 +3339,11 @@ internal static partial class ShimEmitter
             yield break;
         }
 
+        // The generated forward-declare lists wrap the declaration in its namespace on one line
+        // —?`namespace BlockEvents { class IBlockEventExecutor; }` —?so anchoring at the line
+        // start would miss every one of them.
         var forwardDeclared = System.Text.RegularExpressions.Regex
-            .Matches(text, @"^\s*(?:class|struct)\s+(\w+)\s*;", System.Text.RegularExpressions.RegexOptions.Multiline)
+            .Matches(text, @"(?:^|[;{}])\s*(?:class|struct)\s+(\w+)\s*;", System.Text.RegularExpressions.RegexOptions.Multiline)
             .Select(match => match.Groups[1].Value)
             .ToHashSet(StringComparer.Ordinal);
         if (forwardDeclared.Count == 0)
@@ -2878,7 +3351,7 @@ internal static partial class ShimEmitter
             yield break;
         }
 
-        // The spellings nest — TypedStorage<8, 8, ::std::unique_ptr<::T>> — so match each
+        // The spellings nest —?TypedStorage<8, 8, ::std::unique_ptr<::T>> —?so match each
         // forward-declared name against the storage-containing lines that mention it.
         var storageLines = text
             .Split((char)10)
@@ -2905,10 +3378,7 @@ internal static partial class ShimEmitter
     private static IEnumerable<string> DirectIncludes(IrManifest manifest, string surface, string include)
     {
         var relative = NormalizeInclude(include);
-        var file = manifest.Sources
-            .Where(pin => string.Equals(pin.Surface, surface, StringComparison.Ordinal))
-            .Select(pin => Path.Combine(pin.Path, relative.Replace('/', Path.DirectorySeparatorChar)))
-            .FirstOrDefault(File.Exists);
+        var file = ResolveIncludedFile(manifest, surface, include);
         if (file is null)
         {
             yield break;
@@ -3703,7 +4173,7 @@ internal static partial class ShimEmitter
         source.Add("    static_cast<std::uint32_t>(sizeof(HosihikariBindingTableV1)),");
         foreach (var function in functions)
         {
-            source.Add($"    &{function.CppName},");
+            source.Add($"    &{function.CppName}{function.DefinitionSuffix},");
         }
 
         source.Add("};");
@@ -4013,6 +4483,11 @@ internal static partial class ShimEmitter
         if (function.MutableStringOutRef)
         {
             parameters.Add("HosihikariStringView* hs_strOut");
+        }
+
+        if (function.CppTemplateArgument is not null)
+        {
+            yield return "template <class P>";
         }
 
         yield return $"static {returnType} {function.CppName}({string.Join(", ", parameters)}) try";
@@ -5206,7 +5681,10 @@ internal static partial class ShimEmitter
     /// reach here (scalars, strings, opaque handles, vectors, by-value records).
     /// </summary>
     private static IEnumerable<string> EmitInlineBodySymbolFunction(AbiFunction function) =>
-        EmitFunction(function, llAllocator: false);
+        // Symbol dispatch never sets TemplateCopyConstruction, so the manifest is only along for
+        // the signature.
+        EmitFunction(function, llAllocator: false, manifest: null!);
+
 
     private static IEnumerable<string> SymbolCatchTail(AbiKind returnKind)
     {

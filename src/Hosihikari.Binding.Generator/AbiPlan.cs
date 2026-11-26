@@ -278,6 +278,17 @@ internal sealed class AbiFunction
     /// </summary>
     public string TableField => CppName;
     public string CppName { get; set; } = "";
+
+    /// <summary>
+    /// The template argument a guarded copy function is instantiated with, or null. The
+    /// function is emitted as a template so that `if constexpr` discards the branch the
+    /// payload cannot take; the table member keeps the bare name and the definition and the
+    /// table entry take the argument.
+    /// </summary>
+    public string? CppTemplateArgument { get; set; }
+
+    /// <summary>The argument list to append to the name at the definition and the use site.</summary>
+    public string DefinitionSuffix => CppTemplateArgument is null ? "" : $"<{CppTemplateArgument}>";
     public AbiFunctionKind Kind { get; init; }
     public AbiCastKind CastKind { get; init; }
     public string? TargetCppName { get; init; }
@@ -1532,11 +1543,15 @@ internal sealed class AbiPlan
                 }
                 else if (string.Equals(method.Name, "operator=", StringComparison.Ordinal)
                     && declaration.Template is not null
-                    && !method.Defined)
+                    && !method.Defined
+                    && (!method.PatternDefined || IsMoveAssignment(method)))
                 {
-                    // A template specialization whose assignment operator has no visible
-                    // definition cannot be compiled by the shim; a defined one can.
-                    reason = "the template assignment operator has no visible definition";
+                    // Like the constructors: the pattern body of a copy assignment only
+                    // assigns the payload, which is enough to compile; the move assignment
+                    // forwards with std::move and needs the payload's move assignment.
+                    reason = method.PatternDefined
+                        ? "template move assignment operators are not projected"
+                        : "the template assignment operator has no visible definition";
                 }
 
                 if (reason is not null)
@@ -4172,6 +4187,19 @@ internal sealed class AbiPlan
                 && (method.Defined || IsPatternCallable(method))
                 && !HasAlgorithmRequiringCopy(method, declaration, membersByDeclaration, declarationsByQualifiedName),
         };
+        // A pattern-defined copy assignment assigns the payload in place, so it only compiles
+        // where the payload is itself assignable. The IR does not record assignability, so the
+        // shim guards the call at compile time instead.
+        if (linkCarrier
+            && declaration.Template is not null
+            && !method.Defined
+            && method.PatternDefined
+            && method.Name == "operator="
+            && !IsMoveAssignment(method))
+        {
+            function.TemplateCopyConstruction = true;
+            function.TemplateCopyPayload = LastTemplateArgument(function.ClassCppName);
+        }
         return true;
     }
 
@@ -7970,6 +7998,17 @@ internal sealed class AbiPlan
     /// </summary>
     private static bool IsMoveConstructor(MemberRecord member) =>
         IsCopyOrMoveConstructor(member)
+        && member.Signature!.Parameters[0].Type.TrimEnd().EndsWith("&&", StringComparison.Ordinal);
+
+    /// <summary>
+    /// True only for a move assignment: the same shape as a copy assignment, but an
+    /// rvalue-reference parameter and the name <c>operator=</c>. Its pattern body forwards
+    /// with <c>std::move</c>, so it needs the payload's move assignment rather than its copy
+    /// assignment.
+    /// </summary>
+    private static bool IsMoveAssignment(MemberRecord member) =>
+        member.Name == "operator="
+        && IsCopyOrMoveConstructor(member)
         && member.Signature!.Parameters[0].Type.TrimEnd().EndsWith("&&", StringComparison.Ordinal);
 
     /// <summary>
