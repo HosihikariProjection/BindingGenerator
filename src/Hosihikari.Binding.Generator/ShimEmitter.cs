@@ -46,6 +46,16 @@ internal static partial class ShimEmitter
     {
         HeaderTextCache.Clear();
         StoresCache.Clear();
+        CopyAssignableFacts.Clear();
+        // The frontend already evaluated `is_copy_assignable_v` for every class on the surface,
+        // which is the answer the guard would otherwise approximate from the carrier headers.
+        foreach (var declaration in records.OfType<DeclarationRecord>())
+        {
+            if (declaration.CopyAssignable is { } assignable)
+            {
+                CopyAssignableFacts[declaration.QualifiedName.TrimStart(':')] = assignable;
+            }
+        }
         HeaderSearchCache.Clear();
         HeaderIndexCache.Clear();
         foreach (
@@ -2711,6 +2721,16 @@ internal static partial class ShimEmitter
         bool
     > StoresCache = new(StringComparer.Ordinal);
 
+    /// <summary>
+    /// The frontend's <c>is_copy_assignable_v</c> answer per class, keyed by qualified name.
+    /// Populated once per emit from the records; empty on IR written before 1.8, where the
+    /// tables and the header walk are the whole answer.
+    /// </summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<
+        string,
+        bool
+    > CopyAssignableFacts = new(StringComparer.Ordinal);
+
     private static bool StoresUnassignable(
         IrManifest manifest,
         string surface,
@@ -2887,9 +2907,14 @@ internal static partial class ShimEmitter
             (
                 copyAssign
                     ? names.Where(name =>
-                        UncopyablePayloads.Contains(name)
-                        || UnassignablePayloads.Contains(name)
-                        || StoresUnassignable(manifest, surface, name)
+                        // The recorded fact is the authority; a class the IR carries an answer
+                        // for needs neither table. A payload the surface never declares falls
+                        // back to them, and to the carrier-header walk behind them.
+                        CopyAssignableFacts.TryGetValue(name, out var assignable)
+                            ? !assignable
+                            : UncopyablePayloads.Contains(name)
+                                || UnassignablePayloads.Contains(name)
+                                || StoresUnassignable(manifest, surface, name)
                     )
                     : names.Where(UncopyablePayloads.Contains)
             ).Any()

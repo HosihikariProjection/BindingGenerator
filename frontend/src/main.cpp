@@ -6,6 +6,7 @@
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/DeclCXX.h"
 #include "clang/AST/DeclTemplate.h"
+#include "clang/AST/ExprCXX.h"
 #include "clang/AST/RecordLayout.h"
 #include "clang/AST/VTableBuilder.h"
 #include "clang/AST/RecursiveASTVisitor.h"
@@ -408,7 +409,8 @@ std::string serializeJson(const llvm::json::Value& Value) {
 
 class IrVisitor : public RecursiveASTVisitor<IrVisitor> {
 public:
-    IrVisitor(ASTContext& Ctx, const Options& Opt) : Ctx(Ctx), Opt(Opt) {}
+    IrVisitor(ASTContext& Ctx, const Options& Opt, clang::Sema* Sema)
+        : Ctx(Ctx), Opt(Opt), SemaPtr(Sema) {}
 
     bool shouldVisitTemplateInstantiations() const { return true; }
 
@@ -726,6 +728,9 @@ public:
 private:
     ASTContext& Ctx;
     const Options& Opt;
+    // Null when the AST was built without a Sema (a pure parse); the copy-assignment fact is
+    // then simply absent, which the IR spells as null.
+    clang::Sema* SemaPtr = nullptr;
     std::set<std::string> Emitted;
     // Function records can be revisited through a redeclaration; the index lets a later
     // definition upgrade an earlier prototype instead of being dropped.
@@ -1165,6 +1170,44 @@ private:
         return "unknown";
     }
 
+    /// Evaluates `std::is_copy_assignable_v<T>` the way the standard library does: the
+    /// two-argument `__is_assignable` with an lvalue T on the left. The trait expression is
+    /// built by Sema, so the answer already accounts for a deleted or ill-formed member, not
+    /// just the class's own declaration.
+    std::optional<bool> isCopyAssignable(CXXRecordDecl* Record) const {
+        if (SemaPtr == nullptr) {
+            return std::nullopt;
+        }
+
+        QualType Type = Ctx.getTypeDeclType(static_cast<const TypeDecl*>(Record));
+        QualType LValue = Ctx.getLValueReferenceType(Type);
+        TypeSourceInfo* Destination = Ctx.getTrivialTypeSourceInfo(LValue);
+        TypeSourceInfo* Source = Ctx.getTrivialTypeSourceInfo(
+            Ctx.getLValueReferenceType(Type.withConst())
+        );
+
+        auto Traits = SemaPtr->BuildTypeTrait(
+            clang::BTT_IsAssignable,
+            Record->getLocation(),
+            llvm::ArrayRef<TypeSourceInfo*>({Destination, Source}),
+            Record->getLocation()
+        );
+        if (Traits.isInvalid()) {
+            return std::nullopt;
+        }
+
+        // Sema evaluates the trait while building it: the expression already carries the
+        // answer, so there is no enum body to force.
+        auto* Trait = dyn_cast<TypeTraitExpr>(Traits.get());
+        if (Trait == nullptr) {
+            return std::nullopt;
+        }
+
+        return Trait->isStoredAsBoolean()
+            ? Trait->getBoolValue()
+            : Trait->getAPValue().getInt().getBoolValue();
+    }
+
     llvm::json::Object makeDeclaration(NamedDecl* Decl, const std::string& Id, const std::string& Kind) const {
         llvm::json::Object Object;
         Object["recordType"] = "declaration";
@@ -1248,6 +1291,12 @@ private:
                 Object["copyConstructible"] = CopyConstructible;
                 Object["triviallyCopyable"] = Record->isTriviallyCopyable();
                 Object["triviallyDestructible"] = Record->hasTrivialDestructor();
+                // A class-level predicate cannot answer this: it reports the declaration and
+                // misses a member whose own copy assignment is ill-formed or unexported, which
+                // is exactly where the shim's assignment fails. Only Sema can evaluate it.
+                if (auto CopyAssignable = isCopyAssignable(Record)) {
+                    Object["copyAssignable"] = *CopyAssignable;
+                }
             }
         }
 
@@ -1629,7 +1678,7 @@ int main(int argc, char** argv) {
         Forcer.TraverseDecl(AST->getASTContext().getTranslationUnitDecl());
     }
 
-    IrVisitor Visitor(AST->getASTContext(), Opt);
+    IrVisitor Visitor(AST->getASTContext(), Opt, AST->hasSema() ? &AST->getSema() : nullptr);
     Visitor.TraverseDecl(AST->getASTContext().getTranslationUnitDecl());
     Visitor.EmitDependencyRecords();
     Visitor.EmitDependencyEnums();
