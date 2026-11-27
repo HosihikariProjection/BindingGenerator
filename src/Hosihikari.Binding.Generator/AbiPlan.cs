@@ -1147,12 +1147,26 @@ internal sealed class AbiPlan
                 (member.Kind is "method" or "operator" or "constructor" or "destructor")
                 && !member.Inline
             );
+            // A class with no declared destructor still gets an implicit one, and `delete`
+            // expands it over the members. A by-value member whose own destructor is not
+            // exported makes that expansion fail, which the class's own presence in the list
+            // cannot express. A container counts through its element type.
+            var memberDestructorUnexported = declarationMembers.Any(member =>
+                member.Kind == "field"
+                && member.Type is { } type
+                && SpellingsInside(type.Canonical).Any(spelling =>
+                    IsUnexported(spelling, "~" + LeafName(spelling))
+                )
+            );
             return linkCarrier
-                    ? destructor is null
-                        || (
-                            destructor.Access == "public"
-                            && HasExportedSymbol(declaration, destructor)
-                            && (declaration.Template is null || destructor.Defined)
+                    ? !memberDestructorUnexported
+                        && (
+                            destructor is null
+                            || (
+                                destructor.Access == "public"
+                                && HasExportedSymbol(declaration, destructor)
+                                && (declaration.Template is null || destructor.Defined)
+                            )
                         )
                 : destructor is null ? !hasOutOfLineMethod
                 : destructor.Access == "public" && destructor.Inline && !hasOutOfLineMethod;
@@ -1211,6 +1225,21 @@ internal sealed class AbiPlan
                     && member.Type.Canonical.StartsWith(
                         "std::unique_ptr<",
                         StringComparison.Ordinal
+                    )
+                )
+            )
+            {
+                return false;
+            }
+
+            // Same shape, different cause: a by-value member (or a container of one) whose own
+            // destructor the carrier does not export also fails at the delete site.
+            if (
+                declarationMembers.Any(member =>
+                    member.Kind == "field"
+                    && member.Type is { } type
+                    && SpellingsInside(type.Canonical).Any(spelling =>
+                        IsUnexported(spelling, "~" + LeafName(spelling))
                     )
                 )
             )
@@ -3411,7 +3440,7 @@ internal sealed class AbiPlan
             // so anchor on the parenthesis and take the last such match.
             var matches = System.Text.RegularExpressions.Regex.Matches(
                 columns[1],
-                @"([A-Za-z_]\w*)::([A-Za-z_~$]\w*)\("
+                @"([A-Za-z_]\w*)::([^\s(]+)\("
             );
             if (matches.Count > 0)
             {
@@ -3441,11 +3470,60 @@ internal sealed class AbiPlan
 
     private static string? UnexportedKind(string classCppName, string memberName)
     {
-        var separator = classCppName.LastIndexOf("::", StringComparison.Ordinal);
-        var leafClass = separator < 0 ? classCppName : classCppName[(separator + 2)..];
+        var leafClass = LeafName(classCppName);
         return UnexportedMembers.Value.TryGetValue($"{leafClass}::{memberName}", out var kind)
             ? kind
             : null;
+    }
+
+    /// <summary>
+    /// The class name inside a spelling that may carry a namespace or a specialization.
+    /// </summary>
+    private static string LeafName(string spelling)
+    {
+        var head = spelling.Split('(')[0].Split('<')[0];
+        var separator = head.LastIndexOf("::", StringComparison.Ordinal);
+        return separator < 0 ? head : head[(separator + 2)..];
+    }
+
+    /// <summary>
+    /// A spelling and every class argument nested in it, outermost first — a member stored as
+    /// <c>unordered_map&lt;K, V&gt;</c> still destroys <c>V</c>.
+    /// </summary>
+    private static IEnumerable<string> SpellingsInside(string spelling)
+    {
+        yield return spelling;
+        var open = spelling.IndexOf('<');
+        if (open < 0 || !spelling.EndsWith('>'))
+        {
+            yield break;
+        }
+
+        var inner = spelling[(open + 1)..^1];
+        var depth = 0;
+        var from = 0;
+        for (var index = 0; index <= inner.Length; index++)
+        {
+            if (index < inner.Length)
+            {
+                depth += inner[index] switch { '<' => 1, '>' => -1, _ => 0 };
+                if (depth != 0 || inner[index] != ',')
+                {
+                    continue;
+                }
+            }
+
+            var part = inner[from..index].Trim();
+            if (part.Length > 0)
+            {
+                foreach (var nested in SpellingsInside(part))
+                {
+                    yield return nested;
+                }
+            }
+
+            from = index + 1;
+        }
     }
 
     internal static string NormalizeTemplateTypeName(string value) => NormalizeTypeName(value);
