@@ -1125,6 +1125,26 @@ internal sealed class AbiPlan
             return true;
         }
 
+        // A class destroyed through a member reaches that member's destructor, exported or not.
+        // A storage specialization stores raw bytes, so the field says `std::byte[64]` and only
+        // the template argument names what actually lives there.
+        bool MemberDestructorUnexported(
+            DeclarationRecord declaration,
+            List<MemberRecord> declarationMembers
+        ) =>
+            declarationMembers.Any(member =>
+                member.Kind == "field"
+                && member.Type is { } type
+                && SpellingsInside(type.Canonical).Any(spelling =>
+                    IsUnexported(spelling, "~" + LeafName(spelling))
+                )
+            )
+            || (declaration.Template?.Arguments ?? []).Any(argument =>
+                SpellingsInside(argument.Value).Any(spelling =>
+                    IsUnexported(spelling, "~" + LeafName(spelling))
+                )
+            );
+
         bool IsDestructorUsable(
             DeclarationRecord declaration,
             List<MemberRecord> declarationMembers
@@ -1150,14 +1170,8 @@ internal sealed class AbiPlan
             // A class with no declared destructor still gets an implicit one, and `delete`
             // expands it over the members. A by-value member whose own destructor is not
             // exported makes that expansion fail, which the class's own presence in the list
-            // cannot express. A container counts through its element type.
-            var memberDestructorUnexported = declarationMembers.Any(member =>
-                member.Kind == "field"
-                && member.Type is { } type
-                && SpellingsInside(type.Canonical).Any(spelling =>
-                    IsUnexported(spelling, "~" + LeafName(spelling))
-                )
-            );
+            // cannot express.
+            var memberDestructorUnexported = MemberDestructorUnexported(declaration, declarationMembers);
             return linkCarrier
                     ? !memberDestructorUnexported
                         && (
@@ -1207,12 +1221,15 @@ internal sealed class AbiPlan
 
             if (destructor is not null)
             {
+                // A declared destructor can be exported and still pull an unexported member
+                // destructor through its own body.
                 explicitDestructor =
                     destructor.Access == "public"
                     && (
                         linkCarrier ? HasExportedSymbol(declaration, destructor) : destructor.Inline
                     )
-                    && (declaration.Template is null || destructor.Defined);
+                    && (declaration.Template is null || destructor.Defined)
+                    && !MemberDestructorUnexported(declaration, declarationMembers);
                 return explicitDestructor;
             }
 
@@ -1232,17 +1249,9 @@ internal sealed class AbiPlan
                 return false;
             }
 
-            // Same shape, different cause: a by-value member (or a container of one) whose own
-            // destructor the carrier does not export also fails at the delete site.
-            if (
-                declarationMembers.Any(member =>
-                    member.Kind == "field"
-                    && member.Type is { } type
-                    && SpellingsInside(type.Canonical).Any(spelling =>
-                        IsUnexported(spelling, "~" + LeafName(spelling))
-                    )
-                )
-            )
+            // Same shape, different cause: a class whose member destructor is unexported cannot
+            // be deleted either, whatever its own destructor looks like.
+            if (MemberDestructorUnexported(declaration, declarationMembers))
             {
                 return false;
             }
@@ -4375,6 +4384,14 @@ internal sealed class AbiPlan
         ] = "the stored map's value type is not copy constructible",
         ["BlockDefinitionGroup"] = "the stored vector's element type is not copy constructible",
         ["DebuggerStatCollector"] = "the stored vector's element type is not copy constructible",
+        // A wrapper class with no destructor of its own: reaching its elements from the map
+        // needs one, and the carrier exports none.
+        [
+            "ll::TypedStorageImpl<8ULL, 64ULL, std::unordered_map<HashedString, ActorAnimationControllerPtr>>"
+        ] = "the stored map's element type has no exported destructor",
+        [
+            "ll::TypedStorageImpl<8ULL, 64ULL, std::unordered_map<HashedString, ActorSkeletalAnimationPtr>>"
+        ] = "the stored map's element type has no exported destructor",
     };
 
     private static bool IsUnprojectable(AbiFunction function) =>
