@@ -4748,10 +4748,14 @@ internal static partial class ShimEmitter
         source.Add("}");
         source.Add("");
 
-        // A symbol surface keeps every helper, so the mod overload follows the same rule.
-        foreach (var line in ModWeakHelper())
+        // Conditional here too: a symbol surface can be built from a fixture with no Carrier
+        // headers at all, where `ll::mod::Mod` does not name anything.
+        if (NeedsModWeakHelper(functions))
         {
-            source.Add(line);
+            foreach (var line in ModWeakHelper())
+            {
+                source.Add(line);
+            }
         }
 
         source.Add("template <class T>");
