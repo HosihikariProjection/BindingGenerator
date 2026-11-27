@@ -132,7 +132,7 @@ if (-not (Test-Path $BedrockRuntimeLibrary)) {
 }
 
 $ClangCl = Join-Path $LlvmRoot "bin\clang-cl.exe"
-$LinkArgs = @("/link", "/DELAYLOAD:bedrock_runtime.dll", "delayimp.lib")
+$LinkArgs = @("/link", "/DELAYLOAD:bedrock_runtime.dll", "delayimp.lib", "/ERRORLIMIT:0")
 if ($DelayLoad) {
     $LinkArgs += "/DELAYLOAD:LeviLamina.dll"
 }
