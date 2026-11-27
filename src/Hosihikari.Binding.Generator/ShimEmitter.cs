@@ -220,7 +220,13 @@ internal static partial class ShimEmitter
     {
         var directory = Path.Combine(outputDirectory, "shim", configuration.Id, surface);
         Directory.CreateDirectory(directory);
-        File.Copy(abiHeader, Path.Combine(directory, "hosihikari_abi.h"), true);
+        // Written line-ending-normalised: the ABI header's owner may keep it CRLF on Windows,
+        // while the binding repositories hash what Linux checks out. Copying the bytes verbatim
+        // makes the hash depend on the platform the emitter ran on.
+        File.WriteAllText(
+            Path.Combine(directory, "hosihikari_abi.h"),
+            File.ReadAllText(abiHeader).Replace("\r\n", "\n")
+        );
 
         var header = new List<string>
         {

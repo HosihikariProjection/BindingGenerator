@@ -1414,6 +1414,12 @@ internal sealed class AbiPlan
                 {
                     reason = UnavailableMemberReason;
                 }
+                else if (IsUnexported(declaration.QualifiedName, "$ctor"))
+                {
+                    // Constructors are named after the class in the IR, but the export list and
+                    // lld spell them `$ctor`; the list key is the latter.
+                    reason = UnexportedMemberReason;
+                }
                 else if (symbolDispatch)
                 {
                     if (IsInlineBodyConstructor(declaration, constructor))
@@ -1550,8 +1556,10 @@ internal sealed class AbiPlan
                 );
                 if (destructor is not null)
                 {
-                    skipReasons[destructor.Id] = HasUnavailableAnnotation(destructor)
-                        ? UnavailableMemberReason
+                    skipReasons[destructor.Id] =
+                        HasUnavailableAnnotation(destructor) ? UnavailableMemberReason
+                        : IsUnexported(declaration.QualifiedName, "~" + declaration.QualifiedName[(declaration.QualifiedName.LastIndexOf("::") + 2)..])
+                            ? UnexportedMemberReason
                         : "the class has no accessible destructor";
                 }
             }
@@ -1730,6 +1738,20 @@ internal sealed class AbiPlan
                 if (HasUnavailableAnnotation(method))
                 {
                     reason = UnavailableMemberReason;
+                }
+                else if (IsUnexported(declaration.QualifiedName, method.Name))
+                {
+                    // The header annotates it as exported but the library does not carry it, so
+                    // the shim would compile and fail to link. Checked before the dispatch test
+                    // because a member can have a vtable slot and still no exported symbol.
+                    reason = UnexportedMemberReason;
+                }
+                else if (IsVirtualMirror(declaration.QualifiedName, method.Name))
+                {
+                    // A `$` non-virtual mirror of a virtual function. The vtable reaches the real
+                    // one, so the call is reachable only through it; calling the mirror would not
+                    // link. Stub keeps the member visible without a broken symbol reference.
+                    reason = VirtualMirrorMemberReason;
                 }
                 else if (symbolDispatch)
                 {
@@ -3352,8 +3374,79 @@ internal sealed class AbiPlan
     internal const string UnavailableMemberReason =
         "the carrier annotates this member MCNAPI, so the run time does not export it";
 
+    internal const string UnexportedMemberReason =
+        "the carrier declares this member but the export set does not carry it";
+
+    internal const string VirtualMirrorMemberReason =
+        "the carrier exports only the virtual form of this member; call it through the vtable";
+
     internal static bool HasUnavailableAnnotation(MemberRecord member) =>
         member.Macros.Any(macro => string.Equals(macro.Name, "MCNAPI", StringComparison.Ordinal));
+
+    /// <summary>
+    /// Members the carrier declares but never exports, taken from the check-in list beside this
+    /// file. Keyed to <c>Class::method</c>; only the <c>absent</c> rows refuse, because a
+    /// <c>signature</c> row has a same-named export that may still link and a <c>spelling</c>
+    /// row is a virtual mirror the vtable already reaches.
+    /// </summary>
+    private static readonly Lazy<Dictionary<string, string>> UnexportedMembers = new(() =>
+    {
+        var path = Path.Combine(AppContext.BaseDirectory, "unexported-levilamina.txt");
+        var known = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (!File.Exists(path))
+        {
+            return known;
+        }
+
+        foreach (var line in File.ReadLines(path))
+        {
+            var columns = line.Split('\t');
+            if (columns.Length < 2)
+            {
+                continue;
+            }
+
+            // The row is a demangled signature. Return and parameter types also carry `A::b`
+            // heads, but the member is the only one directly followed by the parameter list,
+            // so anchor on the parenthesis and take the last such match.
+            var matches = System.Text.RegularExpressions.Regex.Matches(
+                columns[1],
+                @"([A-Za-z_]\w*)::([A-Za-z_~$]\w*)\("
+            );
+            if (matches.Count > 0)
+            {
+                var key = matches[^1];
+                known[$"{key.Groups[1].Value}::{key.Groups[2].Value}"] = columns[0];
+            }
+        }
+
+        return known;
+    });
+
+    /// <summary>
+    /// True when the carrier's own export set lacks this member. A demangled signature carries
+    /// fully expanded types, so the list is indexed by <c>Class::method</c> — coarse enough that
+    /// an overload with one exported sibling is refused too, which is the safe direction.
+    /// </summary>
+    internal static bool IsUnexported(string classCppName, string memberName) =>
+        UnexportedKind(classCppName, memberName) == "absent";
+
+    /// <summary>
+    /// True when the only miss is a <c>$</c> non-virtual mirror of a virtual function. The
+    /// vtable already reaches the real one, so a stub is the right shape: calling the mirror
+    /// would not link.
+    /// </summary>
+    internal static bool IsVirtualMirror(string classCppName, string memberName) =>
+        UnexportedKind(classCppName, memberName) == "spelling";
+
+    private static string? UnexportedKind(string classCppName, string memberName)
+    {
+        var separator = classCppName.LastIndexOf("::", StringComparison.Ordinal);
+        var leafClass = separator < 0 ? classCppName : classCppName[(separator + 2)..];
+        return UnexportedMembers.Value.TryGetValue($"{leafClass}::{memberName}", out var kind)
+            ? kind
+            : null;
+    }
 
     internal static string NormalizeTemplateTypeName(string value) => NormalizeTypeName(value);
 

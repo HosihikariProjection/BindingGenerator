@@ -1,0 +1,741 @@
+# Members the LeviLamina carrier declares but does not export.
+#
+# Keyed by the demangled signature lld prints. One entry per line: <kind><TAB><symbol>.
+#   absent   - neither the symbol nor its name is in the library; skip it.
+#   spelling - a '$' non-virtual mirror of a virtual function; the vtable already
+#              reaches it, so a missing symbol is expected. Do not skip.
+#   signature- name present, symbol absent; the declaration disagrees with the export.
+#              Fix the declaration rather than skipping.
+#
+# Carrier: 922ff2e83cd3bccae56970d325cc3669344d8117
+# Regenerate by relinking the emitted shim and reading "undefined symbol" lines.
+#
+# Only surfaces that reach `mc` are affected: the checkpoint surface is `ll/api`, whose
+# members are all LLAPI/LLNDAPI and resolve, so this list currently matches nothing there.
+# A new carrier commit invalidates it — relink and rebuild the list rather than editing.
+spelling	__declspec(dllimport) public: bool __cdecl Actor::$add(class ItemStack &)
+spelling	__declspec(dllimport) public: bool __cdecl Actor::$canAddPassenger(class Actor &) const
+spelling	__declspec(dllimport) public: bool __cdecl Actor::$canBeAffectedByArrow(class MobEffectInstance const &) const
+spelling	__declspec(dllimport) public: bool __cdecl Actor::$canBeAffected(unsigned int) const
+spelling	__declspec(dllimport) public: bool __cdecl Actor::$canBePulledIntoVehicle(void) const
+spelling	__declspec(dllimport) public: bool __cdecl Actor::$canChangeDimensionsUsingPortal(void) const
+spelling	__declspec(dllimport) public: bool __cdecl Actor::$canDestroyBlock(class Block const &) const
+spelling	__declspec(dllimport) public: bool __cdecl Actor::$canDisableShield(void)
+spelling	__declspec(dllimport) public: bool __cdecl Actor::$canInteractWithOtherEntitiesInGame(void) const
+spelling	__declspec(dllimport) public: bool __cdecl Actor::$canObstructSpawningAndBlockPlacement(void) const
+spelling	__declspec(dllimport) public: bool __cdecl Actor::$canPickupItem(class ItemStack const &) const
+spelling	__declspec(dllimport) public: bool __cdecl Actor::$canPowerJump(void) const
+spelling	__declspec(dllimport) public: bool __cdecl Actor::$canShowNameTag(void) const
+spelling	__declspec(dllimport) public: bool __cdecl Actor::$canSynchronizeNewEntity(void) const
+spelling	__declspec(dllimport) public: bool __cdecl Actor::$consumeTotem(void)
+spelling	__declspec(dllimport) public: bool __cdecl Actor::$drop(class ItemStack const &, bool)
+spelling	__declspec(dllimport) public: bool __cdecl Actor::$hasComponent(class HashedString const &) const
+spelling	__declspec(dllimport) public: bool __cdecl Actor::$hasDiedBefore(void) const
+spelling	__declspec(dllimport) public: bool __cdecl Actor::$inCaravan(void) const
+spelling	__declspec(dllimport) public: bool __cdecl Actor::$isAlive(void) const
+spelling	__declspec(dllimport) public: bool __cdecl Actor::$isBlocking(void) const
+spelling	__declspec(dllimport) public: bool __cdecl Actor::$isDamageBlocked(class ActorDamageSource const &) const
+spelling	__declspec(dllimport) public: bool __cdecl Actor::$isEnchanted(void) const
+spelling	__declspec(dllimport) public: bool __cdecl Actor::$isFireImmune(void) const
+spelling	__declspec(dllimport) public: bool __cdecl Actor::$isImmobile(void) const
+spelling	__declspec(dllimport) public: bool __cdecl Actor::$isInvisible(void) const
+spelling	__declspec(dllimport) public: bool __cdecl Actor::$isInvulnerableTo(class ActorDamageSource const &) const
+spelling	__declspec(dllimport) public: bool __cdecl Actor::$isOnFire(void) const
+spelling	__declspec(dllimport) public: bool __cdecl Actor::$isSilentObserver(void) const
+spelling	__declspec(dllimport) public: bool __cdecl Actor::$isSleeping(void) const
+spelling	__declspec(dllimport) public: bool __cdecl Actor::$isSurfaceMob(void) const
+spelling	__declspec(dllimport) public: bool __cdecl Actor::$isTargetable(void) const
+spelling	__declspec(dllimport) public: bool __cdecl Actor::$isValidTarget(class Actor *) const
+spelling	__declspec(dllimport) public: bool __cdecl Actor::$load(class CompoundTag const &, class DataLoadHelper &)
+spelling	__declspec(dllimport) public: bool __cdecl Actor::$shouldDropDeathLoot(void) const
+spelling	__declspec(dllimport) public: bool __cdecl Actor::$_shouldProvideFeedbackOnArmorSet(enum SharedTypes::Legacy::ArmorSlot, class ItemStack const &) const
+spelling	__declspec(dllimport) public: bool __cdecl Actor::$_shouldProvideFeedbackOnHandContainerItemSet(enum HandSlot, class ItemStack const &) const
+spelling	__declspec(dllimport) public: bool __cdecl Actor::$startRiding(class Actor &, bool)
+spelling	__declspec(dllimport) public: bool __cdecl Actor::$swing(enum ActorSwingSource, enum HandSlot)
+spelling	__declspec(dllimport) public: bool __cdecl Player::$add(class ItemStack &)
+spelling	__declspec(dllimport) public: bool __cdecl Player::$canAddPassenger(class Actor &) const
+spelling	__declspec(dllimport) public: bool __cdecl Player::$canBePulledIntoVehicle(void) const
+spelling	__declspec(dllimport) public: bool __cdecl Player::$canChangeDimensionsUsingPortal(void) const
+spelling	__declspec(dllimport) public: bool __cdecl Player::$canExistWhenDisallowMob(void) const
+spelling	__declspec(dllimport) public: bool __cdecl Player::$canInteractWithOtherEntitiesInGame(void) const
+spelling	__declspec(dllimport) public: bool __cdecl Player::$canObstructSpawningAndBlockPlacement(void) const
+spelling	__declspec(dllimport) public: bool __cdecl Player::$canStartSleepInBed(void)
+spelling	__declspec(dllimport) public: bool __cdecl Player::$consumeTotem(void)
+spelling	__declspec(dllimport) public: bool __cdecl Player::$drop(class ItemStack const &, bool)
+spelling	__declspec(dllimport) public: bool __cdecl Player::$hasDiedBefore(void) const
+spelling	__declspec(dllimport) public: bool __cdecl Player::$isActorRelevant(class Actor const &)
+spelling	__declspec(dllimport) public: bool __cdecl Player::$isAutoJumpEnabled(void) const
+spelling	__declspec(dllimport) public: bool __cdecl Player::$isBlocking(void) const
+spelling	__declspec(dllimport) public: bool __cdecl Player::$isDamageBlocked(class ActorDamageSource const &) const
+spelling	__declspec(dllimport) public: bool __cdecl Player::$isFireImmune(void) const
+spelling	__declspec(dllimport) public: bool __cdecl Player::$isImmobile(void) const
+spelling	__declspec(dllimport) public: bool __cdecl Player::$isInTrialMode(void)
+spelling	__declspec(dllimport) public: bool __cdecl Player::$isInvulnerableTo(class ActorDamageSource const &) const
+spelling	__declspec(dllimport) public: bool __cdecl Player::$isLoading(void) const
+spelling	__declspec(dllimport) public: bool __cdecl Player::$isPlayerInitialized(void) const
+spelling	__declspec(dllimport) public: bool __cdecl Player::$isSilentObserver(void) const
+spelling	__declspec(dllimport) public: bool __cdecl Player::$isSimulated(void) const
+spelling	__declspec(dllimport) public: bool __cdecl Player::$isSleeping(void) const
+spelling	__declspec(dllimport) public: bool __cdecl Player::$shouldDropDeathLoot(void) const
+spelling	__declspec(dllimport) public: bool __cdecl Player::$_shouldProvideFeedbackOnArmorSet(enum SharedTypes::Legacy::ArmorSlot, class ItemStack const &) const
+spelling	__declspec(dllimport) public: bool __cdecl Player::$_shouldProvideFeedbackOnHandContainerItemSet(enum HandSlot, class ItemStack const &) const
+spelling	__declspec(dllimport) public: bool __cdecl Player::$startRiding(class Actor &, bool)
+spelling	__declspec(dllimport) public: bool __cdecl ServerPlayer::$canChangeDimensionsUsingPortal(void) const
+spelling	__declspec(dllimport) public: bool __cdecl ServerPlayer::$isActorRelevant(class Actor const &)
+spelling	__declspec(dllimport) public: bool __cdecl ServerPlayer::$isExternalCommunicationAllowed(void) const
+spelling	__declspec(dllimport) public: bool __cdecl ServerPlayer::$isLoading(void) const
+spelling	__declspec(dllimport) public: bool __cdecl ServerPlayer::$isPlayerInitialized(void) const
+spelling	__declspec(dllimport) public: bool __cdecl ServerPlayer::$isTeacher(void) const
+spelling	__declspec(dllimport) public: bool __cdecl ServerPlayer::$isValidTarget(class Actor *) const
+spelling	__declspec(dllimport) public: bool __cdecl ServerPlayer::$load(class CompoundTag const &, class DataLoadHelper &)
+spelling	__declspec(dllimport) public: bool __cdecl ServerPlayer::$swing(enum ActorSwingSource, enum HandSlot)
+spelling	__declspec(dllimport) public: class AABB __cdecl Actor::$getLiquidAABB(enum SharedTypes::v1_26_20::MaterialType) const
+spelling	__declspec(dllimport) public: class AnimationComponent & __cdecl Actor::$getAnimationComponent(void)
+spelling	__declspec(dllimport) public: class AnimationComponent & __cdecl Player::$getAnimationComponent(void)
+spelling	__declspec(dllimport) public: class HashedString __cdecl Player::$getCurrentStructureFeature(void) const
+spelling	__declspec(dllimport) public: class HashedString __cdecl ServerPlayer::$getCurrentStructureFeature(void) const
+spelling	__declspec(dllimport) public: class HashedString const & __cdecl Actor::$getActorRendererId(void) const
+spelling	__declspec(dllimport) public: class HashedString const & __cdecl Actor::$queryEntityRenderer(void) const
+spelling	__declspec(dllimport) public: class HashedString const & __cdecl Player::$getActorRendererId(void) const
+spelling	__declspec(dllimport) public: class IMinecraftEventing * __cdecl Player::$getEventing(void) const
+spelling	__declspec(dllimport) public: class ItemStack const & __cdecl Actor::$getCarriedItem(void) const
+spelling	__declspec(dllimport) public: class ItemStack const & __cdecl Actor::$getEquippedTotem(void) const
+spelling	__declspec(dllimport) public: class ItemStack const & __cdecl Player::$getCarriedItem(void) const
+spelling	__declspec(dllimport) public: class ItemStack const & __cdecl Player::$getEquippedTotem(void) const
+spelling	__declspec(dllimport) public: class mce::Color __cdecl Actor::$getNameTagTextColor(void) const
+spelling	__declspec(dllimport) public: class mce::Color __cdecl Player::$getNameTagTextColor(void) const
+spelling	__declspec(dllimport) public: class PlayerEventCoordinator & __cdecl ServerPlayer::$getPlayerEventCoordinator(void)
+spelling	__declspec(dllimport) public: class std::basic_string<char, struct std::char_traits<char>, class std::allocator<char>> __cdecl Actor::$getEntityLocNameString(void) const
+spelling	__declspec(dllimport) public: class std::basic_string<char, struct std::char_traits<char>, class std::allocator<char>> __cdecl Actor::$getExitTip(class std::basic_string<char, struct std::char_traits<char>, class std::allocator<char>> const &, enum InputMode, enum NewInteractionModel) const
+spelling	__declspec(dllimport) public: class std::basic_string<char, struct std::char_traits<char>, class std::allocator<char>> __cdecl Player::$getPlayFabId(void) const
+spelling	__declspec(dllimport) public: class std::basic_string<char, struct std::char_traits<char>, class std::allocator<char>> __cdecl Player::$getXuid(void) const
+spelling	__declspec(dllimport) public: class std::optional<class BlockPos> __cdecl Actor::$getLastDeathPos(void) const
+spelling	__declspec(dllimport) public: class std::optional<class BlockPos> __cdecl Player::$getLastDeathPos(void) const
+spelling	__declspec(dllimport) public: class std::optional<struct DimensionType> __cdecl Actor::$getLastDeathDimension(void) const
+spelling	__declspec(dllimport) public: class std::optional<struct DimensionType> __cdecl Player::$getLastDeathDimension(void) const
+spelling	__declspec(dllimport) public: class std::shared_ptr<class ChunkViewSource> __cdecl Player::$_createChunkSource(class ChunkSource &)
+spelling	__declspec(dllimport) public: class std::vector<class ChunkPos, class std::allocator<class ChunkPos>> const & __cdecl Player::$getTickingOffsets(void) const
+spelling	__declspec(dllimport) public: class std::vector<class ItemStack const *, class std::allocator<class ItemStack const *>> __cdecl Player::$getAllEquipment(void) const
+spelling	__declspec(dllimport) public: class std::vector<class ItemStack const *, class std::allocator<class ItemStack const *>> __cdecl Player::$getAllHandEquipment(void) const
+spelling	__declspec(dllimport) public: enum ActorType __cdecl Actor::$getOwnerEntityType(void)
+spelling	__declspec(dllimport) public: enum ArmorMaterialType __cdecl Actor::$getArmorMaterialTypeInSlot(enum SharedTypes::Legacy::ArmorSlot) const
+spelling	__declspec(dllimport) public: enum BedSleepingResult __cdecl Player::$startSleepInBed(class BlockPos const &, bool, float)
+spelling	__declspec(dllimport) public: enum CommandPermissionLevel __cdecl Actor::$getCommandPermissionLevel(void) const
+spelling	__declspec(dllimport) public: enum CommandPermissionLevel __cdecl Player::$getCommandPermissionLevel(void) const
+spelling	__declspec(dllimport) public: enum SharedTypes::Legacy::ActorDamageCause __cdecl Actor::$getBlockDamageCause(class Block const &) const
+spelling	__declspec(dllimport) public: enum SharedTypes::Legacy::LevelSoundEvent __cdecl Actor::$getAmbientSound(void) const
+spelling	__declspec(dllimport) public: float __cdecl Actor::$causeFallDamageToActor(float, float, class ActorDamageSource)
+spelling	__declspec(dllimport) public: float __cdecl Actor::$getArmorColorInSlot(enum SharedTypes::Legacy::ArmorSlot, int) const
+spelling	__declspec(dllimport) public: float __cdecl Actor::$getBrightness(float, class IConstBlockSource const &) const
+spelling	__declspec(dllimport) public: float __cdecl Actor::$getInterpolatedBodyRot(float) const
+spelling	__declspec(dllimport) public: float __cdecl Actor::$getInterpolatedBodyYaw(float) const
+spelling	__declspec(dllimport) public: float __cdecl Actor::$getInterpolatedHeadRot(float) const
+spelling	__declspec(dllimport) public: float __cdecl Actor::$getMapDecorationRotation(void) const
+spelling	__declspec(dllimport) public: float __cdecl Actor::$getPassengerYRotation(class Actor const &) const
+spelling	__declspec(dllimport) public: float __cdecl Actor::$getShadowRadius(void) const
+spelling	__declspec(dllimport) public: float __cdecl Actor::$getYawSpeedInDegreesPerSecond(void) const
+spelling	__declspec(dllimport) public: float __cdecl Player::$causeFallDamageToActor(float, float, class ActorDamageSource)
+spelling	__declspec(dllimport) public: float __cdecl Player::$getItemUseIntervalProgress(void) const
+spelling	__declspec(dllimport) public: float __cdecl Player::$getItemUseStartupProgress(void) const
+spelling	__declspec(dllimport) public: float __cdecl Player::$getMapDecorationRotation(void) const
+spelling	__declspec(dllimport) public: float __cdecl Player::$getShadowRadius(void) const
+spelling	__declspec(dllimport) public: float __cdecl Player::$getSpeed(void) const
+spelling	__declspec(dllimport) public: int __cdecl Actor::$getArmorTextureIndexInSlot(enum SharedTypes::Legacy::ArmorSlot) const
+spelling	__declspec(dllimport) public: int __cdecl Actor::$getDeathTime(void) const
+spelling	__declspec(dllimport) public: int __cdecl Player::$getItemUseDuration(void) const
+spelling	__declspec(dllimport) public: int __cdecl ServerPlayer::$_getSpawnChunkLimit(void) const
+spelling	__declspec(dllimport) public: struct ActorUniqueID __cdecl Actor::$getControllingPlayer(void) const
+spelling	__declspec(dllimport) public: struct ActorUniqueID __cdecl Actor::$getSourceUniqueID(void) const
+spelling	__declspec(dllimport) public: struct ActorUniqueID __cdecl ServerPlayer::$getControllingPlayer(void) const
+spelling	__declspec(dllimport) public: struct PlayerMovementSettings const & __cdecl Player::$getMovementSettings(void) const
+spelling	__declspec(dllimport) public: unsigned char __cdecl Player::$getMaxChunkBuildRadius(void) const
+spelling	__declspec(dllimport) public: unsigned char __cdecl ServerPlayer::$getMaxChunkBuildRadius(void) const
+spelling	__declspec(dllimport) public: unsigned int __cdecl Player::$getUserId(void) const
+spelling	__declspec(dllimport) public: void __cdecl Actor::$addAdditionalSaveData(class CompoundTag &) const
+spelling	__declspec(dllimport) public: void __cdecl Actor::$addPassenger(class Actor &)
+spelling	__declspec(dllimport) public: void __cdecl Actor::$applySnapshot(class EntityContext const &, class MovementDataExtractionUtility::SnapshotAccessor const &)
+spelling	__declspec(dllimport) public: void __cdecl Actor::$baseTick(void)
+spelling	__declspec(dllimport) public: void __cdecl Actor::$blockedByShield(class ActorDamageSource const &, class Actor &)
+spelling	__declspec(dllimport) public: void __cdecl Actor::$changeDimension(class ChangeDimensionPacket const &)
+spelling	__declspec(dllimport) public: void __cdecl Actor::$changeDimension(struct DimensionType)
+spelling	__declspec(dllimport) public: void __cdecl Actor::$despawn(void)
+spelling	__declspec(dllimport) public: void __cdecl Actor::$die(class ActorDamageSource const &)
+spelling	__declspec(dllimport) public: void __cdecl Actor::$doEnterWaterSplashEffect(void)
+spelling	__declspec(dllimport) public: void __cdecl Actor::$doExitWaterSplashEffect(void)
+spelling	__declspec(dllimport) public: void __cdecl Actor::$_doInitialMove(void)
+spelling	__declspec(dllimport) public: void __cdecl Actor::$doWaterSplashEffect(void)
+spelling	__declspec(dllimport) public: void __cdecl Actor::$feed(int)
+spelling	__declspec(dllimport) public: void __cdecl Actor::$getDebugText(class std::vector<class std::basic_string<char, struct std::char_traits<char>, class std::allocator<char>>, class std::allocator<class std::basic_string<char, struct std::char_traits<char>, class std::allocator<char>>>> &)
+spelling	__declspec(dllimport) public: void __cdecl Actor::$handleEntityEvent(enum ActorEvent, int)
+spelling	__declspec(dllimport) public: void __cdecl Actor::$handleInsidePortal(class BlockPos const &)
+spelling	__declspec(dllimport) public: void __cdecl Actor::$initializeComponents(enum ActorInitializationMethod, struct VariantParameterList const &)
+spelling	__declspec(dllimport) public: void __cdecl Actor::$kill(void)
+spelling	__declspec(dllimport) public: void __cdecl Actor::$lerpMotion(class Vec3 const &)
+spelling	__declspec(dllimport) public: void __cdecl Actor::$normalTick(void)
+spelling	__declspec(dllimport) public: void __cdecl Actor::$onEffectRemoved(class MobEffectInstance &)
+spelling	__declspec(dllimport) public: void __cdecl Actor::$onFailedTame(void)
+spelling	__declspec(dllimport) public: void __cdecl Actor::$onLightningHit(void)
+spelling	__declspec(dllimport) public: void __cdecl Actor::$onPush(class Actor &)
+spelling	__declspec(dllimport) public: void __cdecl Actor::$onSynchedDataUpdate(int)
+spelling	__declspec(dllimport) public: void __cdecl Actor::$onTame(void)
+spelling	__declspec(dllimport) public: void __cdecl Actor::$openContainerComponent(class Player &)
+spelling	__declspec(dllimport) public: void __cdecl Actor::$outOfWorld(void)
+spelling	__declspec(dllimport) public: void __cdecl Actor::$passengerTick(void)
+spelling	__declspec(dllimport) public: void __cdecl Actor::$performRangedAttack(class Actor &, float)
+spelling	__declspec(dllimport) public: void __cdecl Actor::$playAmbientSound(void)
+spelling	__declspec(dllimport) public: void __cdecl Actor::$playerTouch(class Player &)
+spelling	__declspec(dllimport) public: void __cdecl Actor::$readAdditionalSaveData(class CompoundTag const &, class DataLoadHelper &)
+spelling	__declspec(dllimport) public: void __cdecl Actor::$reloadComponents(enum ActorInitializationMethod, struct VariantParameterList const &)
+spelling	__declspec(dllimport) public: void __cdecl Actor::$reloadHardcodedClient(enum ActorInitializationMethod)
+spelling	__declspec(dllimport) public: void __cdecl Actor::$reloadHardcoded(enum ActorInitializationMethod, struct VariantParameterList const &)
+spelling	__declspec(dllimport) public: void __cdecl Actor::$remove(void)
+spelling	__declspec(dllimport) public: void __cdecl Actor::$renderDebugServerState(class IOptionsReader const &)
+spelling	__declspec(dllimport) public: void __cdecl Actor::$resetUserPos(enum ActorResetRule)
+spelling	__declspec(dllimport) public: void __cdecl Actor::$sendMotionPacketIfNeeded(void)
+spelling	__declspec(dllimport) public: void __cdecl Actor::$_serverInitItemStackIds(void)
+spelling	__declspec(dllimport) public: void __cdecl Actor::$setArmor(enum SharedTypes::Legacy::ArmorSlot, class ItemStack const &)
+spelling	__declspec(dllimport) public: void __cdecl Actor::$setAuxValue(int)
+spelling	__declspec(dllimport) public: void __cdecl Actor::$setCarriedItem(class ItemStack const &)
+spelling	__declspec(dllimport) public: void __cdecl Actor::$setEquippedSlot(enum SharedTypes::Legacy::EquipmentSlot, class ItemStack const &)
+spelling	__declspec(dllimport) public: void __cdecl Actor::$setOffhandSlot(class ItemStack const &)
+spelling	__declspec(dllimport) public: void __cdecl Actor::$setOwner(struct ActorUniqueID)
+spelling	__declspec(dllimport) public: void __cdecl Actor::$setSitting(bool)
+spelling	__declspec(dllimport) public: void __cdecl Actor::$setSleeping(bool)
+spelling	__declspec(dllimport) public: void __cdecl Actor::$setSneaking(bool)
+spelling	__declspec(dllimport) public: void __cdecl Actor::$setStanding(bool)
+spelling	__declspec(dllimport) public: void __cdecl Actor::$setTarget(class Actor *)
+spelling	__declspec(dllimport) public: void __cdecl Actor::$startSwimming(void)
+spelling	__declspec(dllimport) public: void __cdecl Actor::$stopSwimming(void)
+spelling	__declspec(dllimport) public: void __cdecl Actor::$useItem(class ItemStackBase &, enum ItemUseMethod, bool)
+spelling	__declspec(dllimport) public: void __cdecl Player::$addAdditionalSaveData(class CompoundTag &) const
+spelling	__declspec(dllimport) public: void __cdecl Player::$addExperience(int)
+spelling	__declspec(dllimport) public: void __cdecl Player::$addLevels(int)
+spelling	__declspec(dllimport) public: void __cdecl Player::$aiStep(void)
+spelling	__declspec(dllimport) public: void __cdecl Player::$changeDimensionWithCredits(struct DimensionType)
+spelling	__declspec(dllimport) public: void __cdecl Player::$checkMovementStats(class Vec3 const &)
+spelling	__declspec(dllimport) public: void __cdecl Player::$clearVanishEnchantedItemsOnDeath(void)
+spelling	__declspec(dllimport) public: void __cdecl Player::$damageCarriedItemOnAttack(class Actor &, float)
+spelling	__declspec(dllimport) public: void __cdecl Player::$deleteContainerManager(void)
+spelling	__declspec(dllimport) public: void __cdecl Player::$destroyRegion(void)
+spelling	__declspec(dllimport) public: void __cdecl Player::$die(class ActorDamageSource const &)
+spelling	__declspec(dllimport) public: void __cdecl Player::$displayChatMessage(class std::basic_string<char, struct std::char_traits<char>, class std::allocator<char>> const &, class std::basic_string<char, struct std::char_traits<char>, class std::allocator<char>> const &, class std::optional<class std::basic_string<char, struct std::char_traits<char>, class std::allocator<char>>>)
+spelling	__declspec(dllimport) public: void __cdecl Player::$displayTextObjectMessage(class TextObjectRoot const &, class std::basic_string<char, struct std::char_traits<char>, class std::allocator<char>> const &, class std::basic_string<char, struct std::char_traits<char>, class std::allocator<char>> const &)
+spelling	__declspec(dllimport) public: void __cdecl Player::$displayTextObjectWhisperMessage(class ResolvedTextObject const &, class std::basic_string<char, struct std::char_traits<char>, class std::allocator<char>> const &, class std::basic_string<char, struct std::char_traits<char>, class std::allocator<char>> const &)
+spelling	__declspec(dllimport) public: void __cdecl Player::$displayTextObjectWhisperMessage(class std::basic_string<char, struct std::char_traits<char>, class std::allocator<char>> const &, class std::basic_string<char, struct std::char_traits<char>, class std::allocator<char>> const &, class std::basic_string<char, struct std::char_traits<char>, class std::allocator<char>> const &)
+spelling	__declspec(dllimport) public: void __cdecl Player::$displayWhisperMessage(class std::basic_string<char, struct std::char_traits<char>, class std::allocator<char>> const &, class std::basic_string<char, struct std::char_traits<char>, class std::allocator<char>> const &, class std::optional<class std::basic_string<char, struct std::char_traits<char>, class std::allocator<char>>>, class std::basic_string<char, struct std::char_traits<char>, class std::allocator<char>> const &, class std::basic_string<char, struct std::char_traits<char>, class std::allocator<char>> const &)
+spelling	__declspec(dllimport) public: void __cdecl Player::$doEnterWaterSplashEffect(void)
+spelling	__declspec(dllimport) public: void __cdecl Player::$doExitWaterSplashEffect(void)
+spelling	__declspec(dllimport) public: void __cdecl Player::$dropEquipmentOnDeath(class ActorDamageSource const &)
+spelling	__declspec(dllimport) public: void __cdecl Player::$dropEquipmentOnDeath(void)
+spelling	__declspec(dllimport) public: void __cdecl Player::$emitCriticalHitParticles(class Actor const &, int)
+spelling	__declspec(dllimport) public: void __cdecl Player::$feed(int)
+spelling	__declspec(dllimport) public: void __cdecl Player::$_fireDimensionChanged(void)
+spelling	__declspec(dllimport) public: void __cdecl Player::$handleEntityEvent(enum ActorEvent, int)
+spelling	__declspec(dllimport) public: void __cdecl Player::$initHUDContainerManager(void)
+spelling	__declspec(dllimport) public: void __cdecl Player::$moveSpawnView(class Vec3 const &, struct DimensionType)
+spelling	__declspec(dllimport) public: void __cdecl Player::$moveView(void)
+spelling	__declspec(dllimport) public: void __cdecl Player::$normalTick(void)
+spelling	__declspec(dllimport) public: void __cdecl Player::$onLinkedSlotsChanged(void)
+spelling	__declspec(dllimport) public: void __cdecl Player::$onMovePlayerPacketNormal(class Vec3 const &, class Vec2 const &, float)
+spelling	__declspec(dllimport) public: void __cdecl Player::$onSuspension(void)
+spelling	__declspec(dllimport) public: void __cdecl Player::$onSynchedDataUpdate(int)
+spelling	__declspec(dllimport) public: void __cdecl Player::$openBook(int, bool, int, class BlockActor *)
+spelling	__declspec(dllimport) public: void __cdecl Player::$openChalkboard(class ChalkboardBlockActor &, bool)
+spelling	__declspec(dllimport) public: void __cdecl Player::$openInventory(void)
+spelling	__declspec(dllimport) public: void __cdecl Player::$openNpcInteractScreen(class std::shared_ptr<struct INpcDialogueData>)
+spelling	__declspec(dllimport) public: void __cdecl Player::$openPortfolio(void)
+spelling	__declspec(dllimport) public: void __cdecl Player::$openSign(class BlockPos const &, bool)
+spelling	__declspec(dllimport) public: void __cdecl Player::$openTrading(struct ActorUniqueID const &, bool)
+spelling	__declspec(dllimport) public: void __cdecl Player::$passengerTick(void)
+spelling	__declspec(dllimport) public: void __cdecl Player::$playEmote(class std::basic_string<char, struct std::char_traits<char>, class std::allocator<char>> const &, bool)
+spelling	__declspec(dllimport) public: void __cdecl Player::$prepareRegion(class ChunkSource &)
+spelling	__declspec(dllimport) public: void __cdecl Player::$readAdditionalSaveData(class CompoundTag const &, class DataLoadHelper &)
+spelling	__declspec(dllimport) public: void __cdecl Player::$reloadHardcoded(enum ActorInitializationMethod, struct VariantParameterList const &)
+spelling	__declspec(dllimport) public: void __cdecl Player::$remove(void)
+spelling	__declspec(dllimport) public: void __cdecl Player::$requestMissingSubChunk(class SubChunkPos const &)
+spelling	__declspec(dllimport) public: void __cdecl Player::$resetRot(void)
+spelling	__declspec(dllimport) public: void __cdecl Player::$resetUserPos(enum ActorResetRule)
+spelling	__declspec(dllimport) public: void __cdecl Player::$respawn(void)
+spelling	__declspec(dllimport) public: void __cdecl Player::$sendInventory(bool)
+spelling	__declspec(dllimport) public: void __cdecl Player::$sendMotionPacketIfNeeded(void)
+spelling	__declspec(dllimport) public: void __cdecl Player::$sendNetworkPacket(class Packet &) const
+spelling	__declspec(dllimport) public: void __cdecl Player::$_serverInitItemStackIds(void)
+spelling	__declspec(dllimport) public: void __cdecl Player::$setAbilities(class LayeredAbilities const &)
+spelling	__declspec(dllimport) public: void __cdecl Player::$setArmor(enum SharedTypes::Legacy::ArmorSlot, class ItemStack const &)
+spelling	__declspec(dllimport) public: void __cdecl Player::$setBehaviorCommandStatus(class std::basic_string<char, struct std::char_traits<char>, class std::allocator<char>> const &, enum BehaviorStatus)
+spelling	__declspec(dllimport) public: void __cdecl Player::$setCarriedItem(class ItemStack const &)
+spelling	__declspec(dllimport) public: void __cdecl Player::$setOffhandSlot(class ItemStack const &)
+spelling	__declspec(dllimport) public: void __cdecl Player::$setPlayerGameType(enum GameType)
+spelling	__declspec(dllimport) public: void __cdecl Player::$setRemotePlayerTicked(bool)
+spelling	__declspec(dllimport) public: void __cdecl Player::$setSleeping(bool)
+spelling	__declspec(dllimport) public: void __cdecl Player::$setSpeed(float)
+spelling	__declspec(dllimport) public: void __cdecl Player::$startSwimming(void)
+spelling	__declspec(dllimport) public: void __cdecl Player::$stopLoading(void)
+spelling	__declspec(dllimport) public: void __cdecl Player::$stopSleepInBed(bool, bool)
+spelling	__declspec(dllimport) public: void __cdecl Player::$stopSwimming(void)
+spelling	__declspec(dllimport) public: void __cdecl Player::$suspendRegion(void)
+spelling	__declspec(dllimport) public: void __cdecl Player::$teleportTo(class Vec3 const &, bool, int, int, bool)
+spelling	__declspec(dllimport) public: void __cdecl Player::$tickWorld(struct Tick const &)
+spelling	__declspec(dllimport) public: void __cdecl Player::$useItem(class ItemStackBase &, enum ItemUseMethod, bool)
+spelling	__declspec(dllimport) public: void __cdecl ServerPlayer::$aiStep(void)
+spelling	__declspec(dllimport) public: void __cdecl ServerPlayer::$changeDimension(struct DimensionType)
+spelling	__declspec(dllimport) public: void __cdecl ServerPlayer::$changeDimensionWithCredits(struct DimensionType)
+spelling	__declspec(dllimport) public: void __cdecl ServerPlayer::$checkMovementStats(class Vec3 const &)
+spelling	__declspec(dllimport) public: void __cdecl ServerPlayer::$clearVanishEnchantedItemsOnDeath(void)
+spelling	__declspec(dllimport) public: void __cdecl ServerPlayer::$destroyEditorPlayer(void)
+spelling	__declspec(dllimport) public: void __cdecl ServerPlayer::$destroyRegion(void)
+spelling	__declspec(dllimport) public: void __cdecl ServerPlayer::$die(class ActorDamageSource const &)
+spelling	__declspec(dllimport) public: void __cdecl ServerPlayer::$displayTextObjectMessage(class TextObjectRoot const &, class std::basic_string<char, struct std::char_traits<char>, class std::allocator<char>> const &, class std::basic_string<char, struct std::char_traits<char>, class std::allocator<char>> const &)
+spelling	__declspec(dllimport) public: void __cdecl ServerPlayer::$displayTextObjectWhisperMessage(class ResolvedTextObject const &, class std::basic_string<char, struct std::char_traits<char>, class std::allocator<char>> const &, class std::basic_string<char, struct std::char_traits<char>, class std::allocator<char>> const &)
+spelling	__declspec(dllimport) public: void __cdecl ServerPlayer::$displayTextObjectWhisperMessage(class std::basic_string<char, struct std::char_traits<char>, class std::allocator<char>> const &, class std::basic_string<char, struct std::char_traits<char>, class std::allocator<char>> const &, class std::basic_string<char, struct std::char_traits<char>, class std::allocator<char>> const &)
+spelling	__declspec(dllimport) public: void __cdecl ServerPlayer::$displayWhisperMessage(class std::basic_string<char, struct std::char_traits<char>, class std::allocator<char>> const &, class std::basic_string<char, struct std::char_traits<char>, class std::allocator<char>> const &, class std::optional<class std::basic_string<char, struct std::char_traits<char>, class std::allocator<char>>>, class std::basic_string<char, struct std::char_traits<char>, class std::allocator<char>> const &, class std::basic_string<char, struct std::char_traits<char>, class std::allocator<char>> const &)
+spelling	__declspec(dllimport) public: void __cdecl ServerPlayer::$frameUpdate(class FrameUpdateContextBase &)
+spelling	__declspec(dllimport) public: void __cdecl ServerPlayer::$handleEntityEvent(enum ActorEvent, int)
+spelling	__declspec(dllimport) public: void __cdecl ServerPlayer::$moveSpawnView(class Vec3 const &, struct DimensionType)
+spelling	__declspec(dllimport) public: void __cdecl ServerPlayer::$moveView(void)
+spelling	__declspec(dllimport) public: void __cdecl ServerPlayer::$normalTick(void)
+spelling	__declspec(dllimport) public: void __cdecl ServerPlayer::$onLinkedSlotsChanged(void)
+spelling	__declspec(dllimport) public: void __cdecl ServerPlayer::$onSuspension(void)
+spelling	__declspec(dllimport) public: void __cdecl ServerPlayer::$openBook(int, bool, int, class BlockActor *)
+spelling	__declspec(dllimport) public: void __cdecl ServerPlayer::$openInventory(void)
+spelling	__declspec(dllimport) public: void __cdecl ServerPlayer::$openNpcInteractScreen(class std::shared_ptr<struct INpcDialogueData>)
+spelling	__declspec(dllimport) public: void __cdecl ServerPlayer::$openPortfolio(void)
+spelling	__declspec(dllimport) public: void __cdecl ServerPlayer::$openSign(class BlockPos const &, bool)
+spelling	__declspec(dllimport) public: void __cdecl ServerPlayer::$openTrading(struct ActorUniqueID const &, bool)
+spelling	__declspec(dllimport) public: void __cdecl ServerPlayer::$prepareRegion(class ChunkSource &)
+spelling	__declspec(dllimport) public: void __cdecl ServerPlayer::$refreshContainer(class IContainerManager &)
+spelling	__declspec(dllimport) public: void __cdecl ServerPlayer::$respawn(void)
+spelling	__declspec(dllimport) public: void __cdecl ServerPlayer::$sendArmor(class std::bitset<5>)
+spelling	__declspec(dllimport) public: void __cdecl ServerPlayer::$sendArmorDamage(class std::bitset<5>)
+spelling	__declspec(dllimport) public: void __cdecl ServerPlayer::$sendInventory(bool)
+spelling	__declspec(dllimport) public: void __cdecl ServerPlayer::$sendInventoryTransaction(class InventoryTransaction const &) const
+spelling	__declspec(dllimport) public: void __cdecl ServerPlayer::$sendNetworkPacket(class Packet &) const
+spelling	__declspec(dllimport) public: void __cdecl ServerPlayer::$_serverInitItemStackIds(void)
+spelling	__declspec(dllimport) public: void __cdecl ServerPlayer::$setArmor(enum SharedTypes::Legacy::ArmorSlot, class ItemStack const &)
+spelling	__declspec(dllimport) public: void __cdecl ServerPlayer::$setContainerData(class IContainerManager &, int, int)
+spelling	__declspec(dllimport) public: void __cdecl ServerPlayer::$setDamagedArmor(enum SharedTypes::Legacy::ArmorSlot, class ItemStack const &)
+spelling	__declspec(dllimport) public: void __cdecl ServerPlayer::$setOffhandSlot(class ItemStack const &)
+spelling	__declspec(dllimport) public: void __cdecl ServerPlayer::$setPlayerGameType(enum GameType)
+spelling	__declspec(dllimport) public: void __cdecl ServerPlayer::$slotChanged(class IContainerManager &, class Container &, int, class ItemStack const &, class ItemStack const &, bool)
+spelling	__declspec(dllimport) public: void __cdecl ServerPlayer::$stopSleepInBed(bool, bool)
+spelling	__declspec(dllimport) public: void __cdecl ServerPlayer::$_updateChunkPublisherView(class Vec3 const &, float)
+absent	__declspec(dllimport) public: bool __cdecl Actor::addTag(class std::basic_string<char, struct std::char_traits<char>, class std::allocator<char>> const &)
+absent	__declspec(dllimport) public: bool __cdecl Actor::_applyPendingPropertyChanges(void)
+absent	__declspec(dllimport) public: bool __cdecl Actor::canAttack(class Actor const &) const
+absent	__declspec(dllimport) public: bool __cdecl Actor::canBeginOrContinueClimbingLadder(void) const
+absent	__declspec(dllimport) public: bool __cdecl Actor::canMate(class Actor const &) const
+absent	__declspec(dllimport) public: bool __cdecl Actor::canReceiveMobEffectsFromGameplay(void) const
+absent	__declspec(dllimport) public: bool __cdecl Actor::canSee(class Vec3 const &, enum ShapeType) const
+absent	__declspec(dllimport) public: bool __cdecl Actor::canSeeDaylight(void) const
+absent	__declspec(dllimport) public: bool __cdecl Actor::closerThan(class Actor const &, float) const
+absent	__declspec(dllimport) public: bool __cdecl Actor::closerThan(class Actor const &, float, float) const
+absent	__declspec(dllimport) public: bool __cdecl Actor::executeEvent(class std::basic_string<char, struct std::char_traits<char>, class std::allocator<char>> const &, struct VariantParameterList const &)
+absent	__declspec(dllimport) public: bool __cdecl Actor::getFirstAvailableSeatPos(class Actor &, class Vec3 &) const
+absent	__declspec(dllimport) public: bool __cdecl Actor::hasAnyEffects(void) const
+absent	__declspec(dllimport) public: bool __cdecl Actor::hasDimension(void) const
+absent	__declspec(dllimport) public: bool __cdecl Actor::hasFamily(class HashedString const &) const
+absent	__declspec(dllimport) public: bool __cdecl Actor::hasPassenger(void) const
+absent	__declspec(dllimport) public: bool __cdecl Actor::hasPlayerPassenger(void) const
+absent	__declspec(dllimport) public: bool __cdecl Actor::hasPriorityAmmunition(void) const
+absent	__declspec(dllimport) public: bool __cdecl Actor::hasRuntimeID(void) const
+absent	__declspec(dllimport) public: bool __cdecl Actor::hasSaddle(void) const
+absent	__declspec(dllimport) public: bool __cdecl Actor::hasTag(class std::basic_string<char, struct std::char_traits<char>, class std::allocator<char>> const &) const
+absent	__declspec(dllimport) public: bool __cdecl Actor::hasTags(void) const
+absent	__declspec(dllimport) public: bool __cdecl Actor::hasType(enum ActorType) const
+absent	__declspec(dllimport) public: bool __cdecl Actor::hasUniqueID(void) const
+absent	__declspec(dllimport) public: bool __cdecl Actor::inDownwardFlowingLiquid(void) const
+absent	__declspec(dllimport) public: bool __cdecl Actor::isActorLocationInMaterial(enum SharedTypes::Legacy::ActorLocation, enum SharedTypes::v1_26_20::MaterialType) const
+absent	__declspec(dllimport) public: bool __cdecl Actor::isAdventure(void) const
+absent	__declspec(dllimport) public: bool __cdecl Actor::isAngry(void) const
+absent	__declspec(dllimport) public: bool __cdecl Actor::isBaby(void) const
+absent	__declspec(dllimport) public: bool __cdecl Actor::isCreative(void) const
+absent	__declspec(dllimport) public: bool __cdecl Actor::_isDeathLootAllowed(void) const
+absent	__declspec(dllimport) public: bool __cdecl Actor::isDoorOpener(void) const
+absent	__declspec(dllimport) public: bool __cdecl Actor::isImmersedInWater(void) const
+absent	__declspec(dllimport) public: bool __cdecl Actor::isInClouds(void) const
+absent	__declspec(dllimport) public: bool __cdecl Actor::isInLove(void) const
+absent	__declspec(dllimport) public: bool __cdecl Actor::isInPrecipitation(void) const
+absent	__declspec(dllimport) public: bool __cdecl Actor::isInRain(void) const
+absent	__declspec(dllimport) public: bool __cdecl Actor::isInsidePortal(void) const
+absent	__declspec(dllimport) public: bool __cdecl Actor::isInSnow(void) const
+absent	__declspec(dllimport) public: bool __cdecl Actor::isInThunderstorm(void) const
+absent	__declspec(dllimport) public: bool __cdecl Actor::isInvertedHealAndHarm(void) const
+absent	__declspec(dllimport) public: bool __cdecl Actor::isInWaterOrRain(void) const
+absent	__declspec(dllimport) public: bool __cdecl Actor::isInWater(void) const
+absent	__declspec(dllimport) public: bool __cdecl Actor::isJumping(void) const
+absent	__declspec(dllimport) public: bool __cdecl Actor::isLayingDown(void) const
+absent	__declspec(dllimport) public: bool __cdecl Actor::isLeashed(void) const
+absent	__declspec(dllimport) public: bool __cdecl Actor::isLocalPlayer(void) const
+absent	__declspec(dllimport) public: bool __cdecl Actor::isOrphan(void) const
+absent	__declspec(dllimport) public: bool __cdecl Actor::isOverWater(void) const
+absent	__declspec(dllimport) public: bool __cdecl Actor::isPassenger(class Actor const &) const
+absent	__declspec(dllimport) public: bool __cdecl Actor::isResting(void) const
+absent	__declspec(dllimport) public: bool __cdecl Actor::isRiding(class Actor *) const
+absent	__declspec(dllimport) public: bool __cdecl Actor::isSilent(void) const
+absent	__declspec(dllimport) public: bool __cdecl Actor::isSitting(void) const
+absent	__declspec(dllimport) public: bool __cdecl Actor::isSpectator(void) const
+absent	__declspec(dllimport) public: bool __cdecl Actor::isStanding(void) const
+absent	__declspec(dllimport) public: bool __cdecl Actor::isSurvival(void) const
+absent	__declspec(dllimport) public: bool __cdecl Actor::isTame(void) const
+absent	__declspec(dllimport) public: bool __cdecl Actor::isTrading(void) const
+absent	__declspec(dllimport) public: bool __cdecl Actor::isUnderLiquid(enum SharedTypes::v1_26_20::MaterialType) const
+absent	__declspec(dllimport) public: bool __cdecl Actor::isUseNewTradeScreen(void) const
+absent	__declspec(dllimport) public: bool __cdecl Actor::isWearingLeatherArmor(void) const
+absent	__declspec(dllimport) public: bool __cdecl Actor::isWorldBuilder(void) const
+absent	__declspec(dllimport) public: bool __cdecl Actor::onClimbableBlock(void) const
+absent	__declspec(dllimport) public: bool __cdecl Actor::pullInEntity(class Actor &)
+absent	__declspec(dllimport) public: bool __cdecl Actor::removeTag(class std::basic_string<char, struct std::char_traits<char>, class std::allocator<char>> const &)
+absent	__declspec(dllimport) public: bool __cdecl Actor::save(class CompoundTag &) const
+absent	__declspec(dllimport) public: bool __cdecl Actor::shouldOrphan(class BlockSource &)
+absent	__declspec(dllimport) public: bool __cdecl Actor::shouldTick(void) const
+absent	__declspec(dllimport) public: bool __cdecl Actor::tick(class BlockSource &)
+absent	__declspec(dllimport) public: bool __cdecl Actor::tryTeleportTo(class Vec3 const &, bool, bool, int, int)
+absent	__declspec(dllimport) public: bool __cdecl Player::canJump(void)
+absent	__declspec(dllimport) public: bool __cdecl Player::canOpenContainerScreen(void)
+absent	__declspec(dllimport) public: bool __cdecl Player::canStackInOffhand(class ItemStack const &) const
+absent	__declspec(dllimport) public: bool __cdecl Player::canUseAbility(enum AbilitiesIndex) const
+absent	__declspec(dllimport) public: bool __cdecl Player::canUseOperatorBlocks(void) const
+absent	__declspec(dllimport) public: bool __cdecl Player::checkBed(class BlockSource *, class Vec3 const *const)
+absent	__declspec(dllimport) public: bool __cdecl Player::checkNeedAutoJump(float, float)
+absent	__declspec(dllimport) public: bool __cdecl Player::checkSpawnBlock(class BlockSource const &) const
+absent	__declspec(dllimport) public: bool __cdecl Player::equippedArmorItemCanBeMoved(class ItemStack const &) const
+absent	__declspec(dllimport) public: bool __cdecl Player::hasResource(class ItemDescriptor const &)
+absent	__declspec(dllimport) public: bool __cdecl Player::_isChunkSourceLoaded(class Vec3 const &, class BlockSource const &) const
+absent	__declspec(dllimport) public: bool __cdecl Player::isEditorPlayer(void) const
+absent	__declspec(dllimport) public: bool __cdecl Player::isEquipmentHidden(void) const
+absent	__declspec(dllimport) public: bool __cdecl Player::isFlying(void) const
+absent	__declspec(dllimport) public: bool __cdecl Player::isForcedRespawn(void) const
+absent	__declspec(dllimport) public: bool __cdecl Player::isItemOnCooldown(class HashedString const &) const
+absent	__declspec(dllimport) public: bool __cdecl Player::setSpawnBlockRespawnPosition(class BlockPos const &, struct DimensionType)
+absent	__declspec(dllimport) public: bool __cdecl Player::take(class Actor &, int, int)
+absent	__declspec(dllimport) public: bool __cdecl Player::tryStartGliding(void)
+absent	__declspec(dllimport) public: bool __cdecl Player::_validateSpawnPositionAvailability(class Vec3 const &, class BlockSource *, class Vec3 const *const) const
+absent	__declspec(dllimport) public: bool __cdecl ServerPlayer::isInPickRangeOf(class BlockPos const &) const
+absent	__declspec(dllimport) public: bool __cdecl ServerPlayer::selectItem(class ItemStack const &)
+absent	__declspec(dllimport) public: class AABB __cdecl Player::getPickupArea(void) const
+absent	__declspec(dllimport) public: class Actor * __cdecl Actor::getFirstPassenger(void) const
+absent	__declspec(dllimport) public: class Actor * __cdecl Actor::getVehicle(void) const
+absent	__declspec(dllimport) public: class Agent * __cdecl Player::getAgentIfAllowed(bool, struct ActorUniqueID) const
+absent	__declspec(dllimport) public: class AnimationComponent & __cdecl Actor::_getAnimationComponent(class std::shared_ptr<class AnimationComponent> &, enum AnimationComponentGroupType)
+absent	__declspec(dllimport) public: class Bedrock::Safety::RedactableString __cdecl Actor::getRedactableNameTag(void) const
+absent	__declspec(dllimport) public: class BlockPos __cdecl Actor::getBlockPosCurrentlyStandingOn(class Actor const *) const
+absent	__declspec(dllimport) public: class BlockPos const & __cdecl Player::getExpectedSpawnPosition(void) const
+absent	__declspec(dllimport) public: class BlockSource & __cdecl Actor::getDimensionBlockSource(void) const
+absent	__declspec(dllimport) public: class BlockSource const & __cdecl Actor::getDimensionBlockSourceConst(void) const
+signature	__declspec(dllimport) public: class Dimension & __cdecl Actor::getDimension(void) const
+absent	__declspec(dllimport) public: class DynamicProperties & __cdecl Actor::getOrAddDynamicProperties(void)
+absent	__declspec(dllimport) public: class FishingHook * __cdecl Actor::fetchFishingHook(void)
+absent	__declspec(dllimport) public: class ItemActor * __cdecl Actor::spawnAtLocation(class ItemStack const &, float)
+absent	__declspec(dllimport) public: class ItemActor const * __cdecl Actor::_drop(class ItemStack const &, bool)
+absent	__declspec(dllimport) public: class ItemStack const & __cdecl Actor::getCarriedItemInSlotPreferredBy(class ItemStack const &) const
+absent	__declspec(dllimport) public: class ItemStack const & __cdecl Actor::getItemInHandSlot(enum HandSlot) const
+absent	__declspec(dllimport) public: class ItemStack const & __cdecl Player::setSelectedSlot(int)
+absent	__declspec(dllimport) public: class LayeredAbilities & __cdecl Player::getAbilities(void)
+absent	__declspec(dllimport) public: class LayeredAbilities const & __cdecl Player::getAbilities(void) const
+absent	__declspec(dllimport) public: class LootTable * __cdecl Actor::getLootTable(void)
+absent	__declspec(dllimport) public: class MerchantRecipeList * __cdecl Actor::getTradeOffers(void)
+absent	__declspec(dllimport) public: class Mob * __cdecl Actor::getOwner(void) const
+absent	__declspec(dllimport) public: class MobEffectInstance const * __cdecl Actor::getEffect(class MobEffect const &) const
+absent	__declspec(dllimport) public: class MobEffectInstance const * __cdecl Actor::getEffect(unsigned int) const
+absent	__declspec(dllimport) public: class Player * __cdecl Actor::getPlayerOwner(void) const
+absent	__declspec(dllimport) public: class Random & __cdecl Actor::getRandom(void) const
+absent	__declspec(dllimport) public: class std::basic_string<char, struct std::char_traits<char>, class std::allocator<char>> __cdecl Player::getChatDisplayName(void) const
+absent	__declspec(dllimport) public: class std::basic_string<char, struct std::char_traits<char>, class std::allocator<char>> __cdecl Player::getInteractText(void) const
+absent	__declspec(dllimport) public: class std::basic_string<char, struct std::char_traits<char>, class std::allocator<char>> __cdecl Player::getItemInteractText(class Item const &) const
+absent	__declspec(dllimport) public: class std::basic_string<char, struct std::char_traits<char>, class std::allocator<char>> __cdecl ServerPlayer::getLanguageCode(void) const
+absent	__declspec(dllimport) public: class std::basic_string<char, struct std::char_traits<char>, class std::allocator<char>> const & __cdecl Actor::getNameTag(void) const
+absent	__declspec(dllimport) public: class std::vector<class ItemDescriptor, class std::allocator<class ItemDescriptor>> const * __cdecl Actor::tryGetEquippableSlotAllowedItems(int) const
+absent	__declspec(dllimport) public: class std::vector<class MobEffectInstance, class std::allocator<class MobEffectInstance>> & __cdecl Actor::_getAllEffectsNonConst(void)
+absent	__declspec(dllimport) public: class std::vector<class MobEffectInstance, class std::allocator<class MobEffectInstance>> const & __cdecl Actor::getAllEffects(void) const
+absent	__declspec(dllimport) public: class std::vector<class std::basic_string<char, struct std::char_traits<char>, class std::allocator<char>>, class std::allocator<class std::basic_string<char, struct std::char_traits<char>, class std::allocator<char>>>> const __cdecl Actor::getTags(void) const
+absent	__declspec(dllimport) public: enum ActorType __cdecl Actor::getEntityTypeId(void) const
+absent	__declspec(dllimport) public: enum ContainerID __cdecl ServerPlayer::openUnmanagedContainer(enum SharedTypes::Legacy::ContainerType, class std::variant<class BlockPos, struct ActorUniqueID>)
+absent	__declspec(dllimport) public: enum GameType __cdecl Player::getPlayerGameType(void) const
+absent	__declspec(dllimport) public: enum PlayerPermissionLevel __cdecl Player::getPlayerPermissionLevel(void) const
+absent	__declspec(dllimport) public: enum SharedTypes::Legacy::EquipmentSlot __cdecl Actor::getEquipmentSlotForItem(class ItemStack const &) const
+absent	__declspec(dllimport) public: float __cdecl Actor::distanceSqrToBlockPosCenter(class BlockPos const &) const
+signature	__declspec(dllimport) public: float __cdecl Actor::distanceTo(class Actor const &) const
+absent	__declspec(dllimport) public: float __cdecl Actor::evaluateSeatRotation(class RideableComponent const &, bool)
+absent	__declspec(dllimport) public: float __cdecl Actor::getCurrentSwimAmount(void) const
+absent	__declspec(dllimport) public: float __cdecl Actor::getFallDistance(void) const
+absent	__declspec(dllimport) public: float __cdecl Actor::getMaxAutoStep(void) const
+absent	__declspec(dllimport) public: float __cdecl Actor::getRidingHeight(void) const
+absent	__declspec(dllimport) public: float __cdecl Actor::getSwimAmount(float) const
+absent	__declspec(dllimport) public: float __cdecl Actor::getYHeadRot(void) const
+absent	__declspec(dllimport) public: float __cdecl Player::getDestroyProgress(class Block const &)
+absent	__declspec(dllimport) public: float __cdecl Player::getSleepRotation(void) const
+absent	__declspec(dllimport) public: int __cdecl Actor::getChestSlots(void) const
+absent	__declspec(dllimport) public: int __cdecl Actor::getEquipmentCount(void) const
+absent	__declspec(dllimport) public: int __cdecl Actor::getEquipSlots(void) const
+absent	__declspec(dllimport) public: int __cdecl Actor::getInventorySize(void) const
+absent	__declspec(dllimport) public: int __cdecl Actor::getMarkVariant(void) const
+absent	__declspec(dllimport) public: int __cdecl Actor::getOnDeathExperience(void)
+absent	__declspec(dllimport) public: int __cdecl Actor::getPassengerIndex(class Actor const &) const
+absent	__declspec(dllimport) public: int __cdecl Actor::getStrength(void) const
+absent	__declspec(dllimport) public: int __cdecl Actor::getVariant(void) const
+absent	__declspec(dllimport) public: int __cdecl Player::getItemCooldownLeft(class HashedString const &) const
+absent	__declspec(dllimport) public: int __cdecl Player::getItemCooldownLeft(unsigned __int64) const
+absent	__declspec(dllimport) public: int __cdecl Player::getMaxItemCooldownLeft(void) const
+absent	__declspec(dllimport) public: static bool __cdecl Actor::isInLiquid(enum SharedTypes::v1_26_20::MaterialType, class IConstBlockSource const &, class AABB const &, class std::vector<class AABB, class std::allocator<class AABB>> const &)
+absent	__declspec(dllimport) public: static bool __cdecl Player::checkNeedAutoJump(class IConstBlockSource const &, struct AABBShapeComponent const &, struct ActorRotationComponent const &, float, struct StateVectorComponent const &, class optional_ref<class GetCollisionShapeInterface const>, float, float)
+signature	__declspec(dllimport) public: static class Actor * __cdecl Actor::tryGetFromEntity(class StackRefResult<class EntityContext>, bool)
+signature	__declspec(dllimport) public: static class Actor * __cdecl Actor::tryGetFromEntity(class StrictEntityContext const &, class EntityRegistry &, bool)
+absent	__declspec(dllimport) public: static class Attribute const & __cdecl Player::EXHAUSTION(void)
+absent	__declspec(dllimport) public: static class Attribute const & __cdecl Player::EXPERIENCE(void)
+absent	__declspec(dllimport) public: static class Attribute const & __cdecl Player::HUNGER(void)
+absent	__declspec(dllimport) public: static class Attribute const & __cdecl Player::LEVEL(void)
+absent	__declspec(dllimport) public: static class Attribute const & __cdecl Player::SATURATION(void)
+absent	__declspec(dllimport) public: static class std::optional<enum SharedTypes::Legacy::LevelSoundEvent> __cdecl Player::getCustomHurtSound(class Mob const &, enum SharedTypes::Legacy::ActorDamageCause)
+absent	__declspec(dllimport) public: static class std::vector<class BlockPos, class std::allocator<class BlockPos>> __cdecl Actor::getBlocksCurrentlyStandingOn(class AABB const &, class IConstBlockSource const &, float, class optional_ref<class GetCollisionShapeInterface const>)
+absent	__declspec(dllimport) public: struct ActorDefinitionIdentifier const & __cdecl Actor::getActorIdentifier(void) const
+absent	__declspec(dllimport) public: struct ActorUniqueID __cdecl Actor::getLeashHolder(void) const
+absent	__declspec(dllimport) public: struct ActorUniqueID const & __cdecl Actor::getOrCreateUniqueID(void) const
+absent	__declspec(dllimport) public: struct ActorUniqueID const __cdecl Actor::getOwnerId(void) const
+absent	__declspec(dllimport) public: struct BuiltInActorComponents __cdecl Actor::_addActorBuiltInComponents(void)
+absent	__declspec(dllimport) public: struct DimensionType __cdecl Player::getExpectedSpawnDimensionId(void) const
+absent	__declspec(dllimport) public: unsigned __int64 __cdecl Actor::getLevelTimeStamp(void) const
+absent	__declspec(dllimport) public: void __cdecl Actor::_addActorNonBuiltInComponents(void)
+absent	__declspec(dllimport) public: void __cdecl Actor::addEffect(class MobEffectInstance const &)
+absent	__declspec(dllimport) public: void __cdecl Actor::applyOnBornPropertyChanges(void)
+absent	__declspec(dllimport) public: void __cdecl Actor::burn(int, bool)
+absent	__declspec(dllimport) public: void __cdecl Actor::celebrateHunt(int, bool)
+absent	__declspec(dllimport) public: void __cdecl Actor::checkFallDamage(float, bool, bool)
+absent	__declspec(dllimport) public: void __cdecl Actor::chorusFruitTeleport(class Vec3 const &)
+absent	__declspec(dllimport) public: void __cdecl Actor::consumeItem(class ItemActor &, int)
+absent	__declspec(dllimport) public: void __cdecl Actor::deregisterTagsFromLevelCache(void)
+absent	__declspec(dllimport) public: void __cdecl Actor::dropTowards(class ItemStack const &, class Vec3)
+absent	__declspec(dllimport) public: void __cdecl Actor::equip(class std::basic_string<char, struct std::char_traits<char>, class std::allocator<char>> const &)
+absent	__declspec(dllimport) public: void __cdecl Actor::equipFromEquipmentDefinition(void)
+absent	__declspec(dllimport) public: void __cdecl Actor::equip(struct EquipmentTable const &)
+absent	__declspec(dllimport) public: void __cdecl Actor::exitVehicle(bool, bool, bool)
+absent	__declspec(dllimport) public: void __cdecl Actor::handleFallDamage(float, float, class ActorDamageSource)
+absent	__declspec(dllimport) public: void __cdecl Actor::handleLeftoverFallDamage(float, class ActorDamageSource)
+signature	__declspec(dllimport) public: void __cdecl Actor::heal(int)
+absent	__declspec(dllimport) public: void __cdecl Actor::_initializeMaxAutoStep(float)
+absent	__declspec(dllimport) public: void __cdecl Actor::initParams(class RenderParams &)
+absent	__declspec(dllimport) public: void __cdecl Actor::killed(class Actor &)
+absent	__declspec(dllimport) public: void __cdecl Actor::lerpTo(class Vec3 const &, class Vec2 const &, float, int)
+absent	__declspec(dllimport) public: void __cdecl Actor::lerpTo(class Vec3 const &, class Vec2 const &, int)
+absent	__declspec(dllimport) public: void __cdecl Actor::migrateUniqueID(struct ActorUniqueID)
+absent	__declspec(dllimport) public: void __cdecl Actor::move(class Vec3 const &)
+absent	__declspec(dllimport) public: void __cdecl Actor::moveTo(class Vec3 const &, class Vec2 const &)
+absent	__declspec(dllimport) public: void __cdecl Actor::_notifyMobEffectsOnHurt(class ActorDamageSource const &, float)
+absent	__declspec(dllimport) public: void __cdecl Actor::onEffectUpdated(class MobEffectInstance &)
+absent	__declspec(dllimport) public: void __cdecl Actor::pickUpItem(class ItemActor &, int)
+absent	__declspec(dllimport) public: void __cdecl Actor::playSound(class IConstBlockSource const &, enum SharedTypes::Legacy::LevelSoundEvent, class Vec3 const &, int)
+absent	__declspec(dllimport) public: void __cdecl Actor::playSynchronizedSound(enum SharedTypes::Legacy::LevelSoundEvent, class Vec3 const &, int, bool, class std::optional<class Vec3> const &)
+absent	__declspec(dllimport) public: void __cdecl Actor::playSynchronizedSound(struct SoundEventIdentifier const &, class Vec3 const &, int, bool, class Player *)
+absent	__declspec(dllimport) public: void __cdecl Actor::positionPassenger(class Actor &)
+absent	__declspec(dllimport) public: void __cdecl Actor::postSplashGameEvent(void)
+absent	__declspec(dllimport) public: void __cdecl Actor::pushOutOfBlocks(class Vec3 const &)
+absent	__declspec(dllimport) public: void __cdecl Actor::_refreshAABB(void)
+absent	__declspec(dllimport) public: void __cdecl Actor::reload(void)
+absent	__declspec(dllimport) public: void __cdecl Actor::removeAllEffects(void)
+absent	__declspec(dllimport) public: void __cdecl Actor::removeAllPassengers(bool, bool)
+absent	__declspec(dllimport) public: void __cdecl Actor::removeEffect(int)
+absent	__declspec(dllimport) public: void __cdecl Actor::_sendDirtyActorData(void)
+absent	__declspec(dllimport) public: void __cdecl Actor::setActorRendererId(class HashedString)
+absent	__declspec(dllimport) public: void __cdecl Actor::_setActorTypeId(enum ActorType)
+absent	__declspec(dllimport) public: void __cdecl Actor::setBaseDefinition(struct ActorDefinitionIdentifier const &, bool, bool)
+absent	__declspec(dllimport) public: void __cdecl Actor::setDead(bool)
+absent	__declspec(dllimport) public: void __cdecl Actor::setDimension(class WeakRef<class Dimension>)
+absent	__declspec(dllimport) public: void __cdecl Actor::_setDimensionTransitionComponent(struct DimensionType, struct DimensionType, int)
+absent	__declspec(dllimport) public: void __cdecl Actor::setFallDistance(float)
+absent	__declspec(dllimport) public: void __cdecl Actor::_setHandContainerItem(class ItemStack const &, enum HandSlot)
+absent	__declspec(dllimport) public: void __cdecl Actor::setInLove(class Actor *)
+absent	__declspec(dllimport) public: void __cdecl Actor::setInvisible(bool)
+absent	__declspec(dllimport) public: void __cdecl Actor::setLastHurtByMob(class Mob *)
+absent	__declspec(dllimport) public: void __cdecl Actor::setLastHurtByPlayer(class Player *)
+absent	__declspec(dllimport) public: void __cdecl Actor::setLeashHolder(struct ActorUniqueID)
+absent	__declspec(dllimport) public: void __cdecl Actor::setLimitedLifetimeTicks(int)
+absent	__declspec(dllimport) public: void __cdecl Actor::setNameTag(class std::basic_string<char, struct std::char_traits<char>, class std::allocator<char>> const &)
+absent	__declspec(dllimport) public: void __cdecl Actor::setPersistent(void)
+absent	__declspec(dllimport) public: void __cdecl Actor::_setPos(class Vec3 const &)
+absent	__declspec(dllimport) public: void __cdecl Actor::setRedactableNameTag(class Bedrock::Safety::RedactableString const &)
+absent	__declspec(dllimport) public: void __cdecl Actor::setScoreTag(class std::basic_string<char, struct std::char_traits<char>, class std::allocator<char>> const &)
+absent	__declspec(dllimport) public: void __cdecl Actor::setStrength(int)
+absent	__declspec(dllimport) public: void __cdecl Actor::setStrengthMax(int)
+absent	__declspec(dllimport) public: void __cdecl Actor::setUniqueID(struct ActorUniqueID)
+absent	__declspec(dllimport) public: void __cdecl Actor::_setupServerAnimationComponent(void)
+absent	__declspec(dllimport) public: void __cdecl Actor::setYHeadRotations(float, float)
+absent	__declspec(dllimport) public: void __cdecl Actor::setYHeadRot(float)
+absent	__declspec(dllimport) public: void __cdecl Actor::spawnTrailBubbles(void)
+absent	__declspec(dllimport) public: void __cdecl Actor::stopRiding(bool, bool, bool, bool)
+absent	__declspec(dllimport) public: void __cdecl Actor::synchronousSetSize(float, float)
+absent	__declspec(dllimport) public: void __cdecl Actor::teleportPassengersTo(class Vec3 const &, int, int)
+absent	__declspec(dllimport) public: void __cdecl Actor::thawFreezeEffect(void)
+absent	__declspec(dllimport) public: void __cdecl Actor::transferTickingArea(class Dimension const &)
+absent	__declspec(dllimport) public: void __cdecl Actor::triggerActorRemovedEvent(void)
+absent	__declspec(dllimport) public: void __cdecl Actor::_updateComposition(bool)
+absent	__declspec(dllimport) public: void __cdecl Actor::updateDescription(void)
+absent	__declspec(dllimport) public: void __cdecl Actor::updateDimensionChunkMove(void)
+absent	__declspec(dllimport) public: void __cdecl Actor::updateInsideBlock(void)
+absent	__declspec(dllimport) public: void __cdecl Actor::updateInvisibilityStatus(void)
+absent	__declspec(dllimport) public: void __cdecl Actor::updateWaterState(void)
+absent	__declspec(dllimport) public: void __cdecl Actor::wobble(void)
+absent	__declspec(dllimport) public: void __cdecl Player::causeFoodExhaustion(float)
+absent	__declspec(dllimport) public: void __cdecl Player::completeUsingItem(void)
+absent	__declspec(dllimport) public: void __cdecl Player::eat(class ItemStack const &)
+absent	__declspec(dllimport) public: void __cdecl Player::eat(int, float)
+absent	__declspec(dllimport) public: void __cdecl Player::fireDimensionChangedEvent(struct DimensionType, struct DimensionType)
+absent	__declspec(dllimport) public: void __cdecl Player::inventoryChanged(class Container &, int, class ItemStack const &, class ItemStack const &, bool)
+absent	__declspec(dllimport) public: void __cdecl Player::playPredictiveSynchronizedSound(enum SharedTypes::Legacy::LevelSoundEvent, class Vec3 const &, int, bool)
+absent	__declspec(dllimport) public: void __cdecl Player::playPredictiveSynchronizedSound(struct SoundEventIdentifier const &, class Vec3 const &, int, bool)
+absent	__declspec(dllimport) public: void __cdecl Player::releaseUsingItem(void)
+absent	__declspec(dllimport) public: void __cdecl Player::resetPlayerLevel(void)
+absent	__declspec(dllimport) public: void __cdecl Player::sendEventPacket(class LegacyTelemetryEventPacket &) const
+absent	__declspec(dllimport) public: void __cdecl Player::setAgent(class Agent *)
+absent	__declspec(dllimport) public: void __cdecl Player::setChunkRadius(unsigned int)
+absent	__declspec(dllimport) public: void __cdecl Player::setCommandPermissions(enum CommandPermissionLevel)
+absent	__declspec(dllimport) public: void __cdecl Player::setContainerManagerModel(class std::shared_ptr<class ContainerManagerModel>)
+absent	__declspec(dllimport) public: void __cdecl Player::_setInteractionSynchedData(class std::basic_string<char, struct std::char_traits<char>, class std::allocator<char>>, enum ActorInteractionHandResult)
+absent	__declspec(dllimport) public: void __cdecl Player::setName(class std::basic_string<char, struct std::char_traits<char>, class std::allocator<char>> const &)
+absent	__declspec(dllimport) public: void __cdecl Player::_setPlayerGameType(enum GameType)
+absent	__declspec(dllimport) public: void __cdecl Player::setPlayerUIItem(enum PlayerUISlot, class ItemStack const &, bool)
+absent	__declspec(dllimport) public: void __cdecl Player::setRespawnPositionCandidate(void)
+absent	__declspec(dllimport) public: void __cdecl Player::setRespawnPosition(class BlockPos const &, struct DimensionType)
+absent	__declspec(dllimport) public: void __cdecl Player::startGliding(void)
+absent	__declspec(dllimport) public: void __cdecl Player::startItemCooldown(class HashedString const &, int, bool)
+absent	__declspec(dllimport) public: void __cdecl Player::startItemCooldown(class Item const &, bool)
+absent	__declspec(dllimport) public: void __cdecl Player::startItemUseOn(unsigned char, class BlockPos const &, class BlockPos const &, class ItemStack const &)
+absent	__declspec(dllimport) public: void __cdecl Player::startUsingItem(class ItemStack const &, int, enum HandSlot)
+absent	__declspec(dllimport) public: void __cdecl Player::stopGliding(void)
+absent	__declspec(dllimport) public: void __cdecl Player::stopItemUseOn(class BlockPos const &, class ItemStack const &)
+absent	__declspec(dllimport) public: void __cdecl Player::stopUsingItem(void)
+absent	__declspec(dllimport) public: void __cdecl Player::updateInventoryTransactions(void)
+absent	__declspec(dllimport) public: void __cdecl Player::updateSkin(class SerializedSkinRef const &, int)
+absent	__declspec(dllimport) public: void __cdecl Player::updateTouch(void)
+absent	__declspec(dllimport) public: void __cdecl Player::useItemInHandSlot(enum HandSlot, enum ItemUseMethod, bool)
+absent	__declspec(dllimport) public: void __cdecl ServerPlayer::addActorToReplicationList(class gsl::not_null<class Actor *>, bool)
+absent	__declspec(dllimport) public: void __cdecl ServerPlayer::createEditorPlayer(class Bedrock::NonOwnerPointer<class Editor::IEditorManager>)
+absent	__declspec(dllimport) public: void __cdecl ServerPlayer::disconnect(void)
+absent	__declspec(dllimport) public: void __cdecl ServerPlayer::doDeleteContainerManager(bool)
+absent	__declspec(dllimport) public: void __cdecl ServerPlayer::doInitialSpawn(void)
+absent	__declspec(dllimport) public: void __cdecl ServerPlayer::handleActorPickRequestOnServer(class Actor &, bool, bool)
+absent	__declspec(dllimport) public: void __cdecl ServerPlayer::handleBlockPickRequestOnServer(class BlockPos const &, bool)
+absent	__declspec(dllimport) public: void __cdecl ServerPlayer::initiateContainerClose(void)
+absent	__declspec(dllimport) public: void __cdecl ServerPlayer::_logCDEvent(enum CrashDumpLogStringID, enum CrashDumpLogStringID, enum CrashDumpLogStringID, enum CrashDumpLogStringID)
+absent	__declspec(dllimport) public: void __cdecl ServerPlayer::_logPartyState(void) const
+absent	__declspec(dllimport) public: void __cdecl ServerPlayer::postReplicationTick(struct Tick const &)
+absent	__declspec(dllimport) public: void __cdecl ServerPlayer::preReplicationTick(struct Tick const &)
+absent	__declspec(dllimport) public: void __cdecl ServerPlayer::_removeNearbyEntities(void)
+absent	__declspec(dllimport) public: void __cdecl ServerPlayer::sendPlayerContainerClosedEvent(void)
+absent	__declspec(dllimport) public: void __cdecl ServerPlayer::sendPlayerContainerOpenedEvent(enum SharedTypes::Legacy::ContainerType, class std::variant<class BlockPos, struct ActorUniqueID>)
+absent	__declspec(dllimport) public: void __cdecl ServerPlayer::setClientChunkRadius(unsigned int, unsigned char)
+absent	__declspec(dllimport) public: void __cdecl ServerPlayer::_setContainerManagerModel(class std::shared_ptr<class ContainerManagerModel>)
+absent	__declspec(dllimport) public: void * __cdecl Actor::$ctor(class ActorDefinitionGroup *, struct ActorDefinitionIdentifier const &, class EntityContext &)
+absent	__declspec(dllimport) public: void * __cdecl Actor::$ctor(class ILevel &, class EntityContext &)
+absent	__declspec(dllimport) public: void __cdecl Actor::$dtor(void)
+absent	__declspec(dllimport) public: void __cdecl Actor::$teleportTo(class Vec3 const &, bool, int, int, bool)
+absent	__declspec(dllimport) public: void * __cdecl Player::$ctor(class ILevel &, class PacketSender &, enum GameType, bool, class NetworkIdentifier const &, enum SubClientId, class mce::UUID, class std::basic_string<char, struct std::char_traits<char>, class std::allocator<char>> const &, enum PlayerAuthenticationType, struct PlayerAuthenticationInfo const &, class EntityContext &, class std::basic_string<char, struct std::char_traits<char>, class std::allocator<char>> const &, class std::basic_string<char, struct std::char_traits<char>, class std::allocator<char>> const &)
+absent	__declspec(dllimport) public: void __cdecl Player::$displayClientMessage(class std::basic_string<char, struct std::char_traits<char>, class std::allocator<char>> const &, class std::optional<class std::basic_string<char, struct std::char_traits<char>, class std::allocator<char>>>)
+absent	__declspec(dllimport) public: void __cdecl Player::$dtor(void)
+absent	__declspec(dllimport) public: void __cdecl Player::$initializeComponents(enum ActorInitializationMethod, struct VariantParameterList const &)
+absent	__declspec(dllimport) public: void __cdecl ServerPlayer::$hurtArmorSlots(class ActorDamageSource const &, int, class std::bitset<5>)
+absent	__declspec(dllimport) public: void __cdecl ServerPlayer::$initializeComponents(enum ActorInitializationMethod, struct VariantParameterList const &)
+absent	__declspec(dllimport) public: void __cdecl ServerPlayer::$knockback(class Actor *, float, float, float, struct KnockbackParameters const &)
+absent	__declspec(dllimport) public: bool __cdecl Actor::$canAddPassenger(class Actor
+absent	__declspec(dllimport) public: bool __cdecl Actor::$isDamageBlocked(class Actor
+absent	__declspec(dllimport) public: bool __cdecl Actor::$isInvulnerableTo(class Actor
+absent	__declspec(dllimport) public: bool __cdecl Actor::$isValidTarget(class Actor
+absent	__declspec(dllimport) public: bool __cdecl Actor::$startRiding(class Actor
+absent	__declspec(dllimport) public: bool __cdecl Actor::$swing(enum Actor
+absent	__declspec(dllimport) public: bool __cdecl Actor::canAttack(class Actor
+absent	__declspec(dllimport) public: bool __cdecl Actor::canMate(class Actor
+absent	__declspec(dllimport) public: bool __cdecl Actor::closerThan(class Actor
+absent	__declspec(dllimport) public: bool __cdecl Actor::getFirstAvailableSeatPos(class Actor
+absent	__declspec(dllimport) public: bool __cdecl Actor::hasType(enum Actor
+absent	__declspec(dllimport) public: bool __cdecl Actor::isActorLocationInMaterial(enum SharedTypes::Legacy::Actor
+absent	__declspec(dllimport) public: bool __cdecl Actor::isPassenger(class Actor
+absent	__declspec(dllimport) public: bool __cdecl Actor::isRiding(class Actor
+absent	__declspec(dllimport) public: bool __cdecl Actor::pullInEntity(class Actor
+absent	__declspec(dllimport) public: bool __cdecl Player::$canAddPassenger(class Actor
+absent	__declspec(dllimport) public: bool __cdecl Player::$isActorRelevant(class Actor
+absent	__declspec(dllimport) public: bool __cdecl Player::$isDamageBlocked(class Actor
+absent	__declspec(dllimport) public: bool __cdecl Player::$isInvulnerableTo(class Actor
+absent	__declspec(dllimport) public: bool __cdecl Player::$startRiding(class Actor
+absent	__declspec(dllimport) public: bool __cdecl Player::take(class Actor
+absent	__declspec(dllimport) public: bool __cdecl ServerPlayer::$isActorRelevant(class Actor
+absent	__declspec(dllimport) public: bool __cdecl ServerPlayer::$isValidTarget(class Actor
+absent	__declspec(dllimport) public: bool __cdecl ServerPlayer::$swing(enum Actor
+absent	__declspec(dllimport) public: class Agent * __cdecl Player::getAgentIfAllowed(bool, struct Actor
+absent	__declspec(dllimport) public: class BlockPos __cdecl Actor::getBlockPosCurrentlyStandingOn(class Actor
+absent	__declspec(dllimport) public: class HashedString const & __cdecl Actor::$getActor
+absent	__declspec(dllimport) public: class HashedString const & __cdecl Player::$getActor
+absent	__declspec(dllimport) public: enum ContainerID __cdecl ServerPlayer::openUnmanagedContainer(enum SharedTypes::Legacy::ContainerType, class std::variant<class BlockPos, struct Actor
+absent	__declspec(dllimport) public: float __cdecl Actor::$causeFallDamageToActor(float, float, class Actor
+absent	__declspec(dllimport) public: float __cdecl Actor::$getPassengerYRotation(class Actor
+absent	__declspec(dllimport) public: float __cdecl Actor::distanceTo(class Actor
+absent	__declspec(dllimport) public: float __cdecl Player::$causeFallDamageToActor(float, float, class Actor
+absent	__declspec(dllimport) public: int __cdecl Actor::getPassengerIndex(class Actor
+absent	__declspec(dllimport) public: static bool __cdecl Actor::isInLiquid(enum SharedTypes::v1_26_20::MaterialType, class IConstBlockSource const &, class AABB const &, class std::vector
+absent	__declspec(dllimport) public: static bool __cdecl Player::checkNeedAutoJump(class IConstBlockSource const &, struct AABBShapeComponent const &, struct ActorRotationComponent const &, float, struct StateVector
+absent	__declspec(dllimport) public: static class std::optional<enum SharedTypes::Legacy::LevelSoundEvent> __cdecl Player::getCustomHurtSound(class Mob const &, enum SharedTypes::Legacy::Actor
+absent	__declspec(dllimport) public: struct ActorDefinitionIdentifier const & __cdecl Actor::getActor
+absent	__declspec(dllimport) public: struct BuiltInActorComponents __cdecl Actor::_addActor
+absent	__declspec(dllimport) public: void __cdecl Actor::$addPassenger(class Actor
+absent	__declspec(dllimport) public: void __cdecl Actor::$blockedByShield(class ActorDamageSource const &, class Actor
+absent	__declspec(dllimport) public: void * __cdecl Actor::$ctor
+absent	__declspec(dllimport) public: void * __cdecl Actor::$ctor(class ActorDefinitionGroup *, struct Actor
+absent	__declspec(dllimport) public: void __cdecl Actor::$die(class Actor
+absent	__declspec(dllimport) public: void __cdecl Actor::$dtor
+absent	__declspec(dllimport) public: void __cdecl Actor::$getDebugText(class std::vector
+absent	__declspec(dllimport) public: void __cdecl Actor::$handleEntityEvent(enum Actor
+absent	__declspec(dllimport) public: void __cdecl Actor::$initializeComponents(enum Actor
+absent	__declspec(dllimport) public: void __cdecl Actor::$onPush(class Actor
+absent	__declspec(dllimport) public: void __cdecl Actor::$performRangedAttack(class Actor
+absent	__declspec(dllimport) public: void __cdecl Actor::$reloadComponents(enum Actor
+absent	__declspec(dllimport) public: void __cdecl Actor::$reloadHardcodedClient(enum Actor
+absent	__declspec(dllimport) public: void __cdecl Actor::$reloadHardcoded(enum Actor
+absent	__declspec(dllimport) public: void __cdecl Actor::$resetUserPos(enum Actor
+absent	__declspec(dllimport) public: void __cdecl Actor::$setOwner(struct Actor
+absent	__declspec(dllimport) public: void __cdecl Actor::$setTarget(class Actor
+absent	__declspec(dllimport) public: void __cdecl Actor::_addActor
+absent	__declspec(dllimport) public: void __cdecl Actor::consumeItem(class ItemActor
+absent	__declspec(dllimport) public: void __cdecl Actor::handleFallDamage(float, float, class Actor
+absent	__declspec(dllimport) public: void __cdecl Actor::handleLeftoverFallDamage(float, class Actor
+absent	__declspec(dllimport) public: void __cdecl Actor::killed(class Actor
+absent	__declspec(dllimport) public: void __cdecl Actor::migrateUniqueID(struct Actor
+absent	__declspec(dllimport) public: void __cdecl Actor::_notifyMobEffectsOnHurt(class Actor
+absent	__declspec(dllimport) public: void __cdecl Actor::pickUpItem(class ItemActor
+absent	__declspec(dllimport) public: void __cdecl Actor::positionPassenger(class Actor
+absent	__declspec(dllimport) public: void __cdecl Actor::_sendDirtyActor
+absent	__declspec(dllimport) public: void __cdecl Actor::setActor
+absent	__declspec(dllimport) public: void __cdecl Actor::_setActorTypeId(enum Actor
+absent	__declspec(dllimport) public: void __cdecl Actor::setBaseDefinition(struct Actor
+absent	__declspec(dllimport) public: void __cdecl Actor::setInLove(class Actor
+absent	__declspec(dllimport) public: void __cdecl Actor::setLeashHolder(struct Actor
+absent	__declspec(dllimport) public: void __cdecl Actor::setUniqueID(struct Actor
+absent	__declspec(dllimport) public: void __cdecl Actor::triggerActor
+absent	__declspec(dllimport) public: void * __cdecl Player::$ctor
+absent	__declspec(dllimport) public: void __cdecl Player::$damageCarriedItemOnAttack(class Actor
+absent	__declspec(dllimport) public: void __cdecl Player::$die(class Actor
+absent	__declspec(dllimport) public: void __cdecl Player::$dropEquipmentOnDeath(class Actor
+absent	__declspec(dllimport) public: void __cdecl Player::$dtor
+absent	__declspec(dllimport) public: void __cdecl Player::$emitCriticalHitParticles(class Actor
+absent	__declspec(dllimport) public: void __cdecl Player::$handleEntityEvent(enum Actor
+absent	__declspec(dllimport) public: void __cdecl Player::$initializeComponents(enum Actor
+absent	__declspec(dllimport) public: void __cdecl Player::$openBook(int, bool, int, class BlockActor
+absent	__declspec(dllimport) public: void __cdecl Player::$openChalkboard(class ChalkboardBlockActor
+absent	__declspec(dllimport) public: void __cdecl Player::$openTrading(struct Actor
+absent	__declspec(dllimport) public: void __cdecl Player::$reloadHardcoded(enum Actor
+absent	__declspec(dllimport) public: void __cdecl Player::$resetUserPos(enum Actor
+absent	__declspec(dllimport) public: void __cdecl Player::_setInteractionSynchedData(class std::basic_string<char, struct std::char_traits<char>, class std::allocator<char>>, enum Actor
+absent	__declspec(dllimport) public: void __cdecl ServerPlayer::$die(class Actor
+absent	__declspec(dllimport) public: void __cdecl ServerPlayer::$handleEntityEvent(enum Actor
+absent	__declspec(dllimport) public: void __cdecl ServerPlayer::$hurtArmorSlots(class Actor
+absent	__declspec(dllimport) public: void __cdecl ServerPlayer::$initializeComponents(enum Actor
+absent	__declspec(dllimport) public: void __cdecl ServerPlayer::$knockback(class Actor
+absent	__declspec(dllimport) public: void __cdecl ServerPlayer::$openBook(int, bool, int, class BlockActor
+absent	__declspec(dllimport) public: void __cdecl ServerPlayer::$openTrading(struct Actor
+absent	__declspec(dllimport) public: void __cdecl ServerPlayer::addActorToReplicationList(class gsl::not_null<class Actor
+absent	__declspec(dllimport) public: void __cdecl ServerPlayer::handleActorPickRequestOnServer(class Actor
+absent	__declspec(dllimport) public: void __cdecl ServerPlayer::sendPlayerContainerOpenedEvent(enum SharedTypes::Legacy::ContainerType, class std::variant<class BlockPos, struct Actor
+absent	__declspec(dllimport) public: char const * __cdecl AnimationScriptsDescription::$getJsonName(void)
+absent	__declspec(dllimport) public: static void ** __cdecl AnimationScriptsDescription::$vftable(void)
+absent	__declspec(dllimport) public: class std::vector<struct NamedMolangScript, class std::allocator<struct NamedMolangScript>> const & __cdecl CommonResourceDefinitionMap::getAnimateScriptArray(void)
+absent	__declspec(dllimport) public: void __cdecl CommonResourceDefinitionMap::mergeActorAnimateScriptArray(class
+absent	__declspec(dllimport) public: class ExpressionNode & __cdecl ExpressionNode::operator=(class
+absent	public: __cdecl ExpressionNode::ExpressionNode(class
+absent	__declspec(dllimport) public: __cdecl ActorAnimationControllerPtr::~ActorAnimationControllerPtr(void)
+absent	__declspec(dllimport) public: __cdecl ActorSkeletalAnimationPtr::~ActorSkeletalAnimationPtr(void)

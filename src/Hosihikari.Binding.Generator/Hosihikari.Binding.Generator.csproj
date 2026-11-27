@@ -21,4 +21,9 @@
   <ItemGroup>
     <ProjectReference Include="../../../Binding.Ir/src/Hosihikari.Binding.Ir/Hosihikari.Binding.Ir.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <!-- Read at plan time; see AbiPlan.UnexportedMembers for the format and the carrier pin. -->
+    <None Update="unexported-levilamina.txt" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>
