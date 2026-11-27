@@ -2067,7 +2067,7 @@ internal static partial class ShimEmitter
                     break;
                 }
 
-                var memberName = function.NativeMemberName;
+                var memberName = function.CallAsMemberName ?? function.NativeMemberName;
                 if (
                     memberName.StartsWith("operator ", StringComparison.Ordinal)
                     && function.ReturnKind != AbiKind.Void

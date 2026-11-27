@@ -307,6 +307,13 @@ internal sealed class AbiFunction
     public string ClassCppName { get; init; } = "";
     public DeclarationName ClassName { get; init; }
     public string NativeMemberName { get; init; } = "";
+
+    /// <summary>
+    /// Name to call instead of <see cref="NativeMemberName"/>. Only set for a <c>$</c> mirror:
+    /// the mirror is not exported, but the virtual function it mirrors is reachable through
+    /// the vtable, so the shim calls that spelling and lets dispatch do the rest.
+    /// </summary>
+    public string? CallAsMemberName { get; set; }
     public string CSharpMemberName { get; set; } = "";
     public AbiKind ReturnKind { get; init; }
     public string NativeReturnType { get; init; } = "";
@@ -1773,6 +1780,7 @@ internal sealed class AbiPlan
             )
             {
                 string? reason = null;
+                string? callAs = null;
                 if (HasUnavailableAnnotation(method))
                 {
                     reason = UnavailableMemberReason;
@@ -1786,10 +1794,11 @@ internal sealed class AbiPlan
                 }
                 else if (IsVirtualMirror(declaration.QualifiedName, method.Name))
                 {
-                    // A `$` non-virtual mirror of a virtual function. The vtable reaches the real
-                    // one, so the call is reachable only through it; calling the mirror would not
-                    // link. Stub keeps the member visible without a broken symbol reference.
-                    reason = VirtualMirrorMemberReason;
+                    // A `$` non-virtual mirror of a virtual function. The mirror itself is not
+                    // exported, but the virtual it mirrors is reachable through the vtable, so
+                    // the shim calls that spelling and dispatch does the rest.
+                    reason = null;
+                    callAs = method.Name.TrimStart('$');
                 }
                 else if (symbolDispatch)
                 {
@@ -1817,9 +1826,12 @@ internal sealed class AbiPlan
                 }
                 else if (
                     !(
-                        virtualDispatch ? method.Inline || method.Virtual
-                        : linkCarrier ? HasExportedSymbol(declaration, method)
-                        : method.Inline
+                        callAs is not null
+                        || (
+                            virtualDispatch ? method.Inline || method.Virtual
+                            : linkCarrier ? HasExportedSymbol(declaration, method)
+                            : method.Inline
+                        )
                     )
                 )
                 {
@@ -1932,6 +1944,11 @@ internal sealed class AbiPlan
                     skipReasons[method.Id] =
                         reason ?? "the member is not supported by symbol dispatch";
                     continue;
+                }
+
+                if (callAs is not null)
+                {
+                    function.CallAsMemberName = callAs;
                 }
 
                 functions.Add(function);
