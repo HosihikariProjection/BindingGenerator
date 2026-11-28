@@ -1903,6 +1903,37 @@ internal sealed class AbiPlan
 
                 if (reason is not null)
                 {
+                    // A `$` mirror and the virtual it mirrors are two records of one C++
+                    // member. The mirror resolves through the vtable and the plain one only
+                    // through the missing symbol, so without this the developer-visible name
+                    // is a stub while `_name` next to it works. Borrow the mirror's route.
+                    var mirror = declarationMembers.FirstOrDefault(member =>
+                        member.Name == "$" + method.Name
+                        && IsVirtualMirror(declaration.QualifiedName, member.Name, declaration.Surface)
+                    );
+                        Console.Error.WriteLine($"[d7] mirror={mirror is not null} reason={reason} n={(method.Signature?.Parameters.Count, mirror?.Signature?.Parameters.Count)}");
+                    if (
+                        mirror is not null
+                        && reason == "the member is not exported by the carrier"
+                        && method.Signature?.Parameters.Count
+                            == mirror.Signature?.Parameters.Count
+                        && method.Signature is { } signature
+                        && mirror.Signature is { } mirrorSignature
+                        && signature
+                            .Parameters.Select(parameter => parameter.Type)
+                            .SequenceEqual(
+                                mirrorSignature.Parameters.Select(parameter => parameter.Type),
+                                StringComparer.Ordinal
+                            )
+                    )
+                    {
+                        callAs = method.Name;
+                        reason = null;
+                    }
+                }
+
+                if (reason is not null)
+                {
                     skipReasons[method.Id] = reason;
                     continue;
                 }
