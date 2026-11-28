@@ -2969,13 +2969,14 @@ internal static partial class ShimEmitter
                                 || StoresUnassignable(manifest, surface, name)
                                 // A declared-but-unexported operator= is the same shape as one
                                 // the trait already refuses; only the link can tell them apart.
-                                || AbiPlan.IsUnexported(name, "operator=")                    )
+                                || AbiPlan.IsUnexported(name, "operator=", surface)
+                    )
                     : names.Where(name =>
                         UncopyablePayloads.Contains(name)
                         // The payload's own copy constructor can be declared without being
                         // exported; the guard cannot see that, the link can. A constructor is
                         // keyed by the class name against itself.
-                        || AbiPlan.IsUnexported(name, name)
+                        || AbiPlan.IsUnexported(name, name, surface)
                     )
             ).Any()
             || probe.Contains("unique_ptr", StringComparison.Ordinal)

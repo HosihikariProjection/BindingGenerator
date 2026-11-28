@@ -1143,12 +1143,12 @@ internal sealed class AbiPlan
                 member.Kind == "field"
                 && member.Type is { } type
                 && SpellingsInside(type.Canonical).Any(spelling =>
-                    IsUnexported(spelling, "~" + LeafName(spelling))
+                    IsUnexported(spelling, "~" + LeafName(spelling), declaration.Surface)
                 )
             )
             || (declaration.Template?.Arguments ?? []).Any(argument =>
                 SpellingsInside(argument.Value).Any(spelling =>
-                    IsUnexported(spelling, "~" + LeafName(spelling))
+                    IsUnexported(spelling, "~" + LeafName(spelling), declaration.Surface)
                 )
             );
 
@@ -1459,7 +1459,7 @@ internal sealed class AbiPlan
                 {
                     reason = UnavailableMemberReason;
                 }
-                else if (IsUnexported(declaration.QualifiedName, "$ctor"))
+                else if (IsUnexported(declaration.QualifiedName, "$ctor", declaration.Surface))
                 {
                     // Constructors are named after the class in the IR, but the export list and
                     // lld spell them `$ctor`; the list key is the latter.
@@ -1603,7 +1603,11 @@ internal sealed class AbiPlan
                 {
                     skipReasons[destructor.Id] =
                         HasUnavailableAnnotation(destructor) ? UnavailableMemberReason
-                        : IsUnexported(declaration.QualifiedName, "~" + declaration.QualifiedName[(declaration.QualifiedName.LastIndexOf("::") + 2)..])
+                        : IsUnexported(
+                            declaration.QualifiedName,
+                            "~" + declaration.QualifiedName[(declaration.QualifiedName.LastIndexOf("::", StringComparison.Ordinal) + 2)..],
+                            declaration.Surface
+                        )
                             ? UnexportedMemberReason
                         : "the class has no accessible destructor";
                 }
@@ -1785,14 +1789,14 @@ internal sealed class AbiPlan
                 {
                     reason = UnavailableMemberReason;
                 }
-                else if (IsUnexported(declaration.QualifiedName, method.Name))
+                else if (IsUnexported(declaration.QualifiedName, method.Name, declaration.Surface))
                 {
                     // The header annotates it as exported but the library does not carry it, so
                     // the shim would compile and fail to link. Checked before the dispatch test
                     // because a member can have a vtable slot and still no exported symbol.
                     reason = UnexportedMemberReason;
                 }
-                else if (IsVirtualMirror(declaration.QualifiedName, method.Name))
+                else if (IsVirtualMirror(declaration.QualifiedName, method.Name, declaration.Surface))
                 {
                     // A `$` non-virtual mirror of a virtual function. The mirror itself is not
                     // exported, but the virtual it mirrors is reachable through the vtable, so
@@ -3483,15 +3487,24 @@ internal sealed class AbiPlan
     /// fully expanded types, so the list is indexed by <c>Class::method</c> — coarse enough that
     /// an overload with one exported sibling is refused too, which is the safe direction.
     /// </summary>
-    internal static bool IsUnexported(string classCppName, string memberName) =>
-        UnexportedKind(classCppName, memberName) == "absent";
+    internal static bool IsUnexported(string classCppName, string memberName, string? surface) =>
+        IsThisCarrier(surface) && UnexportedKind(classCppName, memberName) == "absent";
+
+    /// <summary>
+    /// The list is taken against one carrier's export set, so a surface built on a different
+    /// carrier must not apply it. `Actor` and friends only collide by name; Endstone's library
+    /// exports members LeviLamina does not.
+    /// </summary>
+    private static bool IsThisCarrier(string? surface) =>
+        string.Equals(surface, "levilamina", StringComparison.Ordinal);
 
     /// <summary>
     /// True when the only miss is a <c>$</c> non-virtual mirror of a virtual function. The
     /// vtable already reaches the real one, so a stub is the right shape: calling the mirror
     /// would not link.
     /// </summary>
-    internal static bool IsVirtualMirror(string classCppName, string memberName) =>
+    internal static bool IsVirtualMirror(string classCppName, string memberName, string? surface) =>
+        IsThisCarrier(surface) &&
         UnexportedKind(classCppName, memberName) == "spelling";
 
     private static string? UnexportedKind(string classCppName, string memberName)
