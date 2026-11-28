@@ -3,7 +3,9 @@
 # Keyed by the demangled signature lld prints. One entry per line: <kind><TAB><symbol>.
 #   absent   - neither the symbol nor its name is in the library; skip it.
 #   spelling - a '$' non-virtual mirror of a virtual function; the vtable already
-#              reaches it, so a missing symbol is expected. Do not skip.
+#              reaches it, so a missing symbol is expected. Do not skip: the entry also
+#              marks the member as reachable, and the emitter calls the virtual instead.
+#              Deleting one turns that member back into a stub.
 #   signature- name present, symbol absent; the declaration disagrees with the export.
 #              Fix the declaration rather than skipping.
 #
