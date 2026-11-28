@@ -4424,9 +4424,17 @@ internal sealed class AbiPlan
         ] = "the stored map's element type has no exported destructor",
     };
 
+    /// <summary>
+    /// Both tables were written from LeviLamina link failures. The shim-entry keys are hashes
+    /// of member names, so an Endstone member of the same name derives the same key and would
+    /// be refused for a reason that may not hold on that carrier.
+    /// </summary>
     private static bool IsUnprojectable(AbiFunction function) =>
-        UnprojectableShimEntries.ContainsKey(function.CppName)
-        || UnprojectableClasses.ContainsKey(function.ClassCppName);
+        IsThisCarrier(function.Surface)
+        && (
+            UnprojectableShimEntries.ContainsKey(function.CppName)
+            || UnprojectableClasses.ContainsKey(function.ClassCppName)
+        );
 
     /// <summary>
     /// True when a field stores a type by value that the surface does not declare. Such a
